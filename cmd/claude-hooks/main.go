@@ -188,6 +188,25 @@ func registerValidators(registry *validator.Registry, log logger.Logger) {
 		),
 	)
 
+	registry.Register(
+		gitvalidators.NewBranchValidator(log),
+		validator.And(
+			validator.EventTypeIs(hook.PreToolUse),
+			validator.ToolTypeIs(hook.Bash),
+			validator.Or(
+				validator.CommandContains("git checkout -b"),
+				validator.And(
+					validator.CommandContains("git branch"),
+					validator.Not(validator.Or(
+						validator.CommandContains("-d"),
+						validator.CommandContains("-D"),
+						validator.CommandContains("--delete"),
+					)),
+				),
+			),
+		),
+	)
+
 	// File validators
 	registry.Register(
 		filevalidators.NewMarkdownValidator(log),
@@ -204,6 +223,18 @@ func registerValidators(registry *validator.Registry, log logger.Logger) {
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit),
 			validator.FileExtensionIs(".tf"),
+		),
+	)
+
+	registry.Register(
+		filevalidators.NewShellScriptValidator(log),
+		validator.And(
+			validator.EventTypeIs(hook.PreToolUse),
+			validator.ToolTypeIn(hook.Write, hook.Edit),
+			validator.Or(
+				validator.FileExtensionIs(".sh"),
+				validator.FileExtensionIs(".bash"),
+			),
 		),
 	)
 }
