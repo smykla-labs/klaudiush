@@ -64,6 +64,23 @@ var _ = Describe("CommitValidator", func() {
 				result := validator.Validate(ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
+
+			It("should pass with --all flag instead of -a", func() {
+				// Set no staged files to test that --all flag bypasses staging check
+				mockGit.StagedFiles = []string{}
+				mockGit.ModifiedFiles = []string{"file1.go", "file2.go"}
+
+				ctx := &hook.Context{
+					EventType: hook.PreToolUse,
+					ToolName:  hook.Bash,
+					ToolInput: hook.ToolInput{
+						Command: `git commit -sS --all -m "feat: update files"`,
+					},
+				}
+
+				result := validator.Validate(ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
 		})
 
 		Context("when -sS flags are missing", func() {
