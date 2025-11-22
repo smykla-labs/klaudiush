@@ -463,8 +463,8 @@ See github.com/smykla-labs/claude-hooks/pull/123`
 			})
 		})
 
-		Context("when message contains Claude references", func() {
-			It("should fail with 'Claude' in message", func() {
+		Context("when message contains AI attribution", func() {
+			It("should fail with AI attribution footer", func() {
 				ctx := &hook.Context{
 					EventType: hook.PreToolUse,
 					ToolName:  hook.Bash,
@@ -475,10 +475,10 @@ See github.com/smykla-labs/claude-hooks/pull/123`
 
 				result := validator.Validate(ctx)
 				Expect(result.Passed).To(BeFalse())
-				Expect(result.Details["errors"]).To(ContainSubstring("Claude AI reference"))
+				Expect(result.Details["errors"]).To(ContainSubstring("AI attribution"))
 			})
 
-			It("should fail with 'claude' in lowercase", func() {
+			It("should fail with 'claude' in unrelated context", func() {
 				ctx := &hook.Context{
 					EventType: hook.PreToolUse,
 					ToolName:  hook.Bash,
@@ -489,7 +489,65 @@ See github.com/smykla-labs/claude-hooks/pull/123`
 
 				result := validator.Validate(ctx)
 				Expect(result.Passed).To(BeFalse())
-				Expect(result.Details["errors"]).To(ContainSubstring("Claude AI reference"))
+				Expect(result.Details["errors"]).To(ContainSubstring("AI attribution"))
+			})
+
+			It("should fail with 'Claude AI' pattern", func() {
+				ctx := &hook.Context{
+					EventType: hook.PreToolUse,
+					ToolName:  hook.Bash,
+					ToolInput: hook.ToolInput{
+						Command: `git commit -sS -a -m "feat(api): add feature\\n\\nWith Claude AI assistance"`,
+					},
+				}
+
+				result := validator.Validate(ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Details["errors"]).To(ContainSubstring("AI attribution"))
+			})
+
+			It("should pass with CLAUDE.md file reference", func() {
+				ctx := &hook.Context{
+					EventType: hook.PreToolUse,
+					ToolName:  hook.Bash,
+					ToolInput: hook.ToolInput{
+						Command: `git commit -sS -a -m "docs(guide): add CLAUDE.md"`,
+					},
+				}
+
+				result := validator.Validate(ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should pass with CLAUDE.md in body", func() {
+				ctx := &hook.Context{
+					EventType: hook.PreToolUse,
+					ToolName:  hook.Bash,
+					ToolInput: hook.ToolInput{
+						Command: `git commit -sS -a -m "$(cat <<'EOF'
+docs(guide): update project guide
+
+Update CLAUDE.md with new architecture details.
+EOF
+)"`,
+					},
+				}
+
+				result := validator.Validate(ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should pass with CLAUDE (uppercase) reference", func() {
+				ctx := &hook.Context{
+					EventType: hook.PreToolUse,
+					ToolName:  hook.Bash,
+					ToolInput: hook.ToolInput{
+						Command: `git commit -sS -a -m "docs(guide): update CLAUDE file"`,
+					},
+				}
+
+				result := validator.Validate(ctx)
+				Expect(result.Passed).To(BeTrue())
 			})
 		})
 
