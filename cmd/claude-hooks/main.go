@@ -12,6 +12,7 @@ import (
 	"github.com/smykla-labs/claude-hooks/internal/dispatcher"
 	"github.com/smykla-labs/claude-hooks/internal/parser"
 	"github.com/smykla-labs/claude-hooks/internal/validator"
+	filevalidators "github.com/smykla-labs/claude-hooks/internal/validators/file"
 	gitvalidators "github.com/smykla-labs/claude-hooks/internal/validators/git"
 	"github.com/smykla-labs/claude-hooks/pkg/hook"
 	"github.com/smykla-labs/claude-hooks/pkg/logger"
@@ -184,6 +185,16 @@ func registerValidators(registry *validator.Registry, log logger.Logger) {
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIs(hook.Bash),
 			validator.CommandContains("gh pr create"),
+		),
+	)
+
+	// File validators
+	registry.Register(
+		filevalidators.NewMarkdownValidator(log),
+		validator.And(
+			validator.EventTypeIs(hook.PreToolUse),
+			validator.ToolTypeIn(hook.Write, hook.Edit),
+			validator.FileExtensionIs(".md"),
 		),
 	)
 }
