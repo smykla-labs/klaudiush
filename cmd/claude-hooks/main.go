@@ -177,6 +177,15 @@ func registerValidators(registry *validator.Registry, log logger.Logger) {
 			validator.CommandContains("git push"),
 		),
 	)
+
+	registry.Register(
+		gitvalidators.NewPRValidator(log),
+		validator.And(
+			validator.EventTypeIs(hook.PreToolUse),
+			validator.ToolTypeIs(hook.Bash),
+			validator.CommandContains("gh pr create"),
+		),
+	)
 }
 
 func truncate(s string, maxLen int) string {
