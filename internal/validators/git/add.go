@@ -15,6 +15,8 @@ import (
 
 const (
 	gitCommandTimeout = 5 * time.Second
+	gitCmd            = "git"
+	addCmd            = "add"
 )
 
 // AddValidator validates git add commands to block tmp/ files from being staged
@@ -65,7 +67,7 @@ func (v *AddValidator) Validate(ctx *hook.Context) *validator.Result {
 	var tmpFiles []string
 
 	for _, cmd := range result.Commands {
-		if cmd.Name != "git" || len(cmd.Args) == 0 || cmd.Args[0] != "add" {
+		if cmd.Name != gitCmd || len(cmd.Args) == 0 || cmd.Args[0] != addCmd {
 			continue
 		}
 

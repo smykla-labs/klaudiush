@@ -10,6 +10,12 @@ import (
 	"github.com/smykla-labs/claude-hooks/pkg/parser"
 )
 
+const (
+	gitCommand       = "git"
+	commitSubcommand = "commit"
+	addSubcommand    = "add"
+)
+
 // CommitValidator validates git commit commands and messages
 type CommitValidator struct {
 	validator.BaseValidator
@@ -40,9 +46,12 @@ func (v *CommitValidator) Validate(ctx *hook.Context) *validator.Result {
 		return validator.Warn(fmt.Sprintf("Failed to parse command: %v", err))
 	}
 
+	// Check if there's a git add in the same command chain
+	hasGitAdd := v.hasGitAddInChain(result.Commands)
+
 	// Find git commit commands
 	for _, cmd := range result.Commands {
-		if cmd.Name != "git" || len(cmd.Args) == 0 || cmd.Args[0] != "commit" {
+		if cmd.Name != gitCommand || len(cmd.Args) == 0 || cmd.Args[0] != commitSubcommand {
 			continue
 		}
 
@@ -58,8 +67,8 @@ func (v *CommitValidator) Validate(ctx *hook.Context) *validator.Result {
 			return res
 		}
 
-		// Check staging area (skip for --amend or --allow-empty)
-		if !gitCmd.HasFlag("--amend") && !gitCmd.HasFlag("--allow-empty") {
+		// Check staging area (skip for --amend, --allow-empty, or if git add is in the chain)
+		if !gitCmd.HasFlag("--amend") && !gitCmd.HasFlag("--allow-empty") && !hasGitAdd {
 			if res := v.checkStagingArea(gitCmd); !res.Passed {
 				return res
 			}
@@ -160,6 +169,18 @@ func (v *CommitValidator) getStatusCounts() (modified, untracked int) {
 	}
 
 	return modified, untracked
+}
+
+// hasGitAddInChain checks if there's a git add command in the command chain
+// This is important because in PreToolUse hooks, the add hasn't executed yet,
+// so we shouldn't check the staging area.
+func (v *CommitValidator) hasGitAddInChain(commands []parser.Command) bool {
+	for _, cmd := range commands {
+		if cmd.Name == gitCommand && len(cmd.Args) > 0 && cmd.Args[0] == addSubcommand {
+			return true
+		}
+	}
+	return false
 }
 
 // Ensure CommitValidator implements validator.Validator

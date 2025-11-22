@@ -630,6 +630,54 @@ Signed-off-by: John Doe <bartek@smykla.com>`
 		})
 	})
 
+	Describe("Chained commands with git add", func() {
+		It("should skip staging check when git add is in the chain", func() {
+			// No staged files, but git add is in the command chain
+			mockGit.StagedFiles = []string{}
+
+			ctx := &hook.Context{
+				EventType: hook.PreToolUse,
+				ToolName:  hook.Bash,
+				ToolInput: hook.ToolInput{
+					Command: `git add file.txt && git commit -sS -m "feat: add file"`,
+				},
+			}
+
+			result := validator.Validate(ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should skip staging check with multiple files in git add", func() {
+			mockGit.StagedFiles = []string{}
+
+			ctx := &hook.Context{
+				EventType: hook.PreToolUse,
+				ToolName:  hook.Bash,
+				ToolInput: hook.ToolInput{
+					Command: `git add mk/check.mk src/main.go && git commit -sS -m "build(makefile): add targets"`,
+				},
+			}
+
+			result := validator.Validate(ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should skip staging check with git add -A in chain", func() {
+			mockGit.StagedFiles = []string{}
+
+			ctx := &hook.Context{
+				EventType: hook.PreToolUse,
+				ToolName:  hook.Bash,
+				ToolInput: hook.ToolInput{
+					Command: `git add -A && git commit -sS -m "chore: update all"`,
+				},
+			}
+
+			result := validator.Validate(ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+	})
+
 	Describe("Amend and allow-empty flags", func() {
 		It("should skip staging check with --amend", func() {
 			ctx := &hook.Context{
