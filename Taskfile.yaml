@@ -1,5 +1,9 @@
 version: '3'
 
+# Task runner configuration for claude-hooks
+# Uses mise for tool version management
+# Run 'mise install' before running tasks
+
 vars:
   BINARY_NAME: claude-hooks
   INSTALL_PATH: ~/.claude/hooks/dispatcher
@@ -13,7 +17,7 @@ tasks:
   build:
     desc: Build the binary (without signoff validation)
     cmds:
-      - go build -o bin/{{.BINARY_NAME}} ./cmd/claude-hooks
+      - mise exec -- go build -o bin/{{.BINARY_NAME}} ./cmd/claude-hooks
     sources:
       - '**/*.go'
     generates:
@@ -29,7 +33,7 @@ tasks:
       SIGNOFF: '{{.GIT_NAME}} <{{.GIT_EMAIL}}>'
     cmds:
       - |
-        go build \
+        mise exec -- go build \
           -ldflags="-X 'github.com/smykla-labs/claude-hooks/internal/validators/git.ExpectedSignoff={{.SIGNOFF}}'" \
           -o bin/{{.BINARY_NAME}} \
           ./cmd/claude-hooks
@@ -41,27 +45,27 @@ tasks:
   test:
     desc: Run tests
     cmds:
-      - go test -v -race -cover ./...
+      - mise exec -- go test -v -race -cover ./...
 
   test:unit:
     desc: Run unit tests only
     cmds:
-      - go test -v -race -cover -short ./...
+      - mise exec -- go test -v -race -cover -short ./...
 
   test:integration:
     desc: Run integration tests only
     cmds:
-      - go test -v -race -cover -run Integration ./...
+      - mise exec -- go test -v -race -cover -run Integration ./...
 
   lint:
     desc: Run linters
     cmds:
-      - golangci-lint run
+      - mise exec -- golangci-lint run
 
   lint:fix:
     desc: Run linters with auto-fix
     cmds:
-      - golangci-lint run --fix
+      - mise exec -- golangci-lint run --fix
 
   check:
     desc: Alias for lint:fix
@@ -71,7 +75,7 @@ tasks:
   fmt:
     desc: Format code
     cmds:
-      - golangci-lint run --fix
+      - mise exec -- golangci-lint run --fix
 
   install:
     desc: Install binary to ~/.claude/hooks/
@@ -93,8 +97,8 @@ tasks:
   deps:
     desc: Download dependencies
     cmds:
-      - go mod download
-      - go mod tidy
+      - mise exec -- go mod download
+      - mise exec -- go mod tidy
 
   verify:
     desc: Run all verification tasks

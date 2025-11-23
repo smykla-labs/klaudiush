@@ -1,0 +1,18 @@
+# mise configuration for claude-hooks
+# https://mise.jdx.dev/
+
+[tools]
+# Go language - latest stable version as of 2025-11-23
+go = "1.25.4"
+
+# Go linting tool with comprehensive checks
+# https://golangci-lint.run/
+golangci-lint = "2.6.2"
+
+# Task runner (if not already managed by mise)
+# Uncomment if you want mise to manage task as well
+# task = "latest"
+
+[env]
+# Ensure Go binaries are in PATH
+_.path = ["{{ env.HOME }}/.local/share/mise/installs/go/*/bin"]
