@@ -156,8 +156,6 @@ func (v *WorkflowValidator) isWorkflowFile(path string) bool {
 }
 
 // getContent extracts workflow content from context
-//
-//nolint:dupl // Same pattern used across validators, extraction would add complexity
 func (v *WorkflowValidator) getContent(ctx *hook.Context) (string, error) {
 	log := v.Logger()
 

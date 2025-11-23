@@ -15,6 +15,9 @@ import (
 
 const (
 	shellCheckTimeout = 10 * time.Second
+
+	// shellContextLines is the number of lines before/after an edit to include for validation
+	shellContextLines = 2
 )
 
 // ShellScriptValidator validates shell scripts using shellcheck.
@@ -46,23 +49,11 @@ func (v *ShellScriptValidator) Validate(ctx *hook.Context) *validator.Result {
 		return validator.Pass()
 	}
 
-	// Get content from context or read from file
-	content := ctx.ToolInput.Content
-	if content == "" {
-		// Check if file exists
-		if _, err := os.Stat(filePath); err != nil {
-			log.Debug("file does not exist, skipping", "file", filePath)
-			return validator.Pass()
-		}
-
-		// Read file content
-		data, err := os.ReadFile(filePath) //nolint:gosec // filePath is from Claude Code context
-		if err != nil {
-			log.Debug("failed to read file", "file", filePath, "error", err)
-			return validator.Pass()
-		}
-
-		content = string(data)
+	// Get content based on operation type
+	content, err := v.getContent(ctx, filePath)
+	if err != nil {
+		log.Debug("failed to get content", "error", err)
+		return validator.Pass()
 	}
 
 	// Skip Fish scripts
@@ -84,6 +75,79 @@ func (v *ShellScriptValidator) Validate(ctx *hook.Context) *validator.Result {
 	log.Debug("shellcheck failed", "output", result.RawOut)
 
 	return validator.Fail(v.formatShellCheckOutput(result.RawOut))
+}
+
+// getContent extracts shell script content from context
+func (v *ShellScriptValidator) getContent(ctx *hook.Context, filePath string) (string, error) {
+	log := v.Logger()
+
+	// For Edit operations, validate only the changed fragment with context
+	if ctx.EventType == hook.PreToolUse && ctx.ToolName == hook.Edit {
+		return v.getEditContent(ctx, filePath)
+	}
+
+	// Get content from context or read from file (Write operation)
+	content := ctx.ToolInput.Content
+	if content != "" {
+		return content, nil
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); err != nil {
+		log.Debug("file does not exist, skipping", "file", filePath)
+		return "", err
+	}
+
+	// Read file content
+	data, err := os.ReadFile(filePath) //nolint:gosec // filePath is from Claude Code context
+	if err != nil {
+		log.Debug("failed to read file", "file", filePath, "error", err)
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+// getEditContent extracts content for Edit operations with context
+func (v *ShellScriptValidator) getEditContent(
+	ctx *hook.Context,
+	filePath string,
+) (string, error) {
+	log := v.Logger()
+
+	oldStr := ctx.ToolInput.OldString
+	newStr := ctx.ToolInput.NewString
+
+	if oldStr == "" || newStr == "" {
+		log.Debug("missing old_string or new_string in edit operation")
+		return "", os.ErrNotExist
+	}
+
+	// Read original file to extract context around the edit
+	//nolint:gosec // filePath is from Claude Code tool context, not user input
+	originalContent, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Debug("failed to read file for edit validation", "file", filePath, "error", err)
+		return "", err
+	}
+
+	// Extract fragment with context lines around the edit
+	fragment := ExtractEditFragment(
+		string(originalContent),
+		oldStr,
+		newStr,
+		shellContextLines,
+		log,
+	)
+	if fragment == "" {
+		log.Debug("could not extract edit fragment, skipping validation")
+		return "", os.ErrNotExist
+	}
+
+	fragmentLineCount := len(strings.Split(fragment, "\n"))
+	log.Debug("validating edit fragment with context", "fragment_lines", fragmentLineCount)
+
+	return fragment, nil
 }
 
 // isFishScript checks if the script is a Fish shell script.

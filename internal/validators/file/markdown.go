@@ -17,6 +17,9 @@ import (
 const (
 	// markdownTimeout is the timeout for markdown linting
 	markdownTimeout = 10 * time.Second
+
+	// contextLines is the number of lines before/after an edit to include for validation
+	contextLines = 2
 )
 
 var (
@@ -80,14 +83,23 @@ func (v *MarkdownValidator) getContent(ctx *hook.Context) (string, error) {
 		return ctx.ToolInput.Content, nil
 	}
 
-	// For Edit operations in PreToolUse, read file and apply edit
+	// For Edit operations in PreToolUse, validate only the changed fragment with context
+	// to avoid forcing users to fix all existing linting issues
 	if ctx.EventType == hook.PreToolUse && ctx.ToolName == hook.Edit {
 		filePath := ctx.GetFilePath()
 		if filePath == "" {
 			return "", errNoContent
 		}
 
-		// Read original file content
+		oldStr := ctx.ToolInput.OldString
+		newStr := ctx.ToolInput.NewString
+
+		if oldStr == "" || newStr == "" {
+			log.Debug("missing old_string or new_string in edit operation")
+			return "", errNoContent
+		}
+
+		// Read original file to extract context around the edit
 		//nolint:gosec // filePath is from Claude Code tool context, not user input
 		originalContent, err := os.ReadFile(filePath)
 		if err != nil {
@@ -95,19 +107,23 @@ func (v *MarkdownValidator) getContent(ctx *hook.Context) (string, error) {
 			return "", err
 		}
 
-		// Apply the edit (replace old_string with new_string)
-		oldStr := ctx.ToolInput.OldString
-		newStr := ctx.ToolInput.NewString
-
-		if oldStr == "" {
-			log.Debug("no old_string in edit operation, cannot validate")
+		// Extract fragment with context lines around the edit
+		fragment := ExtractEditFragment(
+			string(originalContent),
+			oldStr,
+			newStr,
+			contextLines,
+			log,
+		)
+		if fragment == "" {
+			log.Debug("could not extract edit fragment, skipping validation")
 			return "", errNoContent
 		}
 
-		// Replace first occurrence (Edit tool replaces first match)
-		editedContent := strings.Replace(string(originalContent), oldStr, newStr, 1)
+		fragmentLineCount := len(strings.Split(fragment, "\n"))
+		log.Debug("validating edit fragment with context", "fragment_lines", fragmentLineCount)
 
-		return editedContent, nil
+		return fragment, nil
 	}
 
 	// Try to get from file path (Edit or PostToolUse)
