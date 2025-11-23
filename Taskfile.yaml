@@ -5,8 +5,19 @@ version: '3'
 # Run 'mise install' before running tasks
 
 vars:
-  BINARY_NAME: claude-hooks
-  INSTALL_PATH: ~/.claude/hooks/dispatcher
+  BINARY_NAME: chook
+  INSTALL_DIR:
+    sh: |
+      if [ -d "$HOME/.local/bin" ]; then
+        echo "$HOME/.local/bin"
+      elif [ -d "$HOME/bin" ]; then
+        echo "$HOME/bin"
+      elif [ -d "$HOME/.bin" ]; then
+        echo "$HOME/.bin"
+      else
+        echo "$HOME/.local/bin"
+      fi
+  INSTALL_PATH: '{{.INSTALL_DIR}}/chook'
 
 tasks:
   default:
@@ -128,13 +139,22 @@ tasks:
       - mise exec -- golangci-lint run --fix
 
   install:
-    desc: Install binary to ~/.claude/hooks/
+    desc: Install chook binary to user PATH (~/.local/bin or ~/bin)
     deps:
       - build
     cmds:
-      - mkdir -p ~/.claude/hooks
+      - mkdir -p {{.INSTALL_DIR}}
       - cp bin/{{.BINARY_NAME}} {{.INSTALL_PATH}}
       - chmod +x {{.INSTALL_PATH}}
+      - echo "✓ Installed {{.BINARY_NAME}} to {{.INSTALL_PATH}}"
+      - cmd: |
+          if ! echo "$PATH" | grep -q "{{.INSTALL_DIR}}"; then
+            echo ""
+            echo "⚠️  Warning: {{.INSTALL_DIR}} is not in your PATH"
+            echo "Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
+            echo "  export PATH=\"{{.INSTALL_DIR}}:\$PATH\""
+          fi
+        silent: true
 
   install:hooks:
     desc: Install git pre-commit and pre-push hooks

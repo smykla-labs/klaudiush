@@ -58,9 +58,10 @@ before they are executed by Claude Code.`,
 }
 
 func init() {
-	rootCmd.Flags().StringVar(
+	rootCmd.Flags().StringVarP(
 		&hookType,
 		"hook-type",
+		"T",
 		"",
 		"Hook event type (PreToolUse, PostToolUse, Notification)",
 	)
