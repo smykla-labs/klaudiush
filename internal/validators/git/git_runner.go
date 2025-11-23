@@ -29,21 +29,27 @@ func NewCLIGitRunner() *CLIGitRunner {
 }
 
 // NewGitRunner creates a GitRunner instance based on environment configuration
-// If CLAUDE_HOOKS_USE_SDK_GIT is set to "true" or "1", attempts to use SDK-based implementation
-// Falls back to CLI-based implementation if SDK initialization fails or env var not set
+// By default, uses SDK-based implementation for better performance
+// Set CLAUDE_HOOKS_USE_SDK_GIT to "false" or "0" to use CLI-based implementation
+// Falls back to CLI if SDK initialization fails
 // This function always returns a valid GitRunner instance
 //
 //nolint:ireturn,nolintlint // Factory function intentionally returns interface
 func NewGitRunner() GitRunner {
 	useSDK := os.Getenv("CLAUDE_HOOKS_USE_SDK_GIT")
-	if useSDK == "true" || useSDK == "1" {
-		runner, err := gitpkg.NewSDKRunner()
-		if err == nil {
-			return runner
-		}
-		// Fall back to CLI on SDK initialization failure
+
+	// Explicitly disabled: use CLI
+	if useSDK == "false" || useSDK == "0" {
+		return NewCLIGitRunner()
 	}
 
+	// Default or explicitly enabled: try SDK, fallback to CLI
+	runner, err := gitpkg.NewSDKRunner()
+	if err == nil {
+		return runner
+	}
+
+	// Fall back to CLI on SDK initialization failure
 	return NewCLIGitRunner()
 }
 

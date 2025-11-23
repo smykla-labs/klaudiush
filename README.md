@@ -241,25 +241,24 @@ Warnings (`ShouldBlock=false`) print to stderr but allow operation (exit 0).
 
 **Git SDK Configuration**:
 
-```bash
-# Use SDK-based git operations (2-5.9M× faster)
-export CLAUDE_HOOKS_USE_SDK_GIT=true
+SDK is used by default for better performance. To use CLI-based operations:
 
-# Use CLI-based git operations (default, backward compatible)
-unset CLAUDE_HOOKS_USE_SDK_GIT
+```bash
+export CLAUDE_HOOKS_USE_SDK_GIT=false
 ```
 
 The project supports two git operation implementations:
 
-- **SDK Implementation**: Native Go using `go-git/go-git/v6`
+- **SDK Implementation** (default): Native Go using `go-git/go-git/v6`
   - 2-5.9M× faster for cached operations (`IsInRepo`, `GetRepoRoot`)
   - 177× faster for `GetCurrentBranch`
   - 1.5× faster for `GetStagedFiles`
-  - Enable with `CLAUDE_HOOKS_USE_SDK_GIT=true` or `CLAUDE_HOOKS_USE_SDK_GIT=1`
+  - Used by default, no configuration needed
 
-- **CLI Implementation** (default): Executes git commands via shell
+- **CLI Implementation**: Executes git commands via shell
   - Fully tested and backward compatible
   - Automatic fallback if SDK initialization fails
+  - Opt-in with `CLAUDE_HOOKS_USE_SDK_GIT=false` or `CLAUDE_HOOKS_USE_SDK_GIT=0`
 
 ### Build-time Configuration
 

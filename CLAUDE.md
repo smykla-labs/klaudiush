@@ -250,16 +250,16 @@ Unified interface implemented by both CLI and SDK:
 
 ```go
 func NewGitRunner() GitRunner {
-    // Check CLAUDE_HOOKS_USE_SDK_GIT environment variable
-    // Returns SDK implementation if set to "true" or "1"
-    // Falls back to CLI implementation otherwise
+    // By default, uses SDK implementation for better performance
+    // Set CLAUDE_HOOKS_USE_SDK_GIT to "false" or "0" to use CLI
+    // Falls back to CLI if SDK initialization fails
 }
 ```
 
 **Environment Variable**:
 
-- `CLAUDE_HOOKS_USE_SDK_GIT=true` or `CLAUDE_HOOKS_USE_SDK_GIT=1`: Use SDK implementation
-- Not set or other value: Use CLI implementation (default)
+- Not set or `CLAUDE_HOOKS_USE_SDK_GIT=true`: Use SDK implementation (default)
+- `CLAUDE_HOOKS_USE_SDK_GIT=false` or `CLAUDE_HOOKS_USE_SDK_GIT=0`: Use CLI implementation
 
 **Adapter Pattern** (`internal/git/adapter.go`):
 
