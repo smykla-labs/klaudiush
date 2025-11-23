@@ -157,15 +157,39 @@ func formatErrorList(header string, errors []*ValidationError) string {
 
 	var builder strings.Builder
 
+	// Header with validator names
+	builder.WriteString("\n")
 	builder.WriteString(header)
+
+	// Add validator names after header
+	for _, err := range errors {
+		builder.WriteString(" ")
+		// Remove "validate-" prefix if present
+		validatorName := err.Validator
+		validatorName = strings.TrimPrefix(validatorName, "validate-")
+		builder.WriteString(validatorName)
+	}
+
 	builder.WriteString("\n\n")
 
 	for _, err := range errors {
-		builder.WriteString(fmt.Sprintf("  %s\n", err.Message))
+		// Main message
+		builder.WriteString(err.Message)
+		builder.WriteString("\n")
 
+		// Details - just the values without the key label
 		if len(err.Details) > 0 {
-			for k, v := range err.Details {
-				builder.WriteString(fmt.Sprintf("    %s: %s\n", k, v))
+			builder.WriteString("\n")
+
+			for _, v := range err.Details {
+				// Handle multi-line detail values
+				lines := strings.SplitSeq(strings.TrimSpace(v), "\n")
+				for line := range lines {
+					if line != "" {
+						builder.WriteString(line)
+						builder.WriteString("\n")
+					}
+				}
 			}
 		}
 
