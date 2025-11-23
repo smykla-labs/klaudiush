@@ -191,3 +191,72 @@ Warnings (`ShouldBlock=false`) print to stderr but allow operation (exit 0).
 - Write tests using Ginkgo/Gomega BDD style
 - Add minimal comments only where clarification is needed
 - Use structured logging via BaseValidator.Logger()
+
+## Commit Message Standards
+
+All commits must follow these rules:
+
+### Format
+
+```
+type(scope): subject line (max 50 characters)
+
+Body text wrapped at 72 characters per line.
+Explain what and why, not how.
+
+Additional paragraphs separated by blank lines.
+```
+
+### Rules
+
+1. **Title Line (max 50 chars)**:
+   - Format: `type(scope): description`
+   - Scope is **required** (not optional)
+   - Use lowercase for description
+   - No period at the end
+
+2. **Body (max 72 chars per line)**:
+   - Wrap all lines at 72 characters
+   - Separate paragraphs with blank lines
+   - Explain what and why, not how
+
+3. **Valid Types**:
+   - `feat`: New feature
+   - `fix`: Bug fix
+   - `docs`: Documentation only
+   - `style`: Code style (formatting, no logic change)
+   - `refactor`: Code refactoring
+   - `test`: Adding/updating tests
+   - `chore`: Maintenance tasks
+   - `ci`: CI/CD changes
+   - `build`: Build system changes
+   - `perf`: Performance improvements
+
+4. **Scope Examples**:
+   - `validators`, `parser`, `git`, `templates`
+   - `commit`, `pr`, `branch`, `add`, `push`
+   - `copilot`, `docs`, `ci`, `test`
+
+5. **Sign-off Required**:
+   - All commits must be signed with `-sS` flags
+   - Use: `git commit -sS -m "message"`
+
+### Examples
+
+```
+feat(validators): add terraform format validation
+
+Add validator to check terraform file formatting using
+terraform fmt -check. Validates .tf files before commit.
+
+Blocks commit if formatting issues detected.
+```
+
+```
+fix(parser): handle combined flags in git commands
+
+Parse combined flags like -sS into individual flags.
+Fixes issue where HasFlag() couldn't detect combined
+flags properly.
+```
+
