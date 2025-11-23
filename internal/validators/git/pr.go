@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/smykla-labs/claude-hooks/internal/validator"
@@ -228,13 +229,7 @@ func validateBaseBranchLabels(data PRData, allErrors *[]string) {
 	}
 
 	// Release branch - should have matching label
-	hasMatchingLabel := false
-	for _, label := range data.Labels {
-		if label == data.BaseBranch {
-			hasMatchingLabel = true
-			break
-		}
-	}
+	hasMatchingLabel := slices.Contains(data.Labels, data.BaseBranch)
 
 	if !hasMatchingLabel {
 		*allErrors = append(*allErrors,

@@ -52,8 +52,8 @@ func ValidatePRMarkdown(body string) PRMarkdownValidationResult {
 		return result
 	}
 
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(output, "\n")
+	for line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue

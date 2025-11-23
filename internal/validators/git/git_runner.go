@@ -38,22 +38,27 @@ type GitRunner interface {
 	GetRemotes() (map[string]string, error)
 }
 
-// RealGitRunner implements GitRunner using actual git commands
-type RealGitRunner struct {
+// CLIGitRunner implements GitRunner using actual git commands
+type CLIGitRunner struct {
 	runner  exec.CommandRunner
 	timeout time.Duration
 }
 
-// NewRealGitRunner creates a new RealGitRunner instance
-func NewRealGitRunner() *RealGitRunner {
-	return &RealGitRunner{
+// NewCLIGitRunner creates a new CLIGitRunner instance
+func NewCLIGitRunner() *CLIGitRunner {
+	return &CLIGitRunner{
 		runner:  exec.NewCommandRunner(gitCommandTimeout),
 		timeout: gitCommandTimeout,
 	}
 }
 
+// NewRealGitRunner creates a new CLIGitRunner instance
+func NewRealGitRunner() *CLIGitRunner {
+	return NewCLIGitRunner()
+}
+
 // IsInRepo checks if we're in a git repository
-func (r *RealGitRunner) IsInRepo() bool {
+func (r *CLIGitRunner) IsInRepo() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -62,7 +67,7 @@ func (r *RealGitRunner) IsInRepo() bool {
 }
 
 // GetStagedFiles returns the list of staged files
-func (r *RealGitRunner) GetStagedFiles() ([]string, error) {
+func (r *CLIGitRunner) GetStagedFiles() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -75,7 +80,7 @@ func (r *RealGitRunner) GetStagedFiles() ([]string, error) {
 }
 
 // GetModifiedFiles returns the list of modified but unstaged files
-func (r *RealGitRunner) GetModifiedFiles() ([]string, error) {
+func (r *CLIGitRunner) GetModifiedFiles() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -88,7 +93,7 @@ func (r *RealGitRunner) GetModifiedFiles() ([]string, error) {
 }
 
 // GetUntrackedFiles returns the list of untracked files
-func (r *RealGitRunner) GetUntrackedFiles() ([]string, error) {
+func (r *CLIGitRunner) GetUntrackedFiles() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -101,7 +106,7 @@ func (r *RealGitRunner) GetUntrackedFiles() ([]string, error) {
 }
 
 // GetRepoRoot returns the git repository root directory
-func (r *RealGitRunner) GetRepoRoot() (string, error) {
+func (r *CLIGitRunner) GetRepoRoot() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -114,7 +119,7 @@ func (r *RealGitRunner) GetRepoRoot() (string, error) {
 }
 
 // GetRemoteURL returns the URL for the given remote
-func (r *RealGitRunner) GetRemoteURL(remote string) (string, error) {
+func (r *CLIGitRunner) GetRemoteURL(remote string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -127,7 +132,7 @@ func (r *RealGitRunner) GetRemoteURL(remote string) (string, error) {
 }
 
 // GetCurrentBranch returns the current branch name
-func (r *RealGitRunner) GetCurrentBranch() (string, error) {
+func (r *CLIGitRunner) GetCurrentBranch() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -140,7 +145,7 @@ func (r *RealGitRunner) GetCurrentBranch() (string, error) {
 }
 
 // GetBranchRemote returns the tracking remote for the given branch
-func (r *RealGitRunner) GetBranchRemote(branch string) (string, error) {
+func (r *CLIGitRunner) GetBranchRemote(branch string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -154,7 +159,7 @@ func (r *RealGitRunner) GetBranchRemote(branch string) (string, error) {
 }
 
 // GetRemotes returns the list of all remotes with their URLs
-func (r *RealGitRunner) GetRemotes() (map[string]string, error) {
+func (r *CLIGitRunner) GetRemotes() (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -164,8 +169,8 @@ func (r *RealGitRunner) GetRemotes() (map[string]string, error) {
 	}
 
 	remotes := make(map[string]string)
-	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n")
+	for line := range lines {
 		if line == "" {
 			continue
 		}

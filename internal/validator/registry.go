@@ -4,6 +4,7 @@ package validator
 import (
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/smykla-labs/claude-hooks/pkg/hook"
@@ -75,13 +76,7 @@ func ToolTypeIs(toolType hook.ToolType) Predicate {
 // ToolTypeIn returns a predicate that matches any of the given tool types.
 func ToolTypeIn(toolTypes ...hook.ToolType) Predicate {
 	return func(ctx *hook.Context) bool {
-		for _, t := range toolTypes {
-			if ctx.ToolName == t {
-				return true
-			}
-		}
-
-		return false
+		return slices.Contains(toolTypes, ctx.ToolName)
 	}
 }
 
@@ -151,13 +146,7 @@ func FileExtensionIn(exts ...string) Predicate {
 
 	return func(ctx *hook.Context) bool {
 		fileExt := filepath.Ext(ctx.GetFilePath())
-		for _, ext := range normalized {
-			if fileExt == ext {
-				return true
-			}
-		}
-
-		return false
+		return slices.Contains(normalized, fileExt)
 	}
 }
 

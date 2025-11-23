@@ -1,0 +1,449 @@
+package git_test
+
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/config"
+	"github.com/go-git/go-git/v6/plumbing"
+	"github.com/go-git/go-git/v6/plumbing/object"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	internalgit "github.com/smykla-labs/claude-hooks/internal/git"
+)
+
+var _ = Describe("SDKRepository", func() {
+	var (
+		tempDir    string
+		repo       *git.Repository
+		sdkRepo    *internalgit.SDKRepository
+		err        error
+		origDir    string
+		testAuthor = &object.Signature{
+			Name:  "Test User",
+			Email: "test@example.com",
+		}
+	)
+
+	BeforeEach(func() {
+		// Reset repository cache
+		internalgit.ResetRepositoryCache()
+
+		// Save current directory
+		origDir, err = os.Getwd()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create temporary directory
+		tempDir, err = os.MkdirTemp("", "git-test-*")
+		Expect(err).NotTo(HaveOccurred())
+
+		// Resolve symlinks (macOS /var -> /private/var)
+		tempDir, err = filepath.EvalSymlinks(tempDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Change to temp directory
+		err = os.Chdir(tempDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Initialize git repository
+		repo, err = git.PlainInit(tempDir, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Configure repository
+		cfg, err := repo.Config() //nolint:govet // Shadow in test setup is acceptable for readability
+		Expect(err).NotTo(HaveOccurred())
+		cfg.User.Name = testAuthor.Name
+		cfg.User.Email = testAuthor.Email
+		err = repo.SetConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		// Restore original directory
+		if origDir != "" {
+			err := os.Chdir(origDir) //nolint:govet // Shadow in cleanup is acceptable for scoped error handling
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Clean up temp directory
+		if tempDir != "" {
+			err := os.RemoveAll(tempDir) //nolint:govet // Shadow in cleanup is acceptable for scoped error handling
+			Expect(err).NotTo(HaveOccurred())
+		}
+	})
+
+	Describe("DiscoverRepository", func() {
+		Context("when in a git repository", func() {
+			It("should discover the repository", func() {
+				sdkRepo, err = internalgit.DiscoverRepository()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(sdkRepo).NotTo(BeNil())
+			})
+
+			It("should return the same instance on multiple calls", func() {
+				repo1, err1 := internalgit.DiscoverRepository()
+				Expect(err1).NotTo(HaveOccurred())
+
+				repo2, err2 := internalgit.DiscoverRepository()
+				Expect(err2).NotTo(HaveOccurred())
+
+				Expect(repo1).To(BeIdenticalTo(repo2))
+			})
+		})
+
+		Context("when not in a git repository", func() {
+			BeforeEach(func() {
+				// Remove .git directory
+				err := os.RemoveAll(filepath.Join(tempDir, ".git")) //nolint:govet // Shadow in nested test setup is acceptable
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return ErrNotRepository", func() {
+				_, err := internalgit.DiscoverRepository() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).To(MatchError(internalgit.ErrNotRepository))
+			})
+		})
+	})
+
+	Describe("IsInRepo", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return true when in a repository", func() {
+			Expect(sdkRepo.IsInRepo()).To(BeTrue())
+		})
+	})
+
+	Describe("GetRoot", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return the repository root directory", func() {
+			root, err := sdkRepo.GetRoot() //nolint:govet // Shadow in test case is acceptable for readability
+			Expect(err).NotTo(HaveOccurred())
+			Expect(root).To(Equal(tempDir))
+		})
+	})
+
+	Describe("GetStagedFiles", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when no files are staged", func() {
+			It("should return empty list", func() {
+				files, err := sdkRepo.GetStagedFiles() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(files).To(BeEmpty())
+			})
+		})
+
+		Context("when files are staged", func() {
+			BeforeEach(func() {
+				// Create and stage a file
+				testFile := filepath.Join(tempDir, "test.txt")
+				err := os.WriteFile(testFile, []byte("test content"), 0o644) //nolint:govet // Shadow in nested test setup is acceptable
+				Expect(err).NotTo(HaveOccurred())
+
+				worktree, err := repo.Worktree()
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = worktree.Add("test.txt")
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return the staged files", func() {
+				files, err := sdkRepo.GetStagedFiles() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(files).To(ConsistOf("test.txt"))
+			})
+		})
+
+		Context("when multiple files are staged", func() {
+			BeforeEach(func() {
+				worktree, err := repo.Worktree() //nolint:govet // Shadow in nested test setup is acceptable
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, filename := range []string{"file1.txt", "file2.txt", "file3.txt"} {
+					testFile := filepath.Join(tempDir, filename)
+					err := os.WriteFile(testFile, []byte("content"), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = worktree.Add(filename)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+
+			It("should return all staged files", func() {
+				files, err := sdkRepo.GetStagedFiles() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(files).To(ConsistOf("file1.txt", "file2.txt", "file3.txt"))
+			})
+		})
+	})
+
+	Describe("GetModifiedFiles", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create initial commit
+			testFile := filepath.Join(tempDir, "existing.txt")
+			err := os.WriteFile(testFile, []byte("original"), 0o644) //nolint:govet // Shadow in nested test setup is acceptable
+			Expect(err).NotTo(HaveOccurred())
+
+			worktree, err := repo.Worktree()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = worktree.Add("existing.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = worktree.Commit("Initial commit", &git.CommitOptions{
+				Author: testAuthor,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when no files are modified", func() {
+			It("should return empty list", func() {
+				files, err := sdkRepo.GetModifiedFiles() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(files).To(BeEmpty())
+			})
+		})
+
+		Context("when files are modified but not staged", func() {
+			BeforeEach(func() {
+				testFile := filepath.Join(tempDir, "existing.txt")
+				err := os.WriteFile(testFile, []byte("modified content"), 0o644) //nolint:govet // Shadow in nested test setup is acceptable
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return the modified files", func() {
+				files, err := sdkRepo.GetModifiedFiles() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(files).To(ConsistOf("existing.txt"))
+			})
+		})
+	})
+
+	Describe("GetUntrackedFiles", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when no untracked files exist", func() {
+			It("should return empty list", func() {
+				files, err := sdkRepo.GetUntrackedFiles() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(files).To(BeEmpty())
+			})
+		})
+
+		Context("when untracked files exist", func() {
+			BeforeEach(func() {
+				testFile := filepath.Join(tempDir, "untracked.txt")
+				err := os.WriteFile(testFile, []byte("untracked"), 0o644) //nolint:govet // Shadow in nested test setup is acceptable
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return the untracked files", func() {
+				files, err := sdkRepo.GetUntrackedFiles() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(files).To(ConsistOf("untracked.txt"))
+			})
+		})
+	})
+
+	Describe("GetCurrentBranch", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create initial commit to establish HEAD
+			testFile := filepath.Join(tempDir, "initial.txt")
+			err := os.WriteFile(testFile, []byte("initial"), 0o644) //nolint:govet // Shadow in nested test setup is acceptable
+			Expect(err).NotTo(HaveOccurred())
+
+			worktree, err := repo.Worktree()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = worktree.Add("initial.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = worktree.Commit("Initial commit", &git.CommitOptions{
+				Author: testAuthor,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return the current branch name", func() {
+			branch, err := sdkRepo.GetCurrentBranch() //nolint:govet // Shadow in test case is acceptable for readability
+			Expect(err).NotTo(HaveOccurred())
+			Expect(branch).To(Equal("master"))
+		})
+
+		Context("when on a different branch", func() {
+			BeforeEach(func() {
+				worktree, err := repo.Worktree() //nolint:govet // Shadow in nested test setup is acceptable
+				Expect(err).NotTo(HaveOccurred())
+
+				err = worktree.Checkout(&git.CheckoutOptions{
+					Branch: plumbing.NewBranchReferenceName("feature"),
+					Create: true,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return the feature branch name", func() {
+				branch, err := sdkRepo.GetCurrentBranch() //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(branch).To(Equal("feature"))
+			})
+		})
+	})
+
+	Describe("GetBranchRemote", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create initial commit
+			testFile := filepath.Join(tempDir, "initial.txt")
+			err := os.WriteFile(testFile, []byte("initial"), 0o644) //nolint:govet // Shadow in nested test setup is acceptable
+			Expect(err).NotTo(HaveOccurred())
+
+			worktree, err := repo.Worktree()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = worktree.Add("initial.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = worktree.Commit("Initial commit", &git.CommitOptions{
+				Author: testAuthor,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when branch has tracking remote", func() {
+			BeforeEach(func() {
+				// Add remote
+				_, err := repo.CreateRemote(&config.RemoteConfig{ //nolint:govet // Shadow in nested test setup is acceptable
+					Name: "origin",
+					URLs: []string{"https://github.com/test/repo.git"},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Configure branch to track remote
+				cfg, err := repo.Config()
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg.Branches["master"] = &config.Branch{
+					Name:   "master",
+					Remote: "origin",
+					Merge:  "refs/heads/master",
+				}
+
+				err = repo.SetConfig(cfg)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return the tracking remote", func() {
+				remote, err := sdkRepo.GetBranchRemote("master") //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(remote).To(Equal("origin"))
+			})
+		})
+
+		Context("when branch does not exist", func() {
+			It("should return ErrBranchNotFound", func() {
+				_, err := sdkRepo.GetBranchRemote("nonexistent") //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).To(MatchError(ContainSubstring("branch not found")))
+			})
+		})
+
+		Context("when branch has no tracking remote", func() {
+			It("should return ErrNoTracking", func() {
+				_, err := sdkRepo.GetBranchRemote("master") //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).To(MatchError(ContainSubstring("no tracking remote")))
+			})
+		})
+	})
+
+	Describe("GetRemoteURL", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when remote exists", func() {
+			BeforeEach(func() {
+				_, err := repo.CreateRemote(&config.RemoteConfig{ //nolint:govet // Shadow in nested test setup is acceptable
+					Name: "origin",
+					URLs: []string{"https://github.com/test/repo.git"},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return the remote URL", func() {
+				url, err := sdkRepo.GetRemoteURL("origin") //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).NotTo(HaveOccurred())
+				Expect(url).To(Equal("https://github.com/test/repo.git"))
+			})
+		})
+
+		Context("when remote does not exist", func() {
+			It("should return ErrRemoteNotFound", func() {
+				_, err := sdkRepo.GetRemoteURL("nonexistent") //nolint:govet // Shadow in test case is acceptable for readability
+				Expect(err).To(MatchError(ContainSubstring("remote not found")))
+			})
+		})
+	})
+
+	Describe("GetRemotes", func() {
+		BeforeEach(func() {
+			sdkRepo, err = internalgit.DiscoverRepository()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when no remotes exist", func() {
+			It("should return empty map", func() {
+				remotes, err := sdkRepo.GetRemotes()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(remotes).To(BeEmpty())
+			})
+		})
+
+		Context("when multiple remotes exist", func() {
+			BeforeEach(func() {
+				_, err := repo.CreateRemote(&config.RemoteConfig{
+					Name: "origin",
+					URLs: []string{"https://github.com/test/repo.git"},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = repo.CreateRemote(&config.RemoteConfig{
+					Name: "upstream",
+					URLs: []string{"https://github.com/upstream/repo.git"},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should return all remotes with their URLs", func() {
+				remotes, err := sdkRepo.GetRemotes()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(remotes).To(HaveLen(2))
+				Expect(remotes["origin"]).To(Equal("https://github.com/test/repo.git"))
+				Expect(remotes["upstream"]).To(Equal("https://github.com/upstream/repo.git"))
+			})
+		})
+	})
+})

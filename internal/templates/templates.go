@@ -12,7 +12,7 @@ var funcMap = template.FuncMap{
 }
 
 // Execute executes a template with the given data
-func Execute(tmpl *template.Template, data interface{}) (string, error) {
+func Execute(tmpl *template.Template, data any) (string, error) {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", err
@@ -21,7 +21,7 @@ func Execute(tmpl *template.Template, data interface{}) (string, error) {
 }
 
 // MustExecute executes a template and panics on error
-func MustExecute(tmpl *template.Template, data interface{}) string {
+func MustExecute(tmpl *template.Template, data any) string {
 	result, err := Execute(tmpl, data)
 	if err != nil {
 		panic(err)

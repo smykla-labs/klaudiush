@@ -120,9 +120,9 @@ func validateChangelog(body, prType string, result *PRBodyValidationResult) {
 func checkLineBreaks(body string, result *PRBodyValidationResult) {
 	shortLines := 0
 	totalLines := 0
-	lines := strings.Split(body, "\n")
+	lines := strings.SplitSeq(body, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		// Skip headers, blank lines, blockquotes, and list items
 		if strings.HasPrefix(line, "##") ||
 			strings.TrimSpace(line) == "" ||
