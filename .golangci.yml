@@ -82,6 +82,12 @@ linters:
     - wastedassign   # Finds wasted assignment statements
     - modernize      # Modernize Go code with 'any' and other features
     - err113         # Enforce sentinel error pattern
+    - funlen         # Checks for long functions
+    - containedctx   # Detects struct contained context.Context field
+    - errchkjson     # Checks types passed to the json encoding functions
+    - gocheckcompilerdirectives # Checks that go compiler directive comments are valid
+    - ireturn        # Accept Interfaces, Return Concrete Types
+    - wsl            # Whitespace Linter - Add or remove empty lines
 
   exclusions:
     rules:
@@ -188,10 +194,6 @@ linters:
           disabled: true
 
     gocritic:
-      disabled-checks:
-        - ifElseChain
-        - commentFormatting
-        - badCall
 
     nakedret:
       max-func-lines: 30
