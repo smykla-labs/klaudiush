@@ -188,10 +188,18 @@ Warnings (`ShouldBlock=false`) print to stderr but allow operation (exit 0).
 
 ### Temporary Files
 
-- Use `tmp/` directory in project root for all temporary files
-- Never use `/tmp` or system temp directories
+**During Development/Testing:**
+
+- Use `tmp/` directory in project root for temporary files
+- Never use `/tmp` or system temp directories during development
 - The `tmp/` directory is already in `.gitignore`
-- Examples: temp files for validation, test artifacts, scratch files
+- Examples: test artifacts, analysis files, scratch work
+
+**In Production Code (validators running on user machines):**
+
+- Use system temp directory via `os.TempDir()`
+- The dispatcher runs on user machines without project directory
+- Example: terraform.go, workflow.go create temp files for validation
 
 ## Code Style
 
