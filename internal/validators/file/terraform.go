@@ -124,8 +124,8 @@ func (v *TerraformValidator) checkFormat(tool, filePath string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), terraformTimeout)
 	defer cancel()
 
-	result, err := v.runner.Run(ctx, tool, "fmt", "-check", "-diff", filePath)
-	if err == nil {
+	result := v.runner.Run(ctx, tool, "fmt", "-check", "-diff", filePath)
+	if result.Err == nil {
 		// Formatting is correct
 		return ""
 	}
@@ -145,9 +145,9 @@ func (v *TerraformValidator) checkFormat(tool, filePath string) string {
 		)
 	}
 
-	v.Logger().Debug("fmt command failed", "error", err, "stderr", result.Stderr)
+	v.Logger().Debug("fmt command failed", "error", result.Err, "stderr", result.Stderr)
 
-	return fmt.Sprintf("⚠️  Failed to run '%s fmt -check': %v", tool, err)
+	return fmt.Sprintf("⚠️  Failed to run '%s fmt -check': %v", tool, result.Err)
 }
 
 // runTflint runs tflint on the file if available
@@ -162,16 +162,16 @@ func (v *TerraformValidator) runTflint(filePath string) []string {
 	defer cancel()
 
 	// Run tflint on the file
-	result, err := v.runner.Run(ctx, "tflint", "--format=compact", filePath)
+	result := v.runner.Run(ctx, "tflint", "--format=compact", filePath)
 	output := strings.TrimSpace(result.Stdout)
 
-	if err != nil {
+	if result.Err != nil {
 		// tflint returns non-zero on findings
 		if output != "" {
 			return []string{"⚠️  tflint findings:\n" + output}
 		}
 
-		v.Logger().Debug("tflint failed", "error", err, "stderr", result.Stderr)
+		v.Logger().Debug("tflint failed", "error", result.Err, "stderr", result.Stderr)
 
 		return nil
 	}

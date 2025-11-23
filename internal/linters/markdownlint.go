@@ -38,7 +38,7 @@ func (m *RealMarkdownLinter) Lint(ctx context.Context, content string) *LintResu
 	var combinedErr error
 
 	if m.toolChecker.IsAvailable("markdownlint") {
-		result, err := m.runner.RunWithStdin(
+		result := m.runner.RunWithStdin(
 			ctx,
 			strings.NewReader(content),
 			"markdownlint",
@@ -49,8 +49,8 @@ func (m *RealMarkdownLinter) Lint(ctx context.Context, content string) *LintResu
 			combinedOutput.WriteString(result.Stderr)
 		}
 
-		if err != nil {
-			combinedErr = err
+		if result.Err != nil {
+			combinedErr = result.Err
 		}
 	}
 

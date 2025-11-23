@@ -36,9 +36,9 @@ func (t *RealTfLinter) Lint(ctx context.Context, filePath string) *LintResult {
 	}
 
 	// Run tflint with compact format
-	result, err := t.runner.Run(ctx, "tflint", "--format=compact", filePath)
+	result := t.runner.Run(ctx, "tflint", "--format=compact", filePath)
 	// tflint returns non-zero when findings are detected
-	if err != nil {
+	if result.Err != nil {
 		// If there's output, it means there are findings (not an error)
 		output := result.Stdout
 		if output == "" {
@@ -50,14 +50,14 @@ func (t *RealTfLinter) Lint(ctx context.Context, filePath string) *LintResult {
 				Success:  false,
 				RawOut:   output,
 				Findings: []LintFinding{}, // TODO: Parse compact output
-				Err:      err,
+				Err:      result.Err,
 			}
 		}
 
 		// Real error
 		return &LintResult{
 			Success: false,
-			Err:     err,
+			Err:     result.Err,
 		}
 	}
 

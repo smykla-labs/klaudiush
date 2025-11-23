@@ -17,20 +17,20 @@ var errShellcheckFailed = errors.New("shellcheck failed")
 
 // Mock implementations for testing
 type mockCommandRunner struct {
-	runFunc          func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error)
-	runWithStdinFunc func(ctx context.Context, stdin io.Reader, name string, args ...string) (*execpkg.CommandResult, error)
+	runFunc          func(ctx context.Context, name string, args ...string) execpkg.CommandResult
+	runWithStdinFunc func(ctx context.Context, stdin io.Reader, name string, args ...string) execpkg.CommandResult
 }
 
 func (m *mockCommandRunner) Run(
 	ctx context.Context,
 	name string,
 	args ...string,
-) (*execpkg.CommandResult, error) {
+) execpkg.CommandResult {
 	if m.runFunc != nil {
 		return m.runFunc(ctx, name, args...)
 	}
 
-	return &execpkg.CommandResult{}, nil
+	return execpkg.CommandResult{}
 }
 
 func (m *mockCommandRunner) RunWithStdin(
@@ -38,19 +38,19 @@ func (m *mockCommandRunner) RunWithStdin(
 	stdin io.Reader,
 	name string,
 	args ...string,
-) (*execpkg.CommandResult, error) {
+) execpkg.CommandResult {
 	if m.runWithStdinFunc != nil {
 		return m.runWithStdinFunc(ctx, stdin, name, args...)
 	}
 
-	return &execpkg.CommandResult{}, nil
+	return execpkg.CommandResult{}
 }
 
 func (m *mockCommandRunner) RunWithTimeout(
 	timeout time.Duration,
 	name string,
 	args ...string,
-) (*execpkg.CommandResult, error) {
+) execpkg.CommandResult {
 	// Use context with timeout and call Run
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -74,15 +74,16 @@ var _ = Describe("ShellChecker", func() {
 	Describe("Check", func() {
 		Context("when shellcheck passes", func() {
 			It("should return success", func() {
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
 					Expect(name).To(Equal("shellcheck"))
 					Expect(args).To(HaveLen(1))
 
-					return &execpkg.CommandResult{
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   "",
 						ExitCode: 0,
-					}, nil
+						Err:      nil,
+					}
 				}
 
 				result := checker.Check(ctx, "#!/bin/bash\necho 'hello'")
@@ -97,12 +98,13 @@ var _ = Describe("ShellChecker", func() {
 			It("should return failure with output", func() {
 				shellcheckOutput := "script.sh:2:1: warning: Use $(...) instead of legacy backticks"
 
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   shellcheckOutput,
 						Stderr:   "",
 						ExitCode: 1,
-					}, errShellcheckFailed
+						Err:      errShellcheckFailed,
+					}
 				}
 
 				result := checker.Check(ctx, "#!/bin/bash\nvar=`ls`")
@@ -116,12 +118,13 @@ var _ = Describe("ShellChecker", func() {
 			It("should include stderr in output when stdout is empty", func() {
 				stderrOutput := "shellcheck: error parsing script"
 
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   stderrOutput,
 						ExitCode: 1,
-					}, errShellcheckFailed
+						Err:      errShellcheckFailed,
+					}
 				}
 
 				result := checker.Check(ctx, "#!/bin/bash\ninvalid syntax")

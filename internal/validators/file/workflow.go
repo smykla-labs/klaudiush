@@ -361,7 +361,7 @@ func (v *WorkflowValidator) getLatestVersion(actionName string) string {
 	defer cancel()
 
 	// Try releases first
-	result, err := v.runner.Run(
+	result := v.runner.Run(
 		ctx,
 		"gh",
 		"api",
@@ -369,7 +369,7 @@ func (v *WorkflowValidator) getLatestVersion(actionName string) string {
 		"--jq",
 		".tag_name",
 	)
-	if err == nil {
+	if result.Err == nil {
 		version := strings.TrimSpace(result.Stdout)
 		if version != "" {
 			return version
@@ -380,8 +380,8 @@ func (v *WorkflowValidator) getLatestVersion(actionName string) string {
 	ctx, cancel = context.WithTimeout(context.Background(), ghAPITimeout)
 	defer cancel()
 
-	result, err = v.runner.Run(ctx, "gh", "api", fmt.Sprintf("repos/%s/tags", actionName))
-	if err != nil {
+	result = v.runner.Run(ctx, "gh", "api", fmt.Sprintf("repos/%s/tags", actionName))
+	if result.Err != nil {
 		return ""
 	}
 
@@ -437,10 +437,10 @@ func (v *WorkflowValidator) runActionlint(content, originalPath string) []string
 	ctx, cancel := context.WithTimeout(context.Background(), workflowTimeout)
 	defer cancel()
 
-	result, err := v.runner.Run(ctx, "actionlint", "-no-color", tmpFile)
+	result := v.runner.Run(ctx, "actionlint", "-no-color", tmpFile)
 	output := strings.TrimSpace(result.Stdout)
 
-	if err != nil {
+	if result.Err != nil {
 		// actionlint returns non-zero on findings
 		if output != "" {
 			// Parse output into individual warnings
@@ -450,7 +450,7 @@ func (v *WorkflowValidator) runActionlint(content, originalPath string) []string
 		// Check if it's a real error (not just findings)
 		errOutput := strings.TrimSpace(result.Stderr)
 		if errOutput != "" {
-			v.Logger().Debug("actionlint failed", "error", err, "stderr", errOutput)
+			v.Logger().Debug("actionlint failed", "error", result.Err, "stderr", errOutput)
 			return nil
 		}
 

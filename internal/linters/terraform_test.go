@@ -51,16 +51,16 @@ var _ = Describe("TerraformFormatter", func() {
 	Describe("CheckFormat", func() {
 		Context("when terraform fmt succeeds", func() {
 			It("should return success", func() {
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
 					// Expect either tofu or terraform
 					Expect(name).To(Or(Equal("tofu"), Equal("terraform")))
 					Expect(args).To(ContainElements("fmt", "-check", "-diff"))
 
-					return &execpkg.CommandResult{
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   "",
 						ExitCode: 0,
-					}, nil
+					}
 				}
 
 				result := formatter.CheckFormat(ctx, `resource "aws_instance" "example" {
@@ -84,12 +84,13 @@ var _ = Describe("TerraformFormatter", func() {
 +  ami = "ami-12345"
  }`
 
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   diffOutput,
 						Stderr:   "",
 						ExitCode: 3,
-					}, errTerraformFailed
+						Err:      errTerraformFailed,
+					}
 				}
 
 				result := formatter.CheckFormat(ctx, `resource "aws_instance" "example" {
@@ -107,12 +108,13 @@ ami = "ami-12345"
 			It("should include stderr in output", func() {
 				stderrOutput := "Error: Invalid Terraform configuration"
 
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   stderrOutput,
 						ExitCode: 1,
-					}, errTerraformFailed
+						Err:      errTerraformFailed,
+					}
 				}
 
 				result := formatter.CheckFormat(ctx, "invalid terraform syntax")

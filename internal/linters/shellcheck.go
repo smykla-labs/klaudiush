@@ -48,12 +48,12 @@ func (s *RealShellChecker) Check(ctx context.Context, content string) *LintResul
 	defer cleanup()
 
 	// Run shellcheck
-	result, err := s.runner.Run(ctx, "shellcheck", tmpFile)
+	result := s.runner.Run(ctx, "shellcheck", tmpFile)
 
 	return &LintResult{
-		Success:  err == nil,
+		Success:  result.Err == nil,
 		RawOut:   result.Stdout + result.Stderr,
 		Findings: []LintFinding{}, // TODO: Parse shellcheck output
-		Err:      err,
+		Err:      result.Err,
 	}
 }

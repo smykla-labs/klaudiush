@@ -62,9 +62,9 @@ func (r *CLIGitRunner) IsInRepo() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	_, err := r.runner.Run(ctx, "git", "rev-parse", "--git-dir")
+	result := r.runner.Run(ctx, "git", "rev-parse", "--git-dir")
 
-	return err == nil
+	return result.Err == nil
 }
 
 // GetStagedFiles returns the list of staged files
@@ -72,9 +72,9 @@ func (r *CLIGitRunner) GetStagedFiles() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	result, err := r.runner.Run(ctx, "git", "diff", "--cached", "--name-only")
-	if err != nil {
-		return nil, err
+	result := r.runner.Run(ctx, "git", "diff", "--cached", "--name-only")
+	if result.Err != nil {
+		return nil, result.Err
 	}
 
 	return parseLines(result.Stdout), nil
@@ -85,9 +85,9 @@ func (r *CLIGitRunner) GetModifiedFiles() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	result, err := r.runner.Run(ctx, "git", "diff", "--name-only")
-	if err != nil {
-		return nil, err
+	result := r.runner.Run(ctx, "git", "diff", "--name-only")
+	if result.Err != nil {
+		return nil, result.Err
 	}
 
 	return parseLines(result.Stdout), nil
@@ -98,9 +98,9 @@ func (r *CLIGitRunner) GetUntrackedFiles() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	result, err := r.runner.Run(ctx, "git", "ls-files", "--others", "--exclude-standard")
-	if err != nil {
-		return nil, err
+	result := r.runner.Run(ctx, "git", "ls-files", "--others", "--exclude-standard")
+	if result.Err != nil {
+		return nil, result.Err
 	}
 
 	return parseLines(result.Stdout), nil
@@ -111,9 +111,9 @@ func (r *CLIGitRunner) GetRepoRoot() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	result, err := r.runner.Run(ctx, "git", "rev-parse", "--show-toplevel")
-	if err != nil {
-		return "", err
+	result := r.runner.Run(ctx, "git", "rev-parse", "--show-toplevel")
+	if result.Err != nil {
+		return "", result.Err
 	}
 
 	return strings.TrimSpace(result.Stdout), nil
@@ -124,9 +124,9 @@ func (r *CLIGitRunner) GetRemoteURL(remote string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	result, err := r.runner.Run(ctx, "git", "remote", "get-url", remote)
-	if err != nil {
-		return "", err
+	result := r.runner.Run(ctx, "git", "remote", "get-url", remote)
+	if result.Err != nil {
+		return "", result.Err
 	}
 
 	return strings.TrimSpace(result.Stdout), nil
@@ -137,9 +137,9 @@ func (r *CLIGitRunner) GetCurrentBranch() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	result, err := r.runner.Run(ctx, "git", "symbolic-ref", "--short", "HEAD")
-	if err != nil {
-		return "", err
+	result := r.runner.Run(ctx, "git", "symbolic-ref", "--short", "HEAD")
+	if result.Err != nil {
+		return "", result.Err
 	}
 
 	return strings.TrimSpace(result.Stdout), nil
@@ -152,9 +152,9 @@ func (r *CLIGitRunner) GetBranchRemote(branch string) (string, error) {
 
 	configKey := "branch." + branch + ".remote"
 
-	result, err := r.runner.Run(ctx, "git", "config", configKey)
-	if err != nil {
-		return "", err
+	result := r.runner.Run(ctx, "git", "config", configKey)
+	if result.Err != nil {
+		return "", result.Err
 	}
 
 	return strings.TrimSpace(result.Stdout), nil
@@ -165,9 +165,9 @@ func (r *CLIGitRunner) GetRemotes() (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	result, err := r.runner.Run(ctx, "git", "remote", "-v")
-	if err != nil {
-		return nil, err
+	result := r.runner.Run(ctx, "git", "remote", "-v")
+	if result.Err != nil {
+		return nil, result.Err
 	}
 
 	remotes := make(map[string]string)

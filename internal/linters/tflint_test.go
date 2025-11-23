@@ -37,15 +37,15 @@ var _ = Describe("TfLinter", func() {
 
 		Context("when tflint succeeds with no findings", func() {
 			It("should return success", func() {
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
 					Expect(name).To(Equal("tflint"))
 					Expect(args).To(ContainElements("--format=compact"))
 
-					return &execpkg.CommandResult{
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   "",
 						ExitCode: 0,
-					}, nil
+					}
 				}
 
 				result := linter.Lint(ctx, "main.tf")
@@ -61,12 +61,13 @@ var _ = Describe("TfLinter", func() {
 				compactOutput := `main.tf:3:1: Warning - Missing version constraint for provider "aws" (terraform_required_providers)
 main.tf:10:5: Error - "instance_type" is a required field (aws_instance_invalid_type)`
 
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   compactOutput,
 						Stderr:   "",
 						ExitCode: 2,
-					}, errTfLintFailed
+						Err:      errTfLintFailed,
+					}
 				}
 
 				result := linter.Lint(ctx, "main.tf")
@@ -80,12 +81,13 @@ main.tf:10:5: Error - "instance_type" is a required field (aws_instance_invalid_
 			It("should use stderr if stdout is empty", func() {
 				stderrOutput := "tflint: error parsing configuration"
 
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   stderrOutput,
 						ExitCode: 1,
-					}, errTfLintFailed
+						Err:      errTfLintFailed,
+					}
 				}
 
 				result := linter.Lint(ctx, "main.tf")
@@ -98,12 +100,13 @@ main.tf:10:5: Error - "instance_type" is a required field (aws_instance_invalid_
 
 		Context("when tflint command fails with no output", func() {
 			It("should return error", func() {
-				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				mockRunner.runFunc = func(ctx context.Context, name string, args ...string) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   "",
 						ExitCode: 127,
-					}, errTfLintFailed
+						Err:      errTfLintFailed,
+					}
 				}
 
 				result := linter.Lint(ctx, "main.tf")

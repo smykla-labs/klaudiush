@@ -54,15 +54,15 @@ func (t *RealTerraformFormatter) CheckFormat(ctx context.Context, content string
 	defer cleanup()
 
 	// Run terraform fmt -check -diff
-	result, err := t.runner.Run(ctx, tool, "fmt", "-check", "-diff", tmpFile)
+	result := t.runner.Run(ctx, tool, "fmt", "-check", "-diff", tmpFile)
 
 	findings := t.parseDiffOutput(result.Stdout)
 
 	return &LintResult{
-		Success:  err == nil,
+		Success:  result.Err == nil,
 		RawOut:   result.Stdout + result.Stderr,
 		Findings: findings,
-		Err:      err,
+		Err:      result.Err,
 	}
 }
 

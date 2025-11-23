@@ -39,7 +39,7 @@ func ValidatePRMarkdown(body string) PRMarkdownValidationResult {
 	defer cancel()
 
 	runner := execpkg.NewCommandRunner(markdownlintTimeout)
-	cmdResult, _ := runner.RunWithStdin(ctx, strings.NewReader(body), "markdownlint", "--stdin")
+	cmdResult := runner.RunWithStdin(ctx, strings.NewReader(body), "markdownlint", "--stdin")
 
 	// Parse markdownlint output
 	output := cmdResult.Stdout + cmdResult.Stderr

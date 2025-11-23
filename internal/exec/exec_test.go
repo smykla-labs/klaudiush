@@ -28,36 +28,38 @@ var _ = Describe("CommandRunner", func() {
 	Describe("Run", func() {
 		It("should execute a simple command", func() {
 			ctx := context.Background()
-			result, err := runner.Run(ctx, "echo", "hello")
+			result := runner.Run(ctx, "echo", "hello")
 
-			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Err).ToNot(HaveOccurred())
 			Expect(result.Stdout).To(Equal("hello\n"))
 			Expect(result.ExitCode).To(Equal(0))
+			Expect(result.Success()).To(BeTrue())
 		})
 
 		It("should capture stderr", func() {
 			ctx := context.Background()
 			// sh -c to write to stderr
-			result, err := runner.Run(ctx, "sh", "-c", "echo error >&2")
+			result := runner.Run(ctx, "sh", "-c", "echo error >&2")
 
-			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Err).ToNot(HaveOccurred())
 			Expect(result.Stderr).To(Equal("error\n"))
 		})
 
 		It("should handle command failures", func() {
 			ctx := context.Background()
-			result, err := runner.Run(ctx, "sh", "-c", "exit 42")
+			result := runner.Run(ctx, "sh", "-c", "exit 42")
 
-			Expect(err).To(HaveOccurred())
+			Expect(result.Err).To(HaveOccurred())
 			Expect(result.ExitCode).To(Equal(42))
+			Expect(result.Failed()).To(BeTrue())
 		})
 
 		It("should respect context cancellation", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel() // Cancel immediately
 
-			_, err := runner.Run(ctx, "sleep", "10")
-			Expect(err).To(HaveOccurred())
+			result := runner.Run(ctx, "sleep", "10")
+			Expect(result.Err).To(HaveOccurred())
 		})
 	})
 
@@ -66,24 +68,24 @@ var _ = Describe("CommandRunner", func() {
 			ctx := context.Background()
 			stdin := strings.NewReader("test input")
 
-			result, err := runner.RunWithStdin(ctx, stdin, "cat")
+			result := runner.RunWithStdin(ctx, stdin, "cat")
 
-			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Err).ToNot(HaveOccurred())
 			Expect(result.Stdout).To(Equal("test input"))
 		})
 	})
 
 	Describe("RunWithTimeout", func() {
 		It("should execute command with timeout", func() {
-			result, err := runner.RunWithTimeout(5*time.Second, "echo", "test")
+			result := runner.RunWithTimeout(5*time.Second, "echo", "test")
 
-			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Err).ToNot(HaveOccurred())
 			Expect(result.Stdout).To(Equal("test\n"))
 		})
 
 		It("should timeout long-running commands", func() {
-			_, err := runner.RunWithTimeout(100*time.Millisecond, "sleep", "10")
-			Expect(err).To(HaveOccurred())
+			result := runner.RunWithTimeout(100*time.Millisecond, "sleep", "10")
+			Expect(result.Err).To(HaveOccurred())
 		})
 	})
 })

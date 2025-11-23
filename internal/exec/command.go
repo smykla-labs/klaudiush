@@ -16,23 +16,37 @@ type CommandResult struct {
 	Stdout   string
 	Stderr   string
 	ExitCode int
+	Err      error
+}
+
+// Success returns true if the command executed without error.
+func (r CommandResult) Success() bool {
+	return r.Err == nil
+}
+
+// Failed returns true if the command execution failed.
+func (r CommandResult) Failed() bool {
+	return r.Err != nil
 }
 
 // CommandRunner executes external commands with timeout and output capture.
 type CommandRunner interface {
 	// Run executes a command and returns the result.
-	Run(ctx context.Context, name string, args ...string) (*CommandResult, error)
+	// The result is always valid; check result.Err for execution errors.
+	Run(ctx context.Context, name string, args ...string) CommandResult
 
 	// RunWithStdin executes a command with stdin input.
+	// The result is always valid; check result.Err for execution errors.
 	RunWithStdin(
 		ctx context.Context,
 		stdin io.Reader,
 		name string,
 		args ...string,
-	) (*CommandResult, error)
+	) CommandResult
 
 	// RunWithTimeout executes a command with a specific timeout.
-	RunWithTimeout(timeout time.Duration, name string, args ...string) (*CommandResult, error)
+	// The result is always valid; check result.Err for execution errors.
+	RunWithTimeout(timeout time.Duration, name string, args ...string) CommandResult
 }
 
 // commandRunner implements CommandRunner.
@@ -52,7 +66,7 @@ func (r *commandRunner) Run(
 	ctx context.Context,
 	name string,
 	args ...string,
-) (*CommandResult, error) {
+) CommandResult {
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	var stdout, stderr bytes.Buffer
@@ -62,7 +76,7 @@ func (r *commandRunner) Run(
 
 	err := cmd.Run()
 
-	result := &CommandResult{
+	result := CommandResult{
 		Stdout: stdout.String(),
 		Stderr: stderr.String(),
 	}
@@ -70,11 +84,12 @@ func (r *commandRunner) Run(
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
 		result.ExitCode = exitErr.ExitCode()
+		result.Err = err
 	} else if err != nil {
-		return result, fmt.Errorf("executing %s: %w", name, err)
+		result.Err = fmt.Errorf("executing %s: %w", name, err)
 	}
 
-	return result, err
+	return result
 }
 
 // RunWithStdin executes a command with stdin input.
@@ -83,7 +98,7 @@ func (r *commandRunner) RunWithStdin(
 	stdin io.Reader,
 	name string,
 	args ...string,
-) (*CommandResult, error) {
+) CommandResult {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = stdin
 
@@ -94,7 +109,7 @@ func (r *commandRunner) RunWithStdin(
 
 	err := cmd.Run()
 
-	result := &CommandResult{
+	result := CommandResult{
 		Stdout: stdout.String(),
 		Stderr: stderr.String(),
 	}
@@ -102,11 +117,12 @@ func (r *commandRunner) RunWithStdin(
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
 		result.ExitCode = exitErr.ExitCode()
+		result.Err = err
 	} else if err != nil {
-		return result, fmt.Errorf("executing %s: %w", name, err)
+		result.Err = fmt.Errorf("executing %s: %w", name, err)
 	}
 
-	return result, err
+	return result
 }
 
 // RunWithTimeout executes a command with a specific timeout.
@@ -114,7 +130,7 @@ func (r *commandRunner) RunWithTimeout(
 	timeout time.Duration,
 	name string,
 	args ...string,
-) (*CommandResult, error) {
+) CommandResult {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

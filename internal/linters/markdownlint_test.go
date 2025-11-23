@@ -65,15 +65,15 @@ code
 					stdin io.Reader,
 					name string,
 					args ...string,
-				) (*execpkg.CommandResult, error) {
+				) execpkg.CommandResult {
 					Expect(name).To(Equal("markdownlint"))
 					Expect(args).To(ContainElement("--stdin"))
 
-					return &execpkg.CommandResult{
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   "",
 						ExitCode: 0,
-					}, nil
+					}
 				}
 
 				result := linter.Lint(ctx, content)
@@ -94,12 +94,13 @@ stdin:5 MD022/blanks-around-headings/blanks-around-headers Headings should be su
 					stdin io.Reader,
 					name string,
 					args ...string,
-				) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   markdownlintOutput,
 						Stderr:   "",
 						ExitCode: 1,
-					}, errMarkdownLintFailed
+						Err:      errMarkdownLintFailed,
+					}
 				}
 
 				result := linter.Lint(ctx, "# Test\nSome content")
@@ -126,12 +127,12 @@ code
 					stdin io.Reader,
 					name string,
 					args ...string,
-				) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   "",
 						ExitCode: 0,
-					}, nil
+					}
 				}
 
 				result := linter.Lint(ctx, content)
@@ -161,12 +162,13 @@ code
 					stdin io.Reader,
 					name string,
 					args ...string,
-				) (*execpkg.CommandResult, error) {
-					return &execpkg.CommandResult{
+				) execpkg.CommandResult {
+					return execpkg.CommandResult{
 						Stdout:   markdownlintOutput,
 						Stderr:   "",
 						ExitCode: 1,
-					}, errMarkdownLintFailed
+						Err:      errMarkdownLintFailed,
+					}
 				}
 
 				result := linter.Lint(ctx, content)

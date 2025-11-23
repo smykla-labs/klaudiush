@@ -48,12 +48,12 @@ func (a *RealActionLinter) Lint(ctx context.Context, content string, filePath st
 	defer cleanup()
 
 	// Run actionlint
-	result, err := a.runner.Run(ctx, "actionlint", "-no-color", tmpFile)
+	result := a.runner.Run(ctx, "actionlint", "-no-color", tmpFile)
 
 	return &LintResult{
-		Success:  err == nil,
+		Success:  result.Err == nil,
 		RawOut:   result.Stdout + result.Stderr,
 		Findings: []LintFinding{}, // TODO: Parse actionlint output
-		Err:      err,
+		Err:      result.Err,
 	}
 }
