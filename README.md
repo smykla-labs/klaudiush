@@ -105,17 +105,35 @@ task fmt          # Format code
 task verify       # Run fmt + lint + test
 ```
 
+### Testing
+
+```bash
+task test              # Run all tests (307 specs)
+task test:unit         # Unit tests only
+task test:integration  # Integration tests only
+task test:staged       # Test packages with staged files
+```
+
 ### Git Hooks
 
 ```bash
-task install:hooks  # Install pre-commit hook
+task install:hooks  # Install pre-commit and pre-push hooks
 ```
 
-The pre-commit hook runs `task lint:staged` to validate only modified and staged files before allowing commits. This ensures code quality without running linters on the entire codebase.
+The project includes two git hooks for quality assurance:
 
-To bypass the hook (not recommended), use:
+**Pre-commit hook** runs before each commit:
+- `task lint:staged` - Lints only modified and staged files
+- `task test:staged` - Tests only packages with changes
+
+**Pre-push hook** runs before each push:
+- `task lint` - Full linting of entire codebase
+- `task test` - Full test suite
+
+To bypass hooks (not recommended), use:
 ```bash
-git commit --no-verify
+git commit --no-verify    # Skip pre-commit hook
+git push --no-verify      # Skip pre-push hook
 ```
 
 ### Other
