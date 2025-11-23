@@ -203,18 +203,22 @@ func (m *mockRepository) GetCurrentBranch() (string, error) {
 func (m *mockRepository) GetBranchRemote(branch string) (string, error) {
 	m.getBranchRemoteCalled = true
 	m.lastBranchRemoteArg = branch
+
 	if m.branchRemoteErr != nil {
 		return "", m.branchRemoteErr
 	}
+
 	return m.branchRemotes[branch], nil
 }
 
 func (m *mockRepository) GetRemoteURL(remote string) (string, error) {
 	m.getRemoteURLCalled = true
 	m.lastRemoteURLArg = remote
+
 	if m.remoteURLErr != nil {
 		return "", m.remoteURLErr
 	}
+
 	return m.remoteURLs[remote], nil
 }
 

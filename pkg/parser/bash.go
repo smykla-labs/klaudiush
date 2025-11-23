@@ -56,6 +56,7 @@ func (p *BashParser) Parse(command string) (*ParseResult, error) {
 
 	// Extract git operations
 	gitOps := make([]Command, 0)
+
 	for _, cmd := range walker.commands {
 		if cmd.Name == "git" {
 			gitOps = append(gitOps, cmd)

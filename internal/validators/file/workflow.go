@@ -94,6 +94,7 @@ func (v *WorkflowValidator) Validate(ctx *hook.Context) *validator.Result {
 	}
 
 	var allErrors []string
+
 	var allWarnings []string
 
 	// Parse workflow and validate digest pinning
@@ -112,6 +113,7 @@ func (v *WorkflowValidator) Validate(ctx *hook.Context) *validator.Result {
 	// Report warnings
 	if len(allWarnings) > 0 {
 		log.Debug("workflow validation warnings", "count", len(allWarnings))
+
 		for _, warn := range allWarnings {
 			fmt.Fprintf(os.Stderr, "⚠️  %s\n", warn)
 		}
@@ -131,6 +133,7 @@ func (v *WorkflowValidator) Validate(ctx *hook.Context) *validator.Result {
     # Cannot pin by digest: marketplace action with frequent updates
     uses: vendor/custom-action@v1`,
 		}
+
 		return validator.FailWithDetails(message, details)
 	}
 
@@ -145,6 +148,7 @@ func (v *WorkflowValidator) isWorkflowFile(path string) bool {
 	}
 
 	ext := filepath.Ext(path)
+
 	return ext == ".yml" || ext == ".yaml"
 }
 
@@ -170,6 +174,7 @@ func (v *WorkflowValidator) getContent(ctx *hook.Context) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("reading file: %w", err)
 		}
+
 		return string(content), nil
 	}
 
@@ -179,6 +184,7 @@ func (v *WorkflowValidator) getContent(ctx *hook.Context) (string, error) {
 // parseWorkflow parses workflow content and extracts all action uses
 func (v *WorkflowValidator) parseWorkflow(content string) []actionUse {
 	var actions []actionUse
+
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	lineNum := 0
 	prevLine := ""
@@ -248,6 +254,7 @@ func (v *WorkflowValidator) validateAction(action actionUse) ([]string, []string
 // validateDigestAction validates digest-pinned actions
 func (v *WorkflowValidator) validateDigestAction(action actionUse) ([]string, []string) {
 	var errs []string
+
 	var warnings []string
 
 	versionComment := v.extractVersionComment(action)
@@ -256,6 +263,7 @@ func (v *WorkflowValidator) validateDigestAction(action actionUse) ([]string, []
 		if len(digestPreview) > digestPreviewLength {
 			digestPreview = digestPreview[:digestPreviewLength] + "..."
 		}
+
 		errs = append(errs, fmt.Sprintf(
 			"Line %d: Digest-pinned action '%s@%s' missing version comment",
 			action.LineNum, action.ActionName, digestPreview,
@@ -399,11 +407,13 @@ func (v *WorkflowValidator) runActionlint(content, originalPath string) []string
 	if ext == "" {
 		ext = ".yml"
 	}
+
 	tmpFile, cleanup, err := v.tempManager.Create("workflow-*"+ext, content)
 	if err != nil {
 		v.Logger().Debug("failed to create temp file for actionlint", "error", err)
 		return nil
 	}
+
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), workflowTimeout)

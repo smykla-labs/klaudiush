@@ -20,7 +20,7 @@ type RealTerraformFormatter struct {
 }
 
 // NewTerraformFormatter creates a new RealTerraformFormatter
-func NewTerraformFormatter(runner execpkg.CommandRunner) TerraformFormatter {
+func NewTerraformFormatter(runner execpkg.CommandRunner) *RealTerraformFormatter {
 	return &RealTerraformFormatter{
 		runner:      runner,
 		toolChecker: execpkg.NewToolChecker(),

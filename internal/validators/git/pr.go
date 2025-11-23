@@ -52,6 +52,7 @@ func (v *PRValidator) Validate(ctx *hook.Context) *validator.Result {
 
 	// Parse the command
 	bashParser := parser.NewBashParser()
+
 	result, err := bashParser.Parse(ctx.GetCommand())
 	if err != nil {
 		log.Error("Failed to parse command", "error", err)
@@ -73,6 +74,7 @@ func (v *PRValidator) Validate(ctx *hook.Context) *validator.Result {
 	}
 
 	log.Debug("No gh pr create commands found")
+
 	return validator.Pass()
 }
 
@@ -162,6 +164,7 @@ func (v *PRValidator) parseLabels(labelStr string) []string {
 // validatePR performs comprehensive PR validation
 func (v *PRValidator) validatePR(data PRData) *validator.Result {
 	var allErrors []string
+
 	var allWarnings []string
 
 	// 1. Validate PR title
@@ -247,6 +250,7 @@ func (v *PRValidator) buildResult(allErrors, allWarnings []string, title string)
 		if len(allWarnings) > 0 {
 			message += "\n\nWarnings:\n" + strings.Join(allWarnings, "\n")
 		}
+
 		message += "\n\nPR title: " + title
 
 		return validator.Fail(message)
@@ -290,6 +294,7 @@ func (v *PRValidator) checkCILabelHeuristics(data PRData, prType string) []strin
 
 	// Check if ci/ labels are already present
 	hasCILabel := false
+
 	for _, label := range data.Labels {
 		if strings.HasPrefix(label, "ci/skip") {
 			hasCILabel = true

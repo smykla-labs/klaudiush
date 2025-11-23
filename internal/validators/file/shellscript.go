@@ -148,7 +148,9 @@ func (v *ShellScriptValidator) runShellCheckOnFile(filePath string) *validator.R
 func (v *ShellScriptValidator) formatShellCheckOutput(output string) string {
 	// Clean up the output - remove empty lines
 	lines := strings.Split(output, "\n")
+
 	var cleanLines []string
+
 	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {
 			cleanLines = append(cleanLines, line)

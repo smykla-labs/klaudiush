@@ -39,6 +39,7 @@ func NewTerraformValidator(log logger.Logger) *TerraformValidator {
 // Validate checks Terraform formatting and optionally runs tflint
 func (v *TerraformValidator) Validate(ctx *hook.Context) *validator.Result {
 	log := v.Logger()
+
 	content, err := v.getContent(ctx)
 	if err != nil {
 		log.Debug("skipping terraform validation", "error", err)
@@ -78,6 +79,7 @@ func (v *TerraformValidator) Validate(ctx *hook.Context) *validator.Result {
 		details := map[string]string{
 			"warnings": strings.Join(warnings, "\n"),
 		}
+
 		return validator.WarnWithDetails(message, details)
 	}
 
@@ -140,6 +142,7 @@ func (v *TerraformValidator) checkFormat(tool, filePath string) string {
 	}
 
 	v.Logger().Debug("fmt command failed", "error", err, "stderr", result.Stderr)
+
 	return fmt.Sprintf("⚠️  Failed to run '%s fmt -check': %v", tool, err)
 }
 
@@ -163,7 +166,9 @@ func (v *TerraformValidator) runTflint(filePath string) []string {
 		if output != "" {
 			return []string{"⚠️  tflint findings:\n" + output}
 		}
+
 		v.Logger().Debug("tflint failed", "error", err, "stderr", result.Stderr)
+
 		return nil
 	}
 

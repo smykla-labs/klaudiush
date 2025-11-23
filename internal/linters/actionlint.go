@@ -19,7 +19,7 @@ type RealActionLinter struct {
 }
 
 // NewActionLinter creates a new RealActionLinter
-func NewActionLinter(runner execpkg.CommandRunner) ActionLinter {
+func NewActionLinter(runner execpkg.CommandRunner) *RealActionLinter {
 	return &RealActionLinter{
 		runner:      runner,
 		toolChecker: execpkg.NewToolChecker(),

@@ -32,6 +32,7 @@ func NewMarkdownValidator(log logger.Logger) *MarkdownValidator {
 // Validate checks Markdown formatting rules
 func (v *MarkdownValidator) Validate(ctx *hook.Context) *validator.Result {
 	log := v.Logger()
+
 	content, err := v.getContent(ctx)
 	if err != nil {
 		log.Debug("skipping markdown validation", "error", err)
@@ -49,6 +50,7 @@ func (v *MarkdownValidator) Validate(ctx *hook.Context) *validator.Result {
 		details := map[string]string{
 			"errors": strings.Join(result.Warnings, "\n"),
 		}
+
 		return validator.FailWithDetails(message, details)
 	}
 

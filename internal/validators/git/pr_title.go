@@ -69,6 +69,7 @@ func ValidatePRTitle(title string) PRTitleValidationResult {
 // ExtractPRType extracts the type from a semantic commit title (e.g., "feat", "fix", "ci")
 func ExtractPRType(title string) string {
 	typeRegex := regexp.MustCompile(fmt.Sprintf(`^(%s)`, validTypesPattern))
+
 	matches := typeRegex.FindStringSubmatch(title)
 	if len(matches) > 1 {
 		return matches[1]

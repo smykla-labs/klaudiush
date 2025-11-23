@@ -43,6 +43,7 @@ func (m *MockGitRunner) GetStagedFiles() ([]string, error) {
 	if m.Err != nil {
 		return nil, m.Err
 	}
+
 	return m.StagedFiles, nil
 }
 
@@ -51,6 +52,7 @@ func (m *MockGitRunner) GetModifiedFiles() ([]string, error) {
 	if m.Err != nil {
 		return nil, m.Err
 	}
+
 	return m.ModifiedFiles, nil
 }
 
@@ -59,6 +61,7 @@ func (m *MockGitRunner) GetUntrackedFiles() ([]string, error) {
 	if m.Err != nil {
 		return nil, m.Err
 	}
+
 	return m.UntrackedFiles, nil
 }
 
@@ -67,6 +70,7 @@ func (m *MockGitRunner) GetRepoRoot() (string, error) {
 	if m.Err != nil {
 		return "", m.Err
 	}
+
 	return m.RepoRoot, nil
 }
 
@@ -75,9 +79,11 @@ func (m *MockGitRunner) GetRemoteURL(remote string) (string, error) {
 	if m.Err != nil {
 		return "", m.Err
 	}
+
 	if url, ok := m.Remotes[remote]; ok {
 		return url, nil
 	}
+
 	return "", &MockError{Msg: "remote not found"}
 }
 
@@ -86,6 +92,7 @@ func (m *MockGitRunner) GetCurrentBranch() (string, error) {
 	if m.Err != nil {
 		return "", m.Err
 	}
+
 	return m.CurrentBranch, nil
 }
 
@@ -94,9 +101,11 @@ func (m *MockGitRunner) GetBranchRemote(branch string) (string, error) {
 	if m.Err != nil {
 		return "", m.Err
 	}
+
 	if remote, ok := m.BranchRemotes[branch]; ok {
 		return remote, nil
 	}
+
 	return "", &MockError{Msg: "branch remote not found"}
 }
 
@@ -105,6 +114,7 @@ func (m *MockGitRunner) GetRemotes() (map[string]string, error) {
 	if m.Err != nil {
 		return nil, m.Err
 	}
+
 	return m.Remotes, nil
 }
 

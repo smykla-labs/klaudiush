@@ -68,7 +68,9 @@ func DiscoverRepository() (*SDKRepository, error) {
 				errRepo = ErrNotRepository
 				return
 			}
+
 			errRepo = errors.Wrap(err, "failed to open repository")
+
 			return
 		}
 
@@ -106,6 +108,7 @@ func (r *SDKRepository) GetStagedFiles() ([]string, error) {
 	}
 
 	var staged []string
+
 	for file, fileStatus := range status {
 		// A file is staged if the staging area differs from HEAD
 		if fileStatus.Staging != git.Unmodified {
@@ -129,6 +132,7 @@ func (r *SDKRepository) GetModifiedFiles() ([]string, error) {
 	}
 
 	var modified []string
+
 	for file, fileStatus := range status {
 		// A file is modified if the worktree differs from staging and not untracked
 		if fileStatus.Worktree != git.Unmodified && fileStatus.Worktree != git.Untracked {
@@ -152,6 +156,7 @@ func (r *SDKRepository) GetUntrackedFiles() ([]string, error) {
 	}
 
 	var untracked []string
+
 	for file, fileStatus := range status {
 		// A file is untracked if both staging and worktree show as untracked
 		if fileStatus.Staging == git.Untracked {
@@ -169,6 +174,7 @@ func (r *SDKRepository) GetCurrentBranch() (string, error) {
 		if errors.Is(err, plumbing.ErrReferenceNotFound) {
 			return "", ErrNoHead
 		}
+
 		return "", errors.Wrap(err, "failed to get HEAD")
 	}
 
@@ -183,11 +189,13 @@ func (r *SDKRepository) GetCurrentBranch() (string, error) {
 func (r *SDKRepository) GetBranchRemote(branch string) (string, error) {
 	// First verify the branch exists
 	branchRef := plumbing.NewBranchReferenceName(branch)
+
 	_, err := r.repo.Reference(branchRef, true)
 	if err != nil {
 		if errors.Is(err, plumbing.ErrReferenceNotFound) {
 			return "", errors.Wrapf(ErrBranchNotFound, "branch %q", branch)
 		}
+
 		return "", errors.Wrap(err, "failed to lookup branch")
 	}
 
@@ -211,6 +219,7 @@ func (r *SDKRepository) GetRemoteURL(remote string) (string, error) {
 		if errors.Is(err, git.ErrRemoteNotFound) {
 			return "", errors.Wrapf(ErrRemoteNotFound, "remote %q", remote)
 		}
+
 		return "", errors.Wrap(err, "failed to get remote")
 	}
 
@@ -230,6 +239,7 @@ func (r *SDKRepository) GetRemotes() (map[string]string, error) {
 	}
 
 	result := make(map[string]string)
+
 	for _, remote := range remotes {
 		cfg := remote.Config()
 		if len(cfg.URLs) > 0 {

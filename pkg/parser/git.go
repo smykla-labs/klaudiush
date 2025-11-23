@@ -59,6 +59,7 @@ func ParseGitCommand(cmd Command) (*GitCommand, error) {
 			// Positional argument
 			gitCmd.Args = append(gitCmd.Args, arg)
 			i++
+
 			continue
 		}
 

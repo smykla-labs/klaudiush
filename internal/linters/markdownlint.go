@@ -19,7 +19,7 @@ type RealMarkdownLinter struct {
 }
 
 // NewMarkdownLinter creates a new RealMarkdownLinter
-func NewMarkdownLinter(runner execpkg.CommandRunner) MarkdownLinter {
+func NewMarkdownLinter(runner execpkg.CommandRunner) *RealMarkdownLinter {
 	return &RealMarkdownLinter{
 		runner:      runner,
 		toolChecker: execpkg.NewToolChecker(),

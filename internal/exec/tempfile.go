@@ -16,7 +16,7 @@ type TempFileManager interface {
 type tempFileManager struct{}
 
 // NewTempFileManager creates a new TempFileManager.
-func NewTempFileManager() TempFileManager {
+func NewTempFileManager() *tempFileManager {
 	return &tempFileManager{}
 }
 
@@ -33,6 +33,7 @@ func (m *tempFileManager) Create(pattern, content string) (string, func(), error
 	if _, err := tmpFile.WriteString(content); err != nil {
 		_ = tmpFile.Close()
 		_ = os.Remove(filePath)
+
 		return "", nil, fmt.Errorf("writing to temp file: %w", err)
 	}
 

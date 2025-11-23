@@ -60,6 +60,7 @@ func (v *BranchValidator) Validate(ctx *hook.Context) *validator.Result {
 	log.Debug("validating git branch command")
 
 	bashParser := parser.NewBashParser()
+
 	parseResult, err := bashParser.Parse(ctx.ToolInput.Command)
 	if err != nil {
 		log.Error("failed to parse command", "error", err)
@@ -163,6 +164,7 @@ func (v *BranchValidator) extractCheckoutBranchName(gitCmd *parser.GitCommand) (
 			branchName := gitCmd.Flags[i+1]
 			// Check if there are extra arguments after the branch name
 			hasExtra := len(gitCmd.Args) > 0
+
 			return branchName, hasExtra
 		}
 	}
@@ -172,6 +174,7 @@ func (v *BranchValidator) extractCheckoutBranchName(gitCmd *parser.GitCommand) (
 		branchName := gitCmd.Args[0]
 		// Check if there are extra arguments
 		hasExtra := len(gitCmd.Args) > 1
+
 		return branchName, hasExtra
 	}
 
@@ -185,6 +188,7 @@ func (v *BranchValidator) extractBranchCommandName(gitCmd *parser.GitCommand) (s
 		branchName := gitCmd.Args[0]
 		// Check if there are extra arguments
 		hasExtra := len(gitCmd.Args) > 1
+
 		return branchName, hasExtra
 	}
 
@@ -205,6 +209,7 @@ func (v *BranchValidator) validateBranchName(branchName string) *validator.Resul
 			BranchName:  branchName,
 			LowerBranch: strings.ToLower(branchName),
 		})
+
 		return validator.Fail(message)
 	}
 
@@ -213,6 +218,7 @@ func (v *BranchValidator) validateBranchName(branchName string) *validator.Resul
 		message := templates.MustExecute(templates.BranchPatternTemplate, templates.BranchPatternData{
 			BranchName: branchName,
 		})
+
 		return validator.Fail(message)
 	}
 
@@ -222,6 +228,7 @@ func (v *BranchValidator) validateBranchName(branchName string) *validator.Resul
 		message := templates.MustExecute(templates.BranchMissingPartsTemplate, templates.BranchMissingPartsData{
 			BranchName: branchName,
 		})
+
 		return validator.Fail(message)
 	}
 
@@ -236,6 +243,7 @@ func (v *BranchValidator) validateBranchName(branchName string) *validator.Resul
 			BranchType:    branchType,
 			ValidTypesStr: strings.Join(validTypes, ", "),
 		})
+
 		return validator.Fail(message)
 	}
 

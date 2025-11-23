@@ -133,6 +133,7 @@ func checkLineBreaks(body string, result *PRBodyValidationResult) {
 		}
 
 		totalLines++
+
 		if len(line) < changelogLineThreshold {
 			shortLines++
 		}

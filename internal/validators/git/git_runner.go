@@ -63,6 +63,7 @@ func (r *CLIGitRunner) IsInRepo() bool {
 	defer cancel()
 
 	_, err := r.runner.Run(ctx, "git", "rev-parse", "--git-dir")
+
 	return err == nil
 }
 
@@ -150,6 +151,7 @@ func (r *CLIGitRunner) GetBranchRemote(branch string) (string, error) {
 	defer cancel()
 
 	configKey := "branch." + branch + ".remote"
+
 	result, err := r.runner.Run(ctx, "git", "config", configKey)
 	if err != nil {
 		return "", err
@@ -169,13 +171,17 @@ func (r *CLIGitRunner) GetRemotes() (map[string]string, error) {
 	}
 
 	remotes := make(map[string]string)
+
 	lines := strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n")
 	for line := range lines {
 		if line == "" {
 			continue
 		}
+
 		fields := strings.Fields(line)
+
 		const minFieldsRequired = 2
+
 		if len(fields) >= minFieldsRequired {
 			remoteName := fields[0]
 			remoteURL := fields[1]
@@ -195,5 +201,6 @@ func parseLines(output string) []string {
 	if output == "" {
 		return []string{}
 	}
+
 	return strings.Split(output, "\n")
 }

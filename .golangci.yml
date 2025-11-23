@@ -87,7 +87,7 @@ linters:
     - errchkjson     # Checks types passed to the json encoding functions
     - gocheckcompilerdirectives # Checks that go compiler directive comments are valid
     - ireturn        # Accept Interfaces, Return Concrete Types
-    - wsl            # Whitespace Linter - Add or remove empty lines
+    - wsl_v5         # Whitespace Linter - Add or remove empty lines
 
   exclusions:
     rules:
@@ -211,6 +211,11 @@ linters:
       check-blank: false
 
     modernize:
+
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
 
 formatters:
   enable:

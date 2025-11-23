@@ -36,7 +36,7 @@ type commandRunner struct {
 }
 
 // NewCommandRunner creates a new CommandRunner with the given default timeout.
-func NewCommandRunner(defaultTimeout time.Duration) CommandRunner {
+func NewCommandRunner(defaultTimeout time.Duration) *commandRunner {
 	return &commandRunner{
 		defaultTimeout: defaultTimeout,
 	}
@@ -47,6 +47,7 @@ func (r *commandRunner) Run(ctx context.Context, name string, args ...string) (*
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	var stdout, stderr bytes.Buffer
+
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -73,6 +74,7 @@ func (r *commandRunner) RunWithStdin(ctx context.Context, stdin io.Reader, name 
 	cmd.Stdin = stdin
 
 	var stdout, stderr bytes.Buffer
+
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 

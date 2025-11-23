@@ -58,6 +58,7 @@ func (v *CommitValidator) validateMessage(message string) *validator.Result {
 	// Validate title
 	title, titleErrors := v.validateTitle(lines)
 	errors = append(errors, titleErrors...)
+
 	if title == "" {
 		return validator.Fail("Commit message is empty")
 	}
@@ -72,6 +73,7 @@ func (v *CommitValidator) validateMessage(message string) *validator.Result {
 	}
 
 	log.Debug("Commit message validation passed")
+
 	return validator.Pass()
 }
 
@@ -81,6 +83,7 @@ func (v *CommitValidator) validateTitle(lines []string) (string, []string) {
 
 	// Get title (first non-empty line)
 	title := ""
+
 	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {
 			title = line
@@ -145,12 +148,14 @@ func (v *CommitValidator) validateMarkdownInBody(lines []string) []string {
 	if bodyStartIdx < len(lines) && strings.TrimSpace(lines[bodyStartIdx]) == "" {
 		bodyStartIdx++
 	}
+
 	if bodyStartIdx >= len(lines) {
 		return nil
 	}
 
 	body := strings.Join(lines[bodyStartIdx:], "\n")
 	markdownResult := validators.AnalyzeMarkdown(body)
+
 	return markdownResult.Warnings
 }
 
@@ -183,6 +188,7 @@ func (v *CommitValidator) buildErrorResult(errors []string, message string) *val
 		details.WriteString(err)
 		details.WriteString("\n")
 	}
+
 	details.WriteString("\n📝 Commit message:\n")
 	details.WriteString("---\n")
 	details.WriteString(message)
@@ -217,6 +223,7 @@ func (v *CommitValidator) validateBodyLines(lines []string) []string {
 			if !foundFirstList && !prevLineEmpty {
 				errors = append(errors, v.formatListItemError(line, lineNum)...)
 			}
+
 			foundFirstList = true
 		}
 
@@ -242,6 +249,7 @@ func (v *CommitValidator) validateBodyLines(lines []string) []string {
 // formatListItemError formats error messages for list items missing empty line before
 func (v *CommitValidator) formatListItemError(line string, lineNum int) []string {
 	truncated := truncateLine(line)
+
 	return []string{
 		fmt.Sprintf("❌ Missing empty line before first list item at line %d", lineNum+1),
 		"   List items must be preceded by an empty line",
@@ -252,6 +260,7 @@ func (v *CommitValidator) formatListItemError(line string, lineNum int) []string
 // formatLineLengthError formats error messages for lines exceeding length limit
 func (v *CommitValidator) formatLineLengthError(line string, lineNum, lineLen int) []string {
 	truncated := truncateLine(line)
+
 	return []string{
 		fmt.Sprintf("❌ Line %d exceeds %d characters (%d chars, >5 over limit)", lineNum+1, maxBodyLineLength, lineLen),
 		fmt.Sprintf("   Line: '%s'", truncated),
@@ -263,6 +272,7 @@ func truncateLine(line string) string {
 	if len(line) > truncateErrorLineAt {
 		return line[:truncateErrorLineAt] + "..."
 	}
+
 	return line
 }
 
@@ -273,13 +283,16 @@ func (v *CommitValidator) checkInfraScopeMisuse(title string) []string {
 	}
 
 	matches := infraScopeMisuseRegex.FindStringSubmatch(title)
+
 	const minMatchGroups = 3 // Full match + type + scope groups
+
 	if len(matches) < minMatchGroups {
 		return nil
 	}
 
 	typeMatch := matches[1]  // feat or fix
 	scopeMatch := matches[2] // ci, test, docs, or build
+
 	return []string{
 		fmt.Sprintf("❌ Use '%s(...)' not '%s(%s)' for infrastructure changes", scopeMatch, typeMatch, scopeMatch),
 		"   feat/fix should only be used for user-facing changes",

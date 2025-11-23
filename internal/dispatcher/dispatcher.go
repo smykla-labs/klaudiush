@@ -155,6 +155,7 @@ func formatErrorList(header string, errors []*ValidationError) string {
 	}
 
 	var builder strings.Builder
+
 	builder.WriteString(header)
 	builder.WriteString("\n\n")
 

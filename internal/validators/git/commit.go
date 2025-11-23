@@ -28,6 +28,7 @@ func NewCommitValidator(log logger.Logger, gitRunner GitRunner) *CommitValidator
 	if gitRunner == nil {
 		gitRunner = NewRealGitRunner()
 	}
+
 	return &CommitValidator{
 		BaseValidator: *validator.NewBaseValidator("validate-commit", log),
 		gitRunner:     gitRunner,
@@ -41,6 +42,7 @@ func (v *CommitValidator) Validate(ctx *hook.Context) *validator.Result {
 
 	// Parse the command
 	bashParser := parser.NewBashParser()
+
 	result, err := bashParser.Parse(ctx.GetCommand())
 	if err != nil {
 		log.Error("Failed to parse command", "error", err)
@@ -88,6 +90,7 @@ func (v *CommitValidator) Validate(ctx *hook.Context) *validator.Result {
 	}
 
 	log.Debug("No git commit commands found")
+
 	return validator.Pass()
 }
 
@@ -175,6 +178,7 @@ func (v *CommitValidator) hasGitAddInChain(commands []parser.Command) bool {
 			return true
 		}
 	}
+
 	return false
 }
 

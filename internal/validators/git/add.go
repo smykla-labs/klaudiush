@@ -31,6 +31,7 @@ func NewAddValidator(log logger.Logger, gitRunner GitRunner) *AddValidator {
 	if gitRunner == nil {
 		gitRunner = NewRealGitRunner()
 	}
+
 	return &AddValidator{
 		BaseValidator: *validator.NewBaseValidator("validate-git-add", log),
 		gitRunner:     gitRunner,
@@ -58,6 +59,7 @@ func (v *AddValidator) Validate(ctx *hook.Context) *validator.Result {
 
 	// Parse the command
 	bashParser := parser.NewBashParser()
+
 	result, err := bashParser.Parse(ctx.GetCommand())
 	if err != nil {
 		log.Error("Failed to parse command", "error", err)
@@ -96,6 +98,7 @@ func (v *AddValidator) Validate(ctx *hook.Context) *validator.Result {
 	}
 
 	log.Debug("Git add validation passed")
+
 	return validator.Pass()
 }
 
@@ -123,6 +126,7 @@ func (v *AddValidator) extractFilePaths(args []string) []string {
 			if arg == "--chmod" {
 				skipNext = true
 			}
+
 			continue
 		}
 

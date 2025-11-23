@@ -136,6 +136,7 @@ func FileExtensionIs(ext string) Predicate {
 func FileExtensionIn(exts ...string) Predicate {
 	// Normalize extensions
 	normalized := make([]string, len(exts))
+
 	for i, ext := range exts {
 		if !strings.HasPrefix(ext, ".") {
 			ext = "." + ext

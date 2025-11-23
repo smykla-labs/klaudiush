@@ -17,6 +17,7 @@ func Execute(tmpl *template.Template, data any) (string, error) {
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", err
 	}
+
 	return buf.String(), nil
 }
 
@@ -26,6 +27,7 @@ func MustExecute(tmpl *template.Template, data any) string {
 	if err != nil {
 		panic(err)
 	}
+
 	return result
 }
 

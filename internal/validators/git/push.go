@@ -26,6 +26,7 @@ func NewPushValidator(log logger.Logger, gitRunner GitRunner) *PushValidator {
 	if gitRunner == nil {
 		gitRunner = NewRealGitRunner()
 	}
+
 	return &PushValidator{
 		BaseValidator: *validator.NewBaseValidator("validate-git-push", log),
 		gitRunner:     gitRunner,
@@ -40,12 +41,14 @@ func (v *PushValidator) Name() string {
 // Validate validates git push commands
 func (v *PushValidator) Validate(ctx *hook.Context) *validator.Result {
 	log := v.Logger()
+
 	command := ctx.GetCommand()
 	if command == "" {
 		return validator.Pass()
 	}
 
 	bashParser := parser.NewBashParser()
+
 	parseResult, err := bashParser.Parse(command)
 	if err != nil {
 		log.Debug("failed to parse command", "error", err)
@@ -102,6 +105,7 @@ func (v *PushValidator) validatePushCommand(gitCmd *parser.GitCommand) *validato
 	}
 
 	projectType := detectProjectType(repoRoot)
+
 	return v.validateProjectSpecificRules(projectType, remote)
 }
 
@@ -155,6 +159,7 @@ func (v *PushValidator) formatRemoteNotFoundError(remote string, remotes map[str
 	for name := range remotes {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
 
 	remoteInfos := make([]templates.RemoteInfo, len(names))
@@ -176,9 +181,11 @@ func detectProjectType(repoRoot string) string {
 	if strings.Contains(repoRoot, "/kumahq/kuma") {
 		return "kumahq/kuma"
 	}
+
 	if strings.Contains(repoRoot, "/kong/") || strings.Contains(repoRoot, "/Kong/") {
 		return "kong-org"
 	}
+
 	return ""
 }
 
@@ -208,6 +215,7 @@ func (v *PushValidator) validateKongOrgPush(remote string) *validator.Result {
 func (v *PushValidator) validateKumaPush(remote string) *validator.Result {
 	if remote == "upstream" {
 		message := templates.MustExecute(templates.PushKumaWarningTemplate, nil)
+
 		return &validator.Result{
 			Passed:      false,
 			Message:     message,

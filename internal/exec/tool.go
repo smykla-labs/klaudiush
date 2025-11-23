@@ -19,7 +19,7 @@ type ToolChecker interface {
 type toolChecker struct{}
 
 // NewToolChecker creates a new ToolChecker.
-func NewToolChecker() ToolChecker {
+func NewToolChecker() *toolChecker {
 	return &toolChecker{}
 }
 
@@ -34,6 +34,7 @@ func (t *toolChecker) RequireTool(tool string) error {
 	if !t.IsAvailable(tool) {
 		return &ToolNotFoundError{Tool: tool}
 	}
+
 	return nil
 }
 
@@ -44,6 +45,7 @@ func (t *toolChecker) FindTool(alternatives ...string) string {
 			return tool
 		}
 	}
+
 	return ""
 }
 

@@ -16,6 +16,8 @@ func NewRepositoryAdapter(repo Repository) *RepositoryAdapter {
 }
 
 // NewSDKGitRunner creates a GitRunner backed by the go-git SDK
+//
+//nolint:ireturn // Factory function returns interface by design
 func NewSDKGitRunner() (gitvalidators.GitRunner, error) {
 	repo, err := DiscoverRepository()
 	if err != nil {

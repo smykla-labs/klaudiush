@@ -97,6 +97,8 @@ func (l *FileLogger) Error(msg string, keysAndValues ...any) {
 }
 
 // With returns a new logger with additional base key-value pairs.
+//
+//nolint:ireturn // With is intended to return an interface for chaining
 func (l *FileLogger) With(keysAndValues ...any) Logger {
 	newKVs := make([]any, len(l.baseKVs)+len(keysAndValues))
 	copy(newKVs, l.baseKVs)
@@ -115,6 +117,7 @@ func (l *FileLogger) log(level Level, msg string, keysAndValues ...any) {
 	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
 	var builder strings.Builder
+
 	builder.WriteString(timestamp)
 	builder.WriteString(" ")
 	builder.WriteString(string(level))
@@ -194,6 +197,8 @@ func (n *NoOpLogger) Info(string, ...any) {}
 func (n *NoOpLogger) Error(string, ...any) {}
 
 // With returns the same NoOpLogger.
+//
+//nolint:ireturn // With is intended to return an interface for chaining
 func (n *NoOpLogger) With(...any) Logger {
 	return n
 }

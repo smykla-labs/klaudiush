@@ -36,6 +36,7 @@ func (v *BellValidator) Validate(ctx *hook.Context) *validator.Result {
 		v.Logger().Debug("failed to open /dev/tty", "error", err)
 		return validator.Pass() // Don't fail, just skip
 	}
+
 	defer func() {
 		if closeErr := tty.Close(); closeErr != nil {
 			v.Logger().Debug("failed to close /dev/tty", "error", closeErr)

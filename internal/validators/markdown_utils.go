@@ -45,6 +45,7 @@ func AnalyzeMarkdown(content string) MarkdownAnalysisResult {
 	prevLine := ""
 	prevPrevLine := ""
 	inCodeBlock := false
+
 	var lastList *listContext
 
 	for scanner.Scan() {
@@ -83,6 +84,7 @@ func AnalyzeMarkdown(content string) MarkdownAnalysisResult {
 		if inCodeBlock {
 			prevPrevLine = prevLine
 			prevLine = line
+
 			continue
 		}
 
@@ -116,6 +118,7 @@ func checkCodeBlock(line, prevLine string, lineNum int, inCodeBlock bool, warnin
 				fmt.Sprintf("   Previous line: '%s'", truncate(prevLine)),
 			)
 		}
+
 		return true
 	}
 
@@ -208,7 +211,9 @@ func shouldWarnAboutHeaderSpacing(line string) bool {
 func getListIndent(line string) int {
 	re := regexp.MustCompile(`^([[:space:]]*)([-*+]|[0-9]+\.)[[:space:]]`)
 	matches := re.FindStringSubmatch(line)
+
 	const minRequiredMatches = 3 // Full match + 2 capture groups
+
 	if len(matches) < minRequiredMatches {
 		return 0
 	}
@@ -226,6 +231,7 @@ func getIndentation(line string) int {
 			return i
 		}
 	}
+
 	return len(line)
 }
 
@@ -259,5 +265,6 @@ func truncate(s string) string {
 	if len(s) <= maxTruncateLength {
 		return s
 	}
+
 	return s[:maxTruncateLength]
 }

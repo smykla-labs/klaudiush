@@ -19,7 +19,7 @@ type RealShellChecker struct {
 }
 
 // NewShellChecker creates a new RealShellChecker
-func NewShellChecker(runner execpkg.CommandRunner) ShellChecker {
+func NewShellChecker(runner execpkg.CommandRunner) *RealShellChecker {
 	return &RealShellChecker{
 		runner:      runner,
 		toolChecker: execpkg.NewToolChecker(),
