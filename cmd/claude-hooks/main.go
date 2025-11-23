@@ -13,6 +13,7 @@ import (
 
 	"github.com/smykla-labs/claude-hooks/internal/dispatcher"
 	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
+	githubpkg "github.com/smykla-labs/claude-hooks/internal/github"
 	"github.com/smykla-labs/claude-hooks/internal/linters"
 	"github.com/smykla-labs/claude-hooks/internal/parser"
 	"github.com/smykla-labs/claude-hooks/internal/validator"
@@ -126,27 +127,27 @@ func run(_ *cobra.Command, _ []string) error {
 	disp := dispatcher.NewDispatcher(registry, log)
 
 	// Dispatch validation
-	errors := disp.Dispatch(context.Background(), ctx)
+	errs := disp.Dispatch(context.Background(), ctx)
 
 	// Check if we should block
-	if dispatcher.ShouldBlock(errors) {
-		errorMsg := dispatcher.FormatErrors(errors)
+	if dispatcher.ShouldBlock(errs) {
+		errorMsg := dispatcher.FormatErrors(errs)
 		fmt.Fprint(os.Stderr, errorMsg)
 
 		log.Error("validation blocked",
-			"errorCount", len(errors),
+			"errorCount", len(errs),
 		)
 
 		os.Exit(ExitCodeBlock)
 	}
 
 	// If there are warnings, log them
-	if len(errors) > 0 {
-		errorMsg := dispatcher.FormatErrors(errors)
+	if len(errs) > 0 {
+		errorMsg := dispatcher.FormatErrors(errs)
 		fmt.Fprint(os.Stderr, errorMsg)
 
 		log.Info("validation passed with warnings",
-			"warningCount", len(errors),
+			"warningCount", len(errs),
 		)
 	} else {
 		log.Info("validation passed")
@@ -236,6 +237,9 @@ func registerFileValidators(registry *validator.Registry, log logger.Logger) {
 	actionLinter := linters.NewActionLinter(runner)
 	markdownLinter := linters.NewMarkdownLinter(runner)
 
+	// Initialize GitHub client
+	githubClient := githubpkg.NewClient()
+
 	registry.Register(
 		filevalidators.NewMarkdownValidator(markdownLinter, log),
 		validator.And(
@@ -267,7 +271,7 @@ func registerFileValidators(registry *validator.Registry, log logger.Logger) {
 	)
 
 	registry.Register(
-		filevalidators.NewWorkflowValidator(actionLinter, log),
+		filevalidators.NewWorkflowValidator(actionLinter, githubClient, log),
 		validator.And(
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit, hook.MultiEdit),

@@ -8,11 +8,35 @@ import (
 	. "github.com/onsi/gomega"
 
 	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
+	"github.com/smykla-labs/claude-hooks/internal/github"
 	"github.com/smykla-labs/claude-hooks/internal/linters"
 	"github.com/smykla-labs/claude-hooks/internal/validators/file"
 	"github.com/smykla-labs/claude-hooks/pkg/hook"
 	"github.com/smykla-labs/claude-hooks/pkg/logger"
 )
+
+// mockGitHubClient is a mock implementation of github.Client for testing
+type mockGitHubClient struct {
+	authenticated bool
+}
+
+func (m *mockGitHubClient) GetLatestRelease(
+	ctx context.Context,
+	owner, repo string,
+) (*github.Release, error) {
+	return nil, github.ErrNoReleases
+}
+
+func (m *mockGitHubClient) GetTags(
+	ctx context.Context,
+	owner, repo string,
+) ([]*github.Tag, error) {
+	return nil, github.ErrNoTags
+}
+
+func (m *mockGitHubClient) IsAuthenticated() bool {
+	return m.authenticated
+}
 
 var _ = Describe("WorkflowValidator", func() {
 	var (
@@ -24,7 +48,8 @@ var _ = Describe("WorkflowValidator", func() {
 		log = logger.NewNoOpLogger()
 		runner := execpkg.NewCommandRunner(10 * time.Second)
 		linter := linters.NewActionLinter(runner)
-		validator = file.NewWorkflowValidator(linter, log)
+		githubClient := &mockGitHubClient{authenticated: false}
+		validator = file.NewWorkflowValidator(linter, githubClient, log)
 	})
 
 	Describe("Validate", func() {

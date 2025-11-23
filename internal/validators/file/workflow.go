@@ -3,7 +3,7 @@ package file
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
+	"github.com/smykla-labs/claude-hooks/internal/github"
 	"github.com/smykla-labs/claude-hooks/internal/linters"
 	"github.com/smykla-labs/claude-hooks/internal/validator"
 	"github.com/smykla-labs/claude-hooks/pkg/hook"
@@ -29,6 +29,8 @@ const (
 	actionRefParts = 2
 	// outputParts is the number of parts when splitting actionlint output
 	outputParts = 2
+	// ownerRepoParts is the number of parts in owner/repo format
+	ownerRepoParts = 2
 )
 
 var (
@@ -60,18 +62,20 @@ type actionUse struct {
 // WorkflowValidator validates GitHub Actions workflow files
 type WorkflowValidator struct {
 	validator.BaseValidator
-	linter      linters.ActionLinter
-	toolChecker execpkg.ToolChecker
-	runner      execpkg.CommandRunner
+	linter       linters.ActionLinter
+	githubClient github.Client
 }
 
 // NewWorkflowValidator creates a new WorkflowValidator
-func NewWorkflowValidator(linter linters.ActionLinter, log logger.Logger) *WorkflowValidator {
+func NewWorkflowValidator(
+	linter linters.ActionLinter,
+	githubClient github.Client,
+	log logger.Logger,
+) *WorkflowValidator {
 	return &WorkflowValidator{
 		BaseValidator: *validator.NewBaseValidator("validate-github-workflow", log),
 		linter:        linter,
-		toolChecker:   execpkg.NewToolChecker(),
-		runner:        execpkg.NewCommandRunner(ghAPITimeout),
+		githubClient:  githubClient,
 	}
 }
 
@@ -384,46 +388,40 @@ func (v *WorkflowValidator) hasExplanationComment(action actionUse) bool {
 
 // getLatestVersion queries GitHub API for the latest version of an action
 func (v *WorkflowValidator) getLatestVersion(ctx context.Context, actionName string) string {
-	// Check if gh CLI is available
-	if !v.toolChecker.IsAvailable("gh") {
-		v.Logger().Debug("gh CLI not found, skipping version check")
+	// Parse action name (format: owner/repo)
+	parts := strings.SplitN(actionName, "/", ownerRepoParts)
+	if len(parts) != ownerRepoParts {
+		v.Logger().Debug("invalid action name format", "action", actionName)
 		return ""
 	}
+
+	owner, repo := parts[0], parts[1]
 
 	apiCtx, cancel := context.WithTimeout(ctx, ghAPITimeout)
 	defer cancel()
 
 	// Try releases first
-	result := v.runner.Run(
-		apiCtx,
-		"gh",
-		"api",
-		fmt.Sprintf("repos/%s/releases/latest", actionName),
-		"--jq",
-		".tag_name",
-	)
-	if result.Err == nil {
-		version := strings.TrimSpace(result.Stdout)
-		if version != "" {
-			return version
-		}
+	release, err := v.githubClient.GetLatestRelease(apiCtx, owner, repo)
+	if err == nil && release.TagName != "" {
+		return release.TagName
+	}
+
+	if err != nil &&
+		!errors.Is(err, github.ErrNoReleases) &&
+		!errors.Is(err, github.ErrRepositoryNotFound) {
+		v.Logger().Debug("failed to get latest release", "action", actionName, "error", err)
 	}
 
 	// Fallback to tags
 	apiCtx, cancel = context.WithTimeout(ctx, ghAPITimeout)
 	defer cancel()
 
-	result = v.runner.Run(apiCtx, "gh", "api", fmt.Sprintf("repos/%s/tags", actionName))
-	if result.Err != nil {
-		return ""
-	}
+	tags, err := v.githubClient.GetTags(apiCtx, owner, repo)
+	if err != nil {
+		if !errors.Is(err, github.ErrNoTags) && !errors.Is(err, github.ErrRepositoryNotFound) {
+			v.Logger().Debug("failed to get tags", "action", actionName, "error", err)
+		}
 
-	// Parse JSON response
-	var tags []struct {
-		Name string `json:"name"`
-	}
-
-	if err := json.Unmarshal([]byte(result.Stdout), &tags); err != nil {
 		return ""
 	}
 
