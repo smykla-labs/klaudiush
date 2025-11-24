@@ -172,6 +172,9 @@ func (l *RealMarkdownLinter) runMarkdownlint(ctx context.Context, content string
 	// Combine stdout and stderr for error messages
 	output := result.Stdout + result.Stderr
 
+	// Clean up temp file path from output
+	output = strings.ReplaceAll(output, tempFile, "<file>")
+
 	return &LintResult{
 		Success: false,
 		RawOut:  strings.TrimSpace(output),
