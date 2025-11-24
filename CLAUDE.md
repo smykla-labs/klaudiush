@@ -8,6 +8,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+### Initialization
+
+```bash
+# Initialize project configuration (interactive)
+./bin/klaudiush init
+
+# Initialize global configuration
+./bin/klaudiush init --global
+# or
+./bin/klaudiush init -g
+
+# Force overwrite existing configuration
+./bin/klaudiush init --force
+# or
+./bin/klaudiush init -f
+```
+
+The `init` command provides an interactive setup wizard that:
+
+- Prompts for configuration options (signoff, notifications, etc.)
+- Uses sensible defaults from git config when available
+- Creates `.klaudiush/config.toml` (project) or `~/.klaudiush/config.toml` (global)
+- Optionally adds config files to `.git/info/exclude` (project only)
+
+**Extensible Design**: New configuration options can be added by implementing the `ConfigOption` interface in `internal/initcmd/options.go`. Each option is automatically included in the initialization flow.
+
 ### Build
 
 ```bash
@@ -271,10 +297,49 @@ func NewGitRunner() GitRunner {
 - Provides backward compatibility with existing validators
 - `NewSDKRunner()`: Creates SDK-backed runner instance
 
+**Git Config Reader** (`internal/git/config.go`):
+
+- `ConfigReader` interface for reading git configuration
+- `GetUserName()`, `GetUserEmail()`, `GetSignoff()` methods
+- Uses go-git SDK to read git config values
+- Provides default values for `init` command
+
+**Git Exclude Manager** (`internal/git/exclude.go`):
+
+- `ExcludeManager` for managing `.git/info/exclude` entries
+- `AddEntry()` adds patterns to exclude file
+- `HasEntry()` checks if pattern exists
+- Automatically creates `.git/info` directory if needed
+- Used by `init` command to exclude config files from git
+
 **Testing**:
 
 - `MockGitRunner`: For testing validators with controlled git state
 - All 169 git validator tests pass with both implementations
+
+### Configuration Management
+
+**Config Writer** (`internal/config/writer.go`):
+
+- `Writer` handles writing configuration to TOML files
+- `WriteGlobal()`, `WriteProject()` methods
+- Secure file permissions (0600 for files, 0700 for directories)
+- Creates directories automatically if needed
+
+**Interactive Prompts** (`internal/prompt/prompt.go`):
+
+- `Prompter` interface for interactive user input
+- `Input()` for text input with default values
+- `Confirm()` for yes/no confirmations
+- `StdPrompter` implementation using stdin/stdout
+- Testable with custom reader/writer
+
+**Init Command Options** (`internal/initcmd/options.go`):
+
+- `ConfigOption` interface for extensible configuration
+- Each option implements: `Name()`, `Prompt()`, `IsAvailable()`
+- Current options: `SignoffOption`, `BellNotificationOption`
+- New options auto-included by adding to `GetDefaultOptions()`
 
 ### Logging
 
