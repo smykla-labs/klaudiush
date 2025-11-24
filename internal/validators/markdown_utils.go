@@ -15,6 +15,7 @@ const (
 // MarkdownState represents the parsing state at a given position
 type MarkdownState struct {
 	InCodeBlock bool
+	StartLine   int // 0-indexed line number where this state begins (0 = start of file)
 	// Future: InComment, ListDepth, etc.
 }
 

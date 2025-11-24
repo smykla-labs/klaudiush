@@ -168,6 +168,7 @@ func (v *MarkdownValidator) getContentWithState(
 		// Detect markdown state at fragment start
 		fragmentStartLine := getFragmentStartLine(string(originalContent), oldStr, contextLines)
 		state := validators.DetectMarkdownState(string(originalContent), fragmentStartLine)
+		state.StartLine = fragmentStartLine
 
 		log.Debug("fragment initial state",
 			"start_line", fragmentStartLine,
