@@ -1,525 +1,158 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when working with this repository.
 
 ## Project Overview
 
-`klaudiush` is a validation dispatcher for Claude Code hooks. It intercepts tool invocations (PreToolUse events) and validates commands before execution, enforcing git workflow standards and commit message conventions.
+`klaudiush` is a validation dispatcher for Claude Code hooks. Intercepts PreToolUse events and validates commands before execution, enforcing git workflow standards and commit message conventions.
 
 ## Commands
 
-### Initialization
-
 ```bash
-# Initialize project configuration (interactive)
-./bin/klaudiush init
+# Init (interactive setup wizard, creates config.toml)
+./bin/klaudiush init              # project config
+./bin/klaudiush init --global     # global config
+./bin/klaudiush init --force      # overwrite existing
 
-# Initialize global configuration
-./bin/klaudiush init --global
-# or
-./bin/klaudiush init -g
+# Build & Install
+task build                        # dev build
+task build:prod                   # prod build (validates signoff)
+task install                      # install to ~/.claude/hooks/dispatcher
 
-# Force overwrite existing configuration
-./bin/klaudiush init --force
-# or
-./bin/klaudiush init -f
+# Testing
+task test                         # all tests
+task test:unit                    # unit tests only
+task test:integration             # integration tests only
+
+# Linting & Development
+task check                        # lint + auto-fix
+task lint                         # lint only
+task fmt                          # format code
+task deps                         # update dependencies
+task verify                       # fmt + lint + test
+task clean                        # clean artifacts
 ```
 
-The `init` command provides an interactive setup wizard that:
-
-- Prompts for configuration options (signoff, notifications, etc.)
-- Uses sensible defaults from git config when available
-- Creates `.klaudiush/config.toml` (project) or `~/.klaudiush/config.toml` (global)
-- Optionally adds config files to `.git/info/exclude` (project only)
-
-**Extensible Design**: New configuration options can be added by implementing the `ConfigOption` interface in `internal/initcmd/options.go`. Each option is automatically included in the initialization flow.
-
-### Build
-
-```bash
-# Development build (no signoff validation)
-task build
-
-# Production build (validates signoff matches git config)
-task build:prod
-
-# Install to ~/.claude/hooks/dispatcher
-task install
-```
-
-### Testing
-
-```bash
-# Run all tests
-task test
-
-# Unit tests only
-task test:unit
-
-# Integration tests only
-task test:integration
-```
-
-### Linting
-
-```bash
-# Lint and auto-fix
-task check
-task lint:fix
-
-# Lint only
-task lint
-```
-
-### Development
-
-```bash
-# Format code
-task fmt
-
-# Clean build artifacts
-task clean
-
-# Update dependencies
-task deps
-
-# Run all verification (fmt + lint + test)
-task verify
-```
+**Init Extensibility**: Add new options via `ConfigOption` interface in `internal/initcmd/options.go`.
 
 ## Architecture
 
 ### Core Flow
 
-1. **CLI Entry** (`cmd/klaudiush/main.go`): Receives JSON from stdin, parses `--hook-type` flag
-2. **JSON Parser** (`internal/parser/json.go`): Converts JSON to `hook.Context`
-3. **Dispatcher** (`internal/dispatcher/dispatcher.go`): Orchestrates validation
-4. **Registry** (`internal/validator/registry.go`): Matches validators to context using predicates
-5. **Validators**: Execute validation logic, return `Result` (Pass/Fail/Warn)
+1. CLI Entry (`cmd/klaudiush/main.go`) → 2. JSON Parser (`internal/parser/json.go`) → 3. Dispatcher (`internal/dispatcher/dispatcher.go`) → 4. Registry (`internal/validator/registry.go`) matches validators via predicates → 5. Validators return `Result` (Pass/Fail/Warn)
 
-### Execution Abstractions
+### Execution Abstractions (`internal/exec/`)
 
-**Command Execution Package** (`internal/exec/`):
+Unified command execution abstractions eliminating ~134 lines of duplication:
 
-Provides unified abstractions for external command execution, eliminating code duplication across validators.
+- **CommandRunner**: Execute commands with timeout/context, returns `CommandResult`
+- **ToolChecker**: Check tool availability (`IsAvailable`, `FindTool` for alternatives like `tofu` vs `terraform`)
+- **TempFileManager**: Temp file lifecycle management
 
-- **CommandRunner**: Executes commands with timeout/context management
-  - `Run(ctx, name, args...)`: Execute command and return result
-  - `RunWithStdin(ctx, stdin, name, args...)`: Execute with stdin input
-  - Returns `CommandResult` with stdout, stderr, exit code
-  - Automatic `ExitError` handling with `errors.As`
+### Hook Context (`pkg/hook/context.go`)
 
-- **ToolChecker**: Checks tool availability in PATH
-  - `IsAvailable(tool)`: Check if single tool exists
-  - `FindTool(tools...)`: Find first available tool from list
-  - Used for tool detection (e.g., `tofu` vs `terraform`)
-
-- **TempFileManager**: Manages temporary file lifecycle
-  - `Create(pattern, content)`: Create temp file with content
-  - `Cleanup(path)`: Remove temp file
-  - Uses system temp directory (`os.TempDir()`)
-
-**Benefits**:
-
-- ~134 lines of boilerplate eliminated across validators
-- Consistent error handling with `errors.As`
-- Single source of truth for command execution
-- Better testability with mockable interfaces
-- Prevents nil pointer dereferences
-
-**Migrated Validators**:
-
-- ✅ `git_runner.go` (8 methods) - eliminated ~60 lines
-- ✅ `shellscript.go` - eliminated ~30 lines
-- ✅ `terraform.go` - eliminated ~44 lines
-
-### Hook Context
-
-The `hook.Context` struct (`pkg/hook/context.go`) represents tool invocations:
-
-- `EventType`: PreToolUse, PostToolUse, Notification
-- `ToolName`: Bash, Write, Edit, Grep, etc.
-- `ToolInput`: Command, FilePath, Content, etc.
+Represents tool invocations: `EventType` (PreToolUse/PostToolUse/Notification), `ToolName` (Bash/Write/Edit/Grep), `ToolInput` (Command/FilePath/Content).
 
 ### Validator System
 
-**Predicate-based Registration** (`internal/validator/registry.go`):
+**Registration** (`internal/validator/registry.go`): Predicate-based matching (e.g., `validator.And(EventTypeIs(PreToolUse), ToolTypeIs(Bash), CommandContains("git commit"))`)
 
-```go
-registry.Register(
-    validator,
-    validator.And(
-        validator.EventTypeIs(hook.PreToolUse),
-        validator.ToolTypeIs(hook.Bash),
-        validator.CommandContains("git commit"),
-    ),
-)
-```
+**Results** (`internal/validator/validator.go`): `Pass()`, `Fail(msg)` (blocks, exit 2), `Warn(msg)` (logs, allows)
 
-**Validation Results** (`internal/validator/validator.go`):
-
-- `Pass()`: Validation passed
-- `Fail(msg)`: Validation failed, blocks operation (exit code 2)
-- `Warn(msg)`: Validation failed, logs warning but allows operation
-
-**Creating Validators**:
-
-1. Embed `validator.BaseValidator` for logging/naming
-2. Implement `Validate(ctx *hook.Context) *validator.Result`
-3. Register with predicate in `cmd/klaudiush/main.go:registerValidators()`
+**Creating**: 1) Embed `BaseValidator`, 2) Implement `Validate(ctx *hook.Context)`, 3) Register in `main.go:registerValidators()`
 
 ### Parsers
 
-**Bash Parser** (`pkg/parser/bash.go`):
+**Bash** (`pkg/parser/bash.go`): AST parsing via `mvdan.cc/sh/v3/syntax`, extracts commands/file writes/git ops
 
-- Uses `mvdan.cc/sh/v3/syntax` for AST parsing
-- Extracts commands, file writes, git operations
-- Returns `ParseResult` with all parsed commands
-
-**Git Parser** (`pkg/parser/git.go`):
-
-- Parses `Command` into `GitCommand` struct
-- Handles combined flags (`-sS` → `["-s", "-S"]`)
-- Extracts: commit messages, remotes, branches, file paths
-- `HasFlag()` checks both standalone and combined flags
+**Git** (`pkg/parser/git.go`): Parses to `GitCommand`, handles combined flags (`-sS` → `["-s", "-S"]`), `HasFlag()` checks both forms
 
 ### Validators
 
-**Git Validators** (`internal/validators/git/`):
+**Git** (`internal/validators/git/`): AddValidator (file existence), CommitValidator (flags `-sS`, staging, message), PushValidator (remote/branch), PRValidator (title/body/changelog)
 
-- **AddValidator**: Validates `git add` commands (file existence, patterns)
-- **CommitValidator**: Validates commit flags (`-sS`), staging area, message format
-- **PushValidator**: Validates remote exists, branch tracking
-- **PRValidator**: Validates PR title, body format, changelog
+**Commit Message** (`commit_message.go`): Conventional commits `type(scope): description`, title ≤50 chars, body ≤72 chars, blocks `feat(ci)`/`fix(test)` (use `ci(...)`/`test(...)` instead), no PR refs/Claude attribution
 
-**Commit Message Validation** (`internal/validators/git/commit_message.go`):
+**File** (`internal/validators/file/`): MarkdownValidator, ShellScriptValidator (shellcheck), TerraformValidator (tofu/terraform fmt+tflint), WorkflowValidator (actionlint)
 
-- Conventional commits format: `type(scope): description`
-- Title ≤50 chars, body lines ≤72 chars (77 with tolerance)
-- Blocks `feat(ci)`, `fix(test)` - infrastructure changes should use `ci(...)`, `test(...)`
-- No PR references (`#123` or GitHub URLs)
-- No Claude AI attribution
-- Signoff validation when built with `-ldflags` setting `ExpectedSignoff`
+**Notification** (`internal/validators/notification/`): BellValidator (ASCII 7 to `/dev/tty` for dock bounce)
 
-**File Validators** (`internal/validators/file/`):
+### Linter Abstractions (`internal/linters/`)
 
-- **MarkdownValidator**: Validates Markdown format conventions (uses `MarkdownLinter`)
-- **ShellScriptValidator**: Validates shell scripts with shellcheck (uses `ShellChecker`)
-- **TerraformValidator**: Validates Terraform/OpenTofu formatting and linting (uses `TerraformFormatter`, `TfLinter`)
-- **WorkflowValidator**: Validates GitHub Actions workflows (uses `ActionLinter`)
+Type-safe interfaces for external tools: **ShellChecker** (shellcheck), **TerraformFormatter** (tofu/terraform fmt), **TfLinter** (tflint), **ActionLinter** (actionlint), **MarkdownLinter** (custom rules)
 
-**Notification Validators** (`internal/validators/notification/`):
+**Common Types** (`result.go`): `LintResult` (success/findings), `LintFinding` (file/line/message), `LintSeverity` (Error/Warning/Info)
 
-- **BellValidator**: Sends bell character (ASCII 7) to `/dev/tty` for all notification events (permission prompts, etc.) to trigger terminal bell/dock bounce
+### Git Operations (`internal/git/`)
 
-### Linter Abstractions
+**Dual Implementation**: SDK (go-git/v6, 2-5.9M× faster, default) and CLI (fallback). Set `KLAUDIUSH_USE_SDK_GIT=false` to force CLI.
 
-**Linter Package** (`internal/linters/`):
+**Runner Interface** (`runner.go`): Unified interface for both - `IsInRepo()`, `GetStagedFiles()`, `GetModifiedFiles()`, `GetUntrackedFiles()`, `GetRepoRoot()`, `GetCurrentBranch()`, `GetBranchRemote()`, `GetRemoteURL()`, `GetRemotes()`
 
-Provides typed interfaces for external linting tools:
-
-- **ShellChecker** (`shellcheck.go`): Shell script validation via shellcheck
-  - Returns structured `LintResult` with findings
-  - Handles tool availability checking
-
-- **TerraformFormatter** (`terraform.go`): Terraform/OpenTofu formatting validation
-  - Detects `tofu` vs `terraform` binary
-  - Parses `fmt -check -diff` output
-  - Returns file-level formatting issues
-
-- **TfLinter** (`tflint.go`): Terraform linting via tflint
-  - Uses `--format=compact` for structured output
-  - Distinguishes between findings and errors
-
-- **ActionLinter** (`actionlint.go`): GitHub Actions workflow validation
-  - Parses `file:line:col: message` format
-  - Returns structured findings with location data
-
-- **MarkdownLinter** (`markdownlint.go`): Markdown validation
-  - Custom rules via `AnalyzeMarkdown()` function
-  - Checks for proper heading spacing, etc.
-
-**Common Types** (`result.go`):
-
-- `LintResult`: Structured result with success/findings
-- `LintFinding`: Individual issue with file/line/message
-- `LintSeverity`: Error, Warning, Info levels
-
-**Benefits**:
-
-- Type-safe linter invocations
-- Testable via interface mocking
-- Consistent error handling
-- Foundation for parallel execution and caching
-
-### Git Operations
-
-**Git SDK Architecture** (`internal/git/`):
-
-The project uses a dual implementation strategy for git operations:
-
-- **SDK Implementation** (default in future): Uses `go-git/go-git/v6` for native Go git operations
-  - `Repository` interface (`repository.go`): Core git repository operations
-  - `SDKRepository`: Implementation using go-git SDK
-  - `DiscoverRepository()`: Finds and caches repository instance
-  - Performance: 2-5.9M× faster than CLI for cached operations
-
-- **CLI Implementation** (backward compatible): Executes git commands via shell
-  - `CLIGitRunner`: Uses `exec.CommandRunner` to execute git CLI
-  - Fallback when SDK initialization fails
-
-**Runner Interface** (`internal/git/runner.go`):
-
-Unified interface implemented by both CLI and SDK:
-
-- Operations: `IsInRepo()`, `GetStagedFiles()`, `GetModifiedFiles()`, `GetUntrackedFiles()`
-- Repository info: `GetRepoRoot()`, `GetCurrentBranch()`, `GetBranchRemote()`
-- Remote operations: `GetRemoteURL()`, `GetRemotes()`
-
-**Factory Pattern** (`internal/validators/git/git_runner.go`):
-
-```go
-func NewGitRunner() GitRunner {
-    // By default, uses SDK implementation for better performance
-    // Set KLAUDIUSH_USE_SDK_GIT to "false" or "0" to use CLI
-    // Falls back to CLI if SDK initialization fails
-}
-```
-
-**Environment Variable**:
-
-- Not set or `KLAUDIUSH_USE_SDK_GIT=true`: Use SDK implementation (default)
-- `KLAUDIUSH_USE_SDK_GIT=false` or `KLAUDIUSH_USE_SDK_GIT=0`: Use CLI implementation
-
-**Migration Note**: The old `CLAUDE_HOOKS_USE_SDK_GIT` environment variable is deprecated. Use `KLAUDIUSH_USE_SDK_GIT` instead.
-
-**Adapter Pattern** (`internal/git/adapter.go`):
-
-- `RepositoryAdapter`: Wraps `Repository` to implement `Runner` interface
-- Provides backward compatibility with existing validators
-- `NewSDKRunner()`: Creates SDK-backed runner instance
-
-**Git Config Reader** (`internal/git/config.go`):
-
-- `ConfigReader` interface for reading git configuration
-- `GetUserName()`, `GetUserEmail()`, `GetSignoff()` methods
-- Uses go-git SDK to read git config values
-- Provides default values for `init` command
-
-**Git Exclude Manager** (`internal/git/exclude.go`):
-
-- `ExcludeManager` for managing `.git/info/exclude` entries
-- `AddEntry()` adds patterns to exclude file
-- `HasEntry()` checks if pattern exists
-- Automatically creates `.git/info` directory if needed
-- Used by `init` command to exclude config files from git
-
-**Testing**:
-
-- `MockGitRunner`: For testing validators with controlled git state
-- All 169 git validator tests pass with both implementations
+**Utilities**: `ConfigReader` (git config via SDK), `ExcludeManager` (.git/info/exclude), `RepositoryAdapter` (wraps SDK for Runner), `MockGitRunner` (testing)
 
 ### Configuration System
 
-The configuration system follows Clean Architecture with clear layer separation and supports flexible configuration through multiple sources.
+Clean Architecture layers: Application → Factory → Provider → Implementation → Schema
 
-**Configuration Architecture**:
+**Schema** (`pkg/config/`): Root config, validator configs (git/file/notification), types (Severity/Duration)
 
-```text
-Application Layer (main.go)
-         ↓
-   Factory Layer (builds validators)
-         ↓
-   Provider Layer (multi-source loading)
-         ↓
-Implementation Layer (loading, merging, validation)
-         ↓
-   Schema Layer (public types)
-```
+**Implementation** (`internal/config/`): TOML loader, validation, deep merge, defaults, secure writer (0600/0700)
 
-**Schema Layer** (`pkg/config/`):
+**Provider** (`internal/config/provider/`): Multi-source loading (files/env vars/CLI flags), caching
 
-- `config.go`: Root Config struct
-- `validator.go`: Base ValidatorConfig
-- `git.go`: Git validator configs (CommitValidatorConfig, PRValidatorConfig, etc.)
-- `file.go`: File validator configs (MarkdownValidatorConfig, ShellScriptValidatorConfig, etc.)
-- `notification.go`: Notification validator configs (BellValidatorConfig)
-- `types.go`: Severity enum, Duration wrapper, shared types
+**Factory** (`internal/config/factory/`): Builds validators from config, RegistryBuilder creates complete registry
 
-**Implementation Layer** (`internal/config/`):
+**Precedence** (highest to lowest): CLI Flags → Env Vars (`KLAUDIUSH_*`) → Project Config (`.klaudiush/config.toml`) → Global Config (`~/.klaudiush/config.toml`) → Defaults
 
-- `loader.go`: TOML file loading with strict validation
-- `validation.go`: Configuration semantic validation
-- `merger.go`: Deep merge logic for combining configs
-- `defaults.go`: Default value generation
-- `writer.go`: TOML file writing with secure permissions
-
-**Provider Layer** (`internal/config/provider/`):
-
-- `provider.go`: ConfigProvider interface and multi-source implementation
-- `sources.go`: File, environment variable, and CLI flag sources
-- `cache.go`: Configuration caching for performance
-
-**Factory Layer** (`internal/config/factory/`):
-
-- `factory.go`: ValidatorFactory interface
-- `git_factory.go`: Creates git validators from config
-- `file_factory.go`: Creates file validators from config
-- `notification_factory.go`: Creates notification validators from config
-- `registry.go`: RegistryBuilder creates complete validator registry from config
-
-**Configuration Sources and Precedence** (highest to lowest):
-
-1. **CLI Flags**: Runtime overrides (e.g., `--disable=commit,markdown`, `--config=path`)
-2. **Environment Variables**: `KLAUDIUSH_*` prefixed variables
-3. **Project Config**: `.klaudiush/config.toml` or `klaudiush.toml`
-4. **Global Config**: `~/.klaudiush/config.toml`
-5. **Defaults**: Built-in defaults matching current hardcoded behavior
-
-**CLI Flags for Configuration**:
+**Examples**:
 
 ```bash
-# Custom config file paths
-klaudiush --config=./my-config.toml --hook-type PreToolUse
-klaudiush --global-config=~/.config/klaudiush.toml --hook-type PreToolUse
+# CLI flags
+klaudiush --config=./my-config.toml --disable=commit,markdown --hook-type PreToolUse
 
-# Disable specific validators
-klaudiush --disable=commit,markdown --hook-type PreToolUse
-```
-
-**Environment Variables**:
-
-All configuration can be overridden via environment variables using the `KLAUDIUSH_` prefix:
-
-```bash
-# Disable validator
+# Env vars
 export KLAUDIUSH_VALIDATORS_GIT_COMMIT_ENABLED=false
-
-# Change commit title max length
 export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_TITLE_MAX_LENGTH=72
-
-# Change severity to warning
-export KLAUDIUSH_VALIDATORS_FILE_MARKDOWN_SEVERITY=warning
-
-# Increase timeout
-export KLAUDIUSH_VALIDATORS_FILE_TERRAFORM_TIMEOUT=30s
 ```
-
-**Configuration Files**:
-
-TOML format with deep merge support. Global config provides defaults, project config overrides specific values:
 
 ```toml
-# Global config (~/.klaudiush/config.toml)
+# TOML (deep merge: global defaults, project overrides)
 [validators.git.commit.message]
-title_max_length = 50
+title_max_length = 72
 check_conventional_commits = true
 ```
 
-```toml
-# Project config (.klaudiush/config.toml) - overrides specific values
-[validators.git.commit.message]
-title_max_length = 72  # Project allows longer titles
-```
+**Interactive Setup** (`internal/initcmd/`): Extensible options via `ConfigOption` interface, prompts via `Prompter`
 
-Result: `title_max_length=72`, `check_conventional_commits=true` (merged from both configs)
-
-**Interactive Setup** (`internal/initcmd/`):
-
-- `init.go`: Init command implementation
-- `options.go`: Extensible configuration options via `ConfigOption` interface
-- Current options: `SignoffOption`, `BellNotificationOption`
-- New options auto-included by adding to `GetDefaultOptions()`
-
-**Backward Compatibility**:
-
-- All validators accept `nil` config and use built-in defaults
-- No configuration files required - works out of the box
-- Existing tests pass without modification
-- Default behavior matches previous hardcoded behavior exactly
-
-**Config Writer** (`internal/config/writer.go`):
-
-- `Writer` handles writing configuration to TOML files
-- `WriteGlobal()`, `WriteProject()` methods
-- Secure file permissions (0600 for files, 0700 for directories)
-- Creates directories automatically if needed
-
-**Interactive Prompts** (`internal/prompt/prompt.go`):
-
-- `Prompter` interface for interactive user input
-- `Input()` for text input with default values
-- `Confirm()` for yes/no confirmations
-- `StdPrompter` implementation using stdin/stdout
-- Testable with custom reader/writer
+**Backward Compatibility**: No config files required, validators accept `nil` config, use built-in defaults
 
 ### Logging
 
-All validators log to `~/.claude/hooks/dispatcher.log`:
-
-- Debug mode: enabled by default (`--debug`)
-- Trace mode: `--trace` for verbose output
-- Use `BaseValidator.Logger()` for structured logging
+Logs to `~/.claude/hooks/dispatcher.log`: `--debug` (default), `--trace` (verbose). Use `BaseValidator.Logger()`.
 
 ## Testing
 
-- **Framework**: Ginkgo/Gomega
-- **Mocks**: `git_runner_mock.go` for git operations
-- **Test files**: `*_test.go`, `*_suite_test.go` for Ginkgo suites
-- **Coverage**: 336 tests across all packages
-- Run single test: `mise exec -- go test -v ./pkg/parser -run TestBashParser`
+Framework: Ginkgo/Gomega. 336 tests. Mocks: `git_runner_mock.go`. Run: `mise exec -- go test -v ./pkg/parser -run TestBashParser`
 
-## Development Environment
+## Development
 
-**Tool Version Management**:
+**Tools** (mise): Go 1.25.4, golangci-lint 2.6.2, task 3.45.5, markdownlint-cli 0.46.0. Run `mise install`. See `SETUP.md`.
 
-- Uses [mise](https://mise.jdx.dev/) for consistent tool versions
-- Go 1.25.4
-- golangci-lint 2.6.2
-- task 3.45.5
-- markdownlint-cli 0.46.0
-- Run `mise install` to install pinned versions
-- See `SETUP.md` for detailed setup instructions
+**Linters** (`.golangci.yml`): Nil safety (nilnesserr, govet), completeness (exhaustive, gochecksumtype), quality (gocognit, goconst, cyclop, dupl)
 
-**Linting**:
+## Build-time Configuration (Deprecated)
 
-- Comprehensive linter configuration in `.golangci.yml`
-- Nil safety checks: nilnesserr, govet (nilness), staticcheck
-- Completeness checks: exhaustive, gochecksumtype
-- Code quality: gocognit, goconst, cyclop, dupl
-- All linters pass with 0 issues
-
-## Build-time Configuration
-
-**Signoff Validation** (Deprecated):
-
-```bash
-go build -ldflags="-X 'github.com/smykla-labs/klaudiush/internal/validators/git.ExpectedSignoff=Name <email>'" ./cmd/klaudiush
-```
-
-**Note**: Build-time signoff validation via ldflags is deprecated. Use runtime configuration instead:
+Build-time signoff via ldflags is deprecated. Use runtime config instead:
 
 ```toml
-# In ~/.klaudiush/config.toml or .klaudiush/config.toml
 [validators.git.commit.message]
-expected_signoff = "Your Name <your.email@example.com>"
+expected_signoff = "Name <email>"
 ```
 
-Or via environment variable:
-
-```bash
-export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_EXPECTED_SIGNOFF="Your Name <your.email@example.com>"
-```
-
-Or use the interactive init command:
-
-```bash
-./bin/klaudiush init --global
-```
+Or: `export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_EXPECTED_SIGNOFF="Name <email>"` or `./bin/klaudiush init --global`
 
 ## Exit Codes
 
-- `0`: Operation allowed (validation passed or no validators matched)
-- `2`: Operation blocked (validation failed with `ShouldBlock=true`)
-
-Warnings (`ShouldBlock=false`) print to stderr but allow operation (exit 0).
+- `0`: Allowed (pass/warn/no match)
+- `2`: Blocked (fail with `ShouldBlock=true`)
