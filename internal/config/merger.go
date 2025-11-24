@@ -369,6 +369,18 @@ func (m *Merger) mergeMarkdownConfig(dst, src *config.MarkdownValidatorConfig) {
 	if src.UseMarkdownlint != nil {
 		dst.UseMarkdownlint = src.UseMarkdownlint
 	}
+
+	if src.MarkdownlintPath != "" {
+		dst.MarkdownlintPath = src.MarkdownlintPath
+	}
+
+	if len(src.MarkdownlintRules) > 0 {
+		dst.MarkdownlintRules = src.MarkdownlintRules
+	}
+
+	if src.MarkdownlintConfig != "" {
+		dst.MarkdownlintConfig = src.MarkdownlintConfig
+	}
 }
 
 // mergeShellScriptConfig merges shell script validator configurations.
