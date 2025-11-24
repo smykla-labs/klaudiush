@@ -250,7 +250,7 @@ func registerFileValidators(registry *validator.Registry, log logger.Logger) {
 	)
 
 	registry.Register(
-		filevalidators.NewTerraformValidator(terraformFormatter, tfLinter, log),
+		filevalidators.NewTerraformValidator(terraformFormatter, tfLinter, log, nil),
 		validator.And(
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit, hook.MultiEdit),
@@ -259,7 +259,7 @@ func registerFileValidators(registry *validator.Registry, log logger.Logger) {
 	)
 
 	registry.Register(
-		filevalidators.NewShellScriptValidator(log, shellChecker),
+		filevalidators.NewShellScriptValidator(log, shellChecker, nil),
 		validator.And(
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit, hook.MultiEdit),
@@ -271,7 +271,7 @@ func registerFileValidators(registry *validator.Registry, log logger.Logger) {
 	)
 
 	registry.Register(
-		filevalidators.NewWorkflowValidator(actionLinter, githubClient, log),
+		filevalidators.NewWorkflowValidator(actionLinter, githubClient, log, nil),
 		validator.And(
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit, hook.MultiEdit),
@@ -289,7 +289,7 @@ func registerFileValidators(registry *validator.Registry, log logger.Logger) {
 
 func registerNotificationValidators(registry *validator.Registry, log logger.Logger) {
 	registry.Register(
-		notificationvalidators.NewBellValidator(log),
+		notificationvalidators.NewBellValidator(log, nil),
 		validator.EventTypeIs(hook.Notification),
 	)
 }

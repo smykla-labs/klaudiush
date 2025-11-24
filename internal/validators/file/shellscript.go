@@ -9,31 +9,35 @@ import (
 
 	"github.com/smykla-labs/klaudiush/internal/linters"
 	"github.com/smykla-labs/klaudiush/internal/validator"
+	"github.com/smykla-labs/klaudiush/pkg/config"
 	"github.com/smykla-labs/klaudiush/pkg/hook"
 	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 const (
-	shellCheckTimeout = 10 * time.Second
+	defaultShellCheckTimeout = 10 * time.Second
 
-	// shellContextLines is the number of lines before/after an edit to include for validation
-	shellContextLines = 2
+	// defaultShellContextLines is the number of lines before/after an edit to include for validation
+	defaultShellContextLines = 2
 )
 
 // ShellScriptValidator validates shell scripts using shellcheck.
 type ShellScriptValidator struct {
 	validator.BaseValidator
 	checker linters.ShellChecker
+	config  *config.ShellScriptValidatorConfig
 }
 
 // NewShellScriptValidator creates a new ShellScriptValidator.
 func NewShellScriptValidator(
 	log logger.Logger,
 	checker linters.ShellChecker,
+	cfg *config.ShellScriptValidatorConfig,
 ) *ShellScriptValidator {
 	return &ShellScriptValidator{
 		BaseValidator: *validator.NewBaseValidator("validate-shellscript", log),
 		checker:       checker,
+		config:        cfg,
 	}
 }
 
@@ -66,7 +70,7 @@ func (v *ShellScriptValidator) Validate(
 	}
 
 	// Run shellcheck using the linter
-	lintCtx, cancel := context.WithTimeout(ctx, shellCheckTimeout)
+	lintCtx, cancel := context.WithTimeout(ctx, v.getTimeout())
 	defer cancel()
 
 	result := v.checker.Check(lintCtx, content)
@@ -139,7 +143,7 @@ func (v *ShellScriptValidator) getEditContent(
 		string(originalContent),
 		oldStr,
 		newStr,
-		shellContextLines,
+		v.getContextLines(),
 		log,
 	)
 	if fragment == "" {
@@ -187,4 +191,22 @@ func (*ShellScriptValidator) formatShellCheckOutput(output string) string {
 		cleanLines,
 		"\n",
 	) + "\n\nFix these issues before committing."
+}
+
+// getTimeout returns the configured timeout for shellcheck operations.
+func (v *ShellScriptValidator) getTimeout() time.Duration {
+	if v.config != nil && v.config.Timeout.ToDuration() > 0 {
+		return v.config.Timeout.ToDuration()
+	}
+
+	return defaultShellCheckTimeout
+}
+
+// getContextLines returns the configured number of context lines for edit validation.
+func (v *ShellScriptValidator) getContextLines() int {
+	if v.config != nil && v.config.ContextLines != nil {
+		return *v.config.ContextLines
+	}
+
+	return defaultShellContextLines
 }

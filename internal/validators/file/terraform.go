@@ -10,16 +10,17 @@ import (
 	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
 	"github.com/smykla-labs/klaudiush/internal/linters"
 	"github.com/smykla-labs/klaudiush/internal/validator"
+	"github.com/smykla-labs/klaudiush/pkg/config"
 	"github.com/smykla-labs/klaudiush/pkg/hook"
 	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 const (
-	// terraformTimeout is the timeout for terraform/tofu commands
-	terraformTimeout = 10 * time.Second
+	// defaultTerraformTimeout is the timeout for terraform/tofu commands
+	defaultTerraformTimeout = 10 * time.Second
 
-	// tfContextLines is the number of lines before/after an edit to include for validation
-	tfContextLines = 2
+	// defaultTfContextLines is the number of lines before/after an edit to include for validation
+	defaultTfContextLines = 2
 )
 
 // TerraformValidator validates Terraform/OpenTofu file formatting
@@ -28,6 +29,7 @@ type TerraformValidator struct {
 	formatter   linters.TerraformFormatter
 	linter      linters.TfLinter
 	tempManager execpkg.TempFileManager
+	config      *config.TerraformValidatorConfig
 }
 
 // NewTerraformValidator creates a new TerraformValidator
@@ -35,12 +37,14 @@ func NewTerraformValidator(
 	formatter linters.TerraformFormatter,
 	linter linters.TfLinter,
 	log logger.Logger,
+	cfg *config.TerraformValidatorConfig,
 ) *TerraformValidator {
 	return &TerraformValidator{
 		BaseValidator: *validator.NewBaseValidator("validate-terraform", log),
 		formatter:     formatter,
 		linter:        linter,
 		tempManager:   execpkg.NewTempFileManager(),
+		config:        cfg,
 	}
 }
 
@@ -75,14 +79,18 @@ func (v *TerraformValidator) Validate(
 
 	var warnings []string
 
-	// Run format check
-	if fmtWarning := v.checkFormat(ctx, content, tool); fmtWarning != "" {
-		warnings = append(warnings, fmtWarning)
+	// Run format check if enabled
+	if v.isCheckFormat() {
+		if fmtWarning := v.checkFormat(ctx, content, tool); fmtWarning != "" {
+			warnings = append(warnings, fmtWarning)
+		}
 	}
 
-	// Run tflint if available
-	if lintWarnings := v.runTflint(ctx, tmpFile); len(lintWarnings) > 0 {
-		warnings = append(warnings, lintWarnings...)
+	// Run tflint if enabled and available
+	if v.isUseTflint() {
+		if lintWarnings := v.runTflint(ctx, tmpFile); len(lintWarnings) > 0 {
+			warnings = append(warnings, lintWarnings...)
+		}
 	}
 
 	if len(warnings) > 0 {
@@ -135,7 +143,7 @@ func (v *TerraformValidator) getContent(ctx *hook.Context) (string, error) {
 			string(originalContent),
 			oldStr,
 			newStr,
-			tfContextLines,
+			v.getContextLines(),
 			log,
 		)
 		if fragment == "" {
@@ -166,7 +174,7 @@ func (v *TerraformValidator) checkFormat(ctx context.Context, content, tool stri
 		return "⚠️  Neither 'tofu' nor 'terraform' found in PATH - skipping format check"
 	}
 
-	fmtCtx, cancel := context.WithTimeout(ctx, terraformTimeout)
+	fmtCtx, cancel := context.WithTimeout(ctx, v.getTimeout())
 	defer cancel()
 
 	result := v.formatter.CheckFormat(fmtCtx, content)
@@ -195,7 +203,7 @@ func (v *TerraformValidator) checkFormat(ctx context.Context, content, tool stri
 
 // runTflint runs tflint on the file if available using TfLinter
 func (v *TerraformValidator) runTflint(ctx context.Context, filePath string) []string {
-	lintCtx, cancel := context.WithTimeout(ctx, terraformTimeout)
+	lintCtx, cancel := context.WithTimeout(ctx, v.getTimeout())
 	defer cancel()
 
 	result := v.linter.Lint(lintCtx, filePath)
@@ -214,4 +222,40 @@ func (v *TerraformValidator) runTflint(ctx context.Context, filePath string) []s
 	}
 
 	return nil
+}
+
+// getTimeout returns the configured timeout for terraform/tofu operations.
+func (v *TerraformValidator) getTimeout() time.Duration {
+	if v.config != nil && v.config.Timeout.ToDuration() > 0 {
+		return v.config.Timeout.ToDuration()
+	}
+
+	return defaultTerraformTimeout
+}
+
+// getContextLines returns the configured number of context lines for edit validation.
+func (v *TerraformValidator) getContextLines() int {
+	if v.config != nil && v.config.ContextLines != nil {
+		return *v.config.ContextLines
+	}
+
+	return defaultTfContextLines
+}
+
+// isCheckFormat returns whether format checking is enabled.
+func (v *TerraformValidator) isCheckFormat() bool {
+	if v.config != nil && v.config.CheckFormat != nil {
+		return *v.config.CheckFormat
+	}
+
+	return true
+}
+
+// isUseTflint returns whether tflint integration is enabled.
+func (v *TerraformValidator) isUseTflint() bool {
+	if v.config != nil && v.config.UseTflint != nil {
+		return *v.config.UseTflint
+	}
+
+	return true
 }

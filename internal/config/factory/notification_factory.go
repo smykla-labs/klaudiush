@@ -25,15 +25,17 @@ func (f *NotificationValidatorFactory) CreateValidators(
 	var validators []ValidatorWithPredicate
 
 	if cfg.Validators.Notification.Bell != nil && cfg.Validators.Notification.Bell.IsEnabled() {
-		validators = append(validators, f.createBellValidator())
+		validators = append(validators, f.createBellValidator(cfg.Validators.Notification.Bell))
 	}
 
 	return validators
 }
 
-func (f *NotificationValidatorFactory) createBellValidator() ValidatorWithPredicate {
+func (f *NotificationValidatorFactory) createBellValidator(
+	cfg *config.BellValidatorConfig,
+) ValidatorWithPredicate {
 	return ValidatorWithPredicate{
-		Validator: notificationvalidators.NewBellValidator(f.log),
+		Validator: notificationvalidators.NewBellValidator(f.log, cfg),
 		Predicate: validator.EventTypeIs(hook.Notification),
 	}
 }

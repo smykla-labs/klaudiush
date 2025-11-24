@@ -49,7 +49,7 @@ var _ = Describe("WorkflowValidator", func() {
 		runner := execpkg.NewCommandRunner(10 * time.Second)
 		linter := linters.NewActionLinter(runner)
 		githubClient := &mockGitHubClient{authenticated: false}
-		validator = file.NewWorkflowValidator(linter, githubClient, log)
+		validator = file.NewWorkflowValidator(linter, githubClient, log, nil)
 	})
 
 	Describe("Validate", func() {

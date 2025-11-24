@@ -14,15 +14,16 @@ import (
 	"github.com/smykla-labs/klaudiush/internal/github"
 	"github.com/smykla-labs/klaudiush/internal/linters"
 	"github.com/smykla-labs/klaudiush/internal/validator"
+	"github.com/smykla-labs/klaudiush/pkg/config"
 	"github.com/smykla-labs/klaudiush/pkg/hook"
 	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 const (
-	// workflowTimeout is the timeout for actionlint commands
-	workflowTimeout = 10 * time.Second
-	// ghAPITimeout is the timeout for GitHub API calls
-	ghAPITimeout = 5 * time.Second
+	// defaultWorkflowTimeout is the timeout for actionlint commands
+	defaultWorkflowTimeout = 10 * time.Second
+	// defaultGHAPITimeout is the timeout for GitHub API calls
+	defaultGHAPITimeout = 5 * time.Second
 	// digestPreviewLength is the length of digest to show in error messages
 	digestPreviewLength = 8
 	// actionRefParts is the number of parts when splitting action@version
@@ -64,6 +65,7 @@ type WorkflowValidator struct {
 	validator.BaseValidator
 	linter       linters.ActionLinter
 	githubClient github.Client
+	config       *config.WorkflowValidatorConfig
 }
 
 // NewWorkflowValidator creates a new WorkflowValidator
@@ -71,11 +73,13 @@ func NewWorkflowValidator(
 	linter linters.ActionLinter,
 	githubClient github.Client,
 	log logger.Logger,
+	cfg *config.WorkflowValidatorConfig,
 ) *WorkflowValidator {
 	return &WorkflowValidator{
 		BaseValidator: *validator.NewBaseValidator("validate-github-workflow", log),
 		linter:        linter,
 		githubClient:  githubClient,
+		config:        cfg,
 	}
 }
 
@@ -104,17 +108,22 @@ func (v *WorkflowValidator) Validate(ctx context.Context, hookCtx *hook.Context)
 
 	var allWarnings []string
 
-	// Parse workflow and validate digest pinning
-	actions := v.parseWorkflow(content)
-	for _, action := range actions {
-		errs, warns := v.validateAction(ctx, action)
-		allErrors = append(allErrors, errs...)
-		allWarnings = append(allWarnings, warns...)
+	// Parse workflow and validate digest pinning if enabled
+	if v.isEnforceDigestPinning() {
+		actions := v.parseWorkflow(content)
+		for _, action := range actions {
+			errs, warns := v.validateAction(ctx, action)
+			allErrors = append(allErrors, errs...)
+			allWarnings = append(allWarnings, warns...)
+		}
 	}
 
-	// Run actionlint if available
-	if actionlintWarnings := v.runActionlint(ctx, content, filePath); len(actionlintWarnings) > 0 {
-		allWarnings = append(allWarnings, actionlintWarnings...)
+	// Run actionlint if enabled and available
+	if v.isUseActionlint() {
+		actionlintWarnings := v.runActionlint(ctx, content, filePath)
+		if len(actionlintWarnings) > 0 {
+			allWarnings = append(allWarnings, actionlintWarnings...)
+		}
 	}
 
 	// Report warnings
@@ -308,7 +317,9 @@ func (v *WorkflowValidator) validateDigestAction(
 	var warnings []string
 
 	versionComment := v.extractVersionComment(action)
-	if versionComment == "" {
+
+	// Check version comment if required
+	if v.isRequireVersionComment() && versionComment == "" {
 		digestPreview := action.Version
 		if len(digestPreview) > digestPreviewLength {
 			digestPreview = digestPreview[:digestPreviewLength] + "..."
@@ -322,13 +333,15 @@ func (v *WorkflowValidator) validateDigestAction(
 		return errs, warnings
 	}
 
-	// Check if using latest version
-	latestVersion := v.getLatestVersion(ctx, action.ActionName)
-	if latestVersion != "" && !v.isVersionLatest(versionComment, latestVersion) {
-		warnings = append(warnings, fmt.Sprintf(
-			"Line %d: Action '%s' using %s, latest is %s",
-			action.LineNum, action.ActionName, versionComment, latestVersion,
-		))
+	// Check if using latest version if enabled
+	if v.isCheckLatestVersion() && versionComment != "" {
+		latestVersion := v.getLatestVersion(ctx, action.ActionName)
+		if latestVersion != "" && !v.isVersionLatest(versionComment, latestVersion) {
+			warnings = append(warnings, fmt.Sprintf(
+				"Line %d: Action '%s' using %s, latest is %s",
+				action.LineNum, action.ActionName, versionComment, latestVersion,
+			))
+		}
 	}
 
 	return errs, warnings
@@ -406,7 +419,7 @@ func (v *WorkflowValidator) getLatestVersion(ctx context.Context, actionName str
 
 	owner, repo := parts[0], parts[1]
 
-	apiCtx, cancel := context.WithTimeout(ctx, ghAPITimeout)
+	apiCtx, cancel := context.WithTimeout(ctx, v.getGHAPITimeout())
 	defer cancel()
 
 	// Try releases first
@@ -422,7 +435,7 @@ func (v *WorkflowValidator) getLatestVersion(ctx context.Context, actionName str
 	}
 
 	// Fallback to tags
-	apiCtx, cancel = context.WithTimeout(ctx, ghAPITimeout)
+	apiCtx, cancel = context.WithTimeout(ctx, v.getGHAPITimeout())
 	defer cancel()
 
 	tags, err := v.githubClient.GetTags(apiCtx, owner, repo)
@@ -457,7 +470,7 @@ func (v *WorkflowValidator) runActionlint(
 	ctx context.Context,
 	content, originalPath string,
 ) []string {
-	lintCtx, cancel := context.WithTimeout(ctx, workflowTimeout)
+	lintCtx, cancel := context.WithTimeout(ctx, v.getTimeout())
 	defer cancel()
 
 	result := v.linter.Lint(lintCtx, content, originalPath)
@@ -499,4 +512,58 @@ func (*WorkflowValidator) parseActionlintOutput(output string) []string {
 	}
 
 	return warnings
+}
+
+// getTimeout returns the configured timeout for actionlint operations.
+func (v *WorkflowValidator) getTimeout() time.Duration {
+	if v.config != nil && v.config.Timeout.ToDuration() > 0 {
+		return v.config.Timeout.ToDuration()
+	}
+
+	return defaultWorkflowTimeout
+}
+
+// getGHAPITimeout returns the configured timeout for GitHub API calls.
+func (v *WorkflowValidator) getGHAPITimeout() time.Duration {
+	if v.config != nil && v.config.GHAPITimeout.ToDuration() > 0 {
+		return v.config.GHAPITimeout.ToDuration()
+	}
+
+	return defaultGHAPITimeout
+}
+
+// isEnforceDigestPinning returns whether digest pinning enforcement is enabled.
+func (v *WorkflowValidator) isEnforceDigestPinning() bool {
+	if v.config != nil && v.config.EnforceDigestPinning != nil {
+		return *v.config.EnforceDigestPinning
+	}
+
+	return true
+}
+
+// isRequireVersionComment returns whether version comments are required for digest-pinned actions.
+func (v *WorkflowValidator) isRequireVersionComment() bool {
+	if v.config != nil && v.config.RequireVersionComment != nil {
+		return *v.config.RequireVersionComment
+	}
+
+	return true
+}
+
+// isCheckLatestVersion returns whether latest version checking is enabled.
+func (v *WorkflowValidator) isCheckLatestVersion() bool {
+	if v.config != nil && v.config.CheckLatestVersion != nil {
+		return *v.config.CheckLatestVersion
+	}
+
+	return true
+}
+
+// isUseActionlint returns whether actionlint integration is enabled.
+func (v *WorkflowValidator) isUseActionlint() bool {
+	if v.config != nil && v.config.UseActionlint != nil {
+		return *v.config.UseActionlint
+	}
+
+	return true
 }

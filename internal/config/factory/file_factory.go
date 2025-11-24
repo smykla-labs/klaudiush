@@ -89,12 +89,12 @@ func (f *FileValidatorFactory) createMarkdownValidator(
 }
 
 func (f *FileValidatorFactory) createTerraformValidator(
-	_ *config.TerraformValidatorConfig,
+	cfg *config.TerraformValidatorConfig,
 	formatter linters.TerraformFormatter,
 	linter linters.TfLinter,
 ) ValidatorWithPredicate {
 	return ValidatorWithPredicate{
-		Validator: filevalidators.NewTerraformValidator(formatter, linter, f.log),
+		Validator: filevalidators.NewTerraformValidator(formatter, linter, f.log, cfg),
 		Predicate: validator.And(
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit, hook.MultiEdit),
@@ -104,11 +104,11 @@ func (f *FileValidatorFactory) createTerraformValidator(
 }
 
 func (f *FileValidatorFactory) createShellScriptValidator(
-	_ *config.ShellScriptValidatorConfig,
+	cfg *config.ShellScriptValidatorConfig,
 	checker linters.ShellChecker,
 ) ValidatorWithPredicate {
 	return ValidatorWithPredicate{
-		Validator: filevalidators.NewShellScriptValidator(f.log, checker),
+		Validator: filevalidators.NewShellScriptValidator(f.log, checker, cfg),
 		Predicate: validator.And(
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit, hook.MultiEdit),
@@ -121,12 +121,12 @@ func (f *FileValidatorFactory) createShellScriptValidator(
 }
 
 func (f *FileValidatorFactory) createWorkflowValidator(
-	_ *config.WorkflowValidatorConfig,
+	cfg *config.WorkflowValidatorConfig,
 	linter linters.ActionLinter,
 	githubClient githubpkg.Client,
 ) ValidatorWithPredicate {
 	return ValidatorWithPredicate{
-		Validator: filevalidators.NewWorkflowValidator(linter, githubClient, f.log),
+		Validator: filevalidators.NewWorkflowValidator(linter, githubClient, f.log, cfg),
 		Predicate: validator.And(
 			validator.EventTypeIs(hook.PreToolUse),
 			validator.ToolTypeIn(hook.Write, hook.Edit, hook.MultiEdit),
