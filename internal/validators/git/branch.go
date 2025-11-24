@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/smykla-labs/claude-hooks/internal/templates"
@@ -53,6 +54,15 @@ var (
 		"build":    true,
 		"perf":     true,
 	}
+
+	// Branch creation flags for git checkout.
+	checkoutCreateFlags = []string{"-b", "--branch"}
+
+	// Branch creation flags for git switch.
+	switchCreateFlags = []string{"-c", "--create", "-C", "--force-create"}
+
+	// Branch deletion flags for git branch.
+	branchDeleteFlags = []string{"-d", "-D", "--delete"}
 )
 
 // Validate validates git branch names.
@@ -95,42 +105,52 @@ func (v *BranchValidator) validateGitCommand(gitCmd *parser.GitCommand) *validat
 		return v.validateCheckout(gitCmd)
 	case "branch":
 		return v.validateBranch(gitCmd)
+	case "switch":
+		return v.validateSwitch(gitCmd)
 	default:
 		return nil
 	}
 }
 
-// validateCheckout validates git checkout -b commands.
+// validateCheckout validates git checkout -b/--branch commands that create new branches.
+// Skips validation for commands without branch creation flags.
 func (v *BranchValidator) validateCheckout(gitCmd *parser.GitCommand) *validator.Result {
-	if !gitCmd.HasFlag("-b") {
+	if !hasAnyFlag(gitCmd, checkoutCreateFlags) {
 		return nil
 	}
 
-	branchName, hasExtra := v.extractBranchName(gitCmd)
-	if branchName == "" {
-		return nil
-	}
-
-	if hasExtra {
-		return v.createSpaceError()
-	}
-
-	return v.validateBranchName(branchName)
+	return v.validateBranchCreation(gitCmd)
 }
 
-// validateBranch validates git branch commands.
+// validateBranch validates git branch commands that create new branches.
+// Skips validation for delete operations.
 func (v *BranchValidator) validateBranch(gitCmd *parser.GitCommand) *validator.Result {
-	// Skip if it's a delete operation.
-	if gitCmd.HasFlag("-d") || gitCmd.HasFlag("-D") || gitCmd.HasFlag("--delete") {
+	if hasAnyFlag(gitCmd, branchDeleteFlags) {
 		return nil
 	}
 
-	branchName, hasExtra := v.extractBranchName(gitCmd)
+	return v.validateBranchCreation(gitCmd)
+}
+
+// validateSwitch validates git switch -c/--create/-C/--force-create commands that create new branches.
+// Skips validation for commands without branch creation flags.
+func (v *BranchValidator) validateSwitch(gitCmd *parser.GitCommand) *validator.Result {
+	if !hasAnyFlag(gitCmd, switchCreateFlags) {
+		return nil
+	}
+
+	return v.validateBranchCreation(gitCmd)
+}
+
+// validateBranchCreation performs the common validation logic for branch creation commands.
+// Validates branch name format and checks for spaces.
+func (v *BranchValidator) validateBranchCreation(gitCmd *parser.GitCommand) *validator.Result {
+	branchName := v.extractBranchName(gitCmd)
 	if branchName == "" {
 		return nil
 	}
 
-	if hasExtra {
+	if strings.Contains(branchName, " ") {
 		return v.createSpaceError()
 	}
 
@@ -144,67 +164,80 @@ func (*BranchValidator) createSpaceError() *validator.Result {
 }
 
 // extractBranchName extracts the branch name from a git command.
-// Returns the branch name and a boolean indicating if there are extra arguments
-// that suggest the branch name contains spaces.
-func (v *BranchValidator) extractBranchName(gitCmd *parser.GitCommand) (string, bool) {
+func (v *BranchValidator) extractBranchName(gitCmd *parser.GitCommand) string {
 	switch gitCmd.Subcommand {
 	case "checkout":
 		return v.extractCheckoutBranchName(gitCmd)
 	case "branch":
 		return v.extractBranchCommandName(gitCmd)
+	case "switch":
+		return v.extractSwitchBranchName(gitCmd)
 	default:
-		return "", false
+		return ""
 	}
 }
 
-// extractCheckoutBranchName extracts the branch name from git checkout -b.
-func (*BranchValidator) extractCheckoutBranchName(gitCmd *parser.GitCommand) (string, bool) {
-	// For 'git checkout -b <branch>', the branch name is after -b.
-	for i, flag := range gitCmd.Flags {
-		if flag == "-b" && i+1 < len(gitCmd.Flags) {
-			branchName := gitCmd.Flags[i+1]
-			// Check if there are extra arguments after the branch name
-			hasExtra := len(gitCmd.Args) > 0
-
-			return branchName, hasExtra
+// extractCheckoutBranchName extracts the branch name from git checkout -b <branch> [start-point].
+// The bash parser handles quoted strings, preserving spaces in a single argument.
+func (*BranchValidator) extractCheckoutBranchName(gitCmd *parser.GitCommand) string {
+	for _, flag := range checkoutCreateFlags {
+		for i, f := range gitCmd.Flags {
+			if f == flag && i+1 < len(gitCmd.Flags) {
+				return gitCmd.Flags[i+1]
+			}
 		}
 	}
 
-	// Try args as well.
 	if len(gitCmd.Args) > 0 {
-		branchName := gitCmd.Args[0]
-		// Check if there are extra arguments
-		hasExtra := len(gitCmd.Args) > 1
-
-		return branchName, hasExtra
+		return gitCmd.Args[0]
 	}
 
-	return "", false
+	return ""
 }
 
-// extractBranchCommandName extracts the branch name from git branch.
-func (*BranchValidator) extractBranchCommandName(gitCmd *parser.GitCommand) (string, bool) {
-	// For 'git branch <branch>', the branch name is the first arg.
+// extractBranchCommandName extracts the branch name from git branch <branch> [start-point].
+// The bash parser handles quoted strings, preserving spaces in a single argument.
+func (*BranchValidator) extractBranchCommandName(gitCmd *parser.GitCommand) string {
 	if len(gitCmd.Args) > 0 {
-		branchName := gitCmd.Args[0]
-		// Check if there are extra arguments
-		hasExtra := len(gitCmd.Args) > 1
-
-		return branchName, hasExtra
+		return gitCmd.Args[0]
 	}
 
-	return "", false
+	return ""
 }
 
-// validateBranchName validates the branch name format.
+// extractSwitchBranchName extracts the branch name from git switch -c <branch> [start-point].
+// The bash parser handles quoted strings, preserving spaces in a single argument.
+func (*BranchValidator) extractSwitchBranchName(gitCmd *parser.GitCommand) string {
+	for _, flag := range switchCreateFlags {
+		for i, f := range gitCmd.Flags {
+			if f == flag && i+1 < len(gitCmd.Flags) {
+				return gitCmd.Flags[i+1]
+			}
+		}
+	}
+
+	if len(gitCmd.Args) > 0 {
+		return gitCmd.Args[0]
+	}
+
+	return ""
+}
+
+// hasAnyFlag checks if the git command has any of the flags in the provided list.
+func hasAnyFlag(gitCmd *parser.GitCommand, flags []string) bool {
+	return slices.ContainsFunc(flags, func(flag string) bool {
+		return gitCmd.HasFlag(flag)
+	})
+}
+
+// validateBranchName validates the branch name format (type/description).
+// Skips validation for protected branches (main, master).
 func (v *BranchValidator) validateBranchName(branchName string) *validator.Result {
-	// Skip protected branches.
 	if protectedBranches[branchName] {
 		v.Logger().Debug("skipping protected branch", "branch", branchName)
 		return validator.Pass()
 	}
 
-	// Check for uppercase characters.
 	if branchName != strings.ToLower(branchName) {
 		message := templates.MustExecute(
 			templates.BranchUppercaseTemplate,
@@ -217,7 +250,6 @@ func (v *BranchValidator) validateBranchName(branchName string) *validator.Resul
 		return validator.Fail(message)
 	}
 
-	// Check format: type/description.
 	if !branchNamePattern.MatchString(branchName) {
 		message := templates.MustExecute(
 			templates.BranchPatternTemplate,
@@ -229,7 +261,6 @@ func (v *BranchValidator) validateBranchName(branchName string) *validator.Resul
 		return validator.Fail(message)
 	}
 
-	// Extract and validate type.
 	parts := strings.SplitN(branchName, "/", minBranchParts)
 	if len(parts) != minBranchParts {
 		message := templates.MustExecute(

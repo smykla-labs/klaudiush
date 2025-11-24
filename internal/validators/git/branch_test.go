@@ -26,8 +26,8 @@ var _ = Describe("BranchValidator", func() {
 		}
 	})
 
-	Describe("git checkout -b", func() {
-		Context("with valid branch names", func() {
+	Describe("git checkout", func() {
+		Context("with -b flag", func() {
 			It("should pass for feat/add-feature", func() {
 				ctx.ToolInput.Command = "git checkout -b feat/add-feature"
 				result := v.Validate(context.Background(), ctx)
@@ -54,6 +54,20 @@ var _ = Describe("BranchValidator", func() {
 
 			It("should pass for ci/update-workflow", func() {
 				ctx.ToolInput.Command = "git checkout -b ci/update-workflow"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+		})
+
+		Context("with --branch flag", func() {
+			It("should pass for feat/add-feature", func() {
+				ctx.ToolInput.Command = "git checkout --branch feat/add-feature"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should pass with start-point", func() {
+				ctx.ToolInput.Command = "git checkout --branch feat/new-feature upstream/main"
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
@@ -96,10 +110,17 @@ var _ = Describe("BranchValidator", func() {
 				Expect(result.Message).To(ContainSubstring("Invalid branch type"))
 			})
 
-			It("should fail for spaces in branch name", func() {
-				ctx.ToolInput.Command = "git checkout -b feat/add feature"
+			It("should fail for spaces in branch name with quotes", func() {
+				ctx.ToolInput.Command = `git checkout -b "feat/add feature"`
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("spaces"))
+			})
+
+			It("should pass with start-point argument", func() {
+				ctx.ToolInput.Command = "git checkout -b feat/new-branch upstream/main"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
 			})
 
 			It("should fail for uppercase in description", func() {
@@ -113,6 +134,74 @@ var _ = Describe("BranchValidator", func() {
 				ctx.ToolInput.Command = "git checkout -b feat_add_feature"
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeFalse())
+			})
+		})
+	})
+
+	Describe("git switch", func() {
+		Context("with -c flag", func() {
+			It("should pass for feat/add-feature", func() {
+				ctx.ToolInput.Command = "git switch -c feat/add-feature"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should pass with start-point", func() {
+				ctx.ToolInput.Command = "git switch -c feat/new-feature upstream/main"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should fail for spaces in branch name with quotes", func() {
+				ctx.ToolInput.Command = `git switch -c "feat/add feature"`
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("spaces"))
+			})
+		})
+
+		Context("with --create flag", func() {
+			It("should pass for fix/bug-fix", func() {
+				ctx.ToolInput.Command = "git switch --create fix/bug-fix"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should fail for uppercase", func() {
+				ctx.ToolInput.Command = "git switch --create Fix/bug-fix"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("lowercase"))
+			})
+		})
+
+		Context("with -C flag", func() {
+			It("should pass for feat/force-create", func() {
+				ctx.ToolInput.Command = "git switch -C feat/force-create"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+		})
+
+		Context("with --force-create flag", func() {
+			It("should pass for feat/force-new", func() {
+				ctx.ToolInput.Command = "git switch --force-create feat/force-new"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+		})
+
+		Context("without create flags", func() {
+			It("should skip validation when switching existing branch", func() {
+				ctx.ToolInput.Command = "git switch main"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should skip validation for Invalid-Branch without -c", func() {
+				ctx.ToolInput.Command = "git switch Invalid-Branch"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
 			})
 		})
 	})
