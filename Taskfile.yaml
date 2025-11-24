@@ -164,7 +164,6 @@ tasks:
       - rm -rf bin/
       - rm -rf dist/
       - rm -rf build/
-      - rm -rf tmp/
 
   deps:
     desc: Download dependencies
