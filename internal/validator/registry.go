@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/smykla-labs/claude-hooks/pkg/hook"
+	"github.com/smykla-labs/klaudiush/pkg/hook"
 )
 
 // Predicate determines if a validator should be applied to a context.

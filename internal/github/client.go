@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/go-github/v79/github"
 
-	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
+	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
 )
 
 const (

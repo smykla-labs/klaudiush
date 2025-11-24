@@ -3,8 +3,8 @@ package git_test
 import (
 	"testing"
 
-	gitpkg "github.com/smykla-labs/claude-hooks/internal/git"
-	gitvalidators "github.com/smykla-labs/claude-hooks/internal/validators/git"
+	gitpkg "github.com/smykla-labs/klaudiush/internal/git"
+	gitvalidators "github.com/smykla-labs/klaudiush/internal/validators/git"
 )
 
 // BenchmarkCLIRunner benchmarks the CLI-based GitRunner

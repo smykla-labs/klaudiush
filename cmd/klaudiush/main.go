@@ -1,4 +1,4 @@
-// Package main provides the CLI entry point for claude-hooks.
+// Package main provides the CLI entry point for klaudiush.
 package main
 
 import (
@@ -11,17 +11,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/smykla-labs/claude-hooks/internal/dispatcher"
-	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
-	githubpkg "github.com/smykla-labs/claude-hooks/internal/github"
-	"github.com/smykla-labs/claude-hooks/internal/linters"
-	"github.com/smykla-labs/claude-hooks/internal/parser"
-	"github.com/smykla-labs/claude-hooks/internal/validator"
-	filevalidators "github.com/smykla-labs/claude-hooks/internal/validators/file"
-	gitvalidators "github.com/smykla-labs/claude-hooks/internal/validators/git"
-	notificationvalidators "github.com/smykla-labs/claude-hooks/internal/validators/notification"
-	"github.com/smykla-labs/claude-hooks/pkg/hook"
-	"github.com/smykla-labs/claude-hooks/pkg/logger"
+	"github.com/smykla-labs/klaudiush/internal/dispatcher"
+	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
+	githubpkg "github.com/smykla-labs/klaudiush/internal/github"
+	"github.com/smykla-labs/klaudiush/internal/linters"
+	"github.com/smykla-labs/klaudiush/internal/parser"
+	"github.com/smykla-labs/klaudiush/internal/validator"
+	filevalidators "github.com/smykla-labs/klaudiush/internal/validators/file"
+	gitvalidators "github.com/smykla-labs/klaudiush/internal/validators/git"
+	notificationvalidators "github.com/smykla-labs/klaudiush/internal/validators/notification"
+	"github.com/smykla-labs/klaudiush/pkg/hook"
+	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 const (
@@ -52,7 +52,7 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "claude-hooks",
+	Use:   "klaudiush",
 	Short: "Claude Code hooks validator",
 	Long: `Claude Code hooks validator - validates tool invocations and file operations
 before they are executed by Claude Code.`,

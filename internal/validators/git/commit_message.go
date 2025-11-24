@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/smykla-labs/claude-hooks/internal/validator"
-	"github.com/smykla-labs/claude-hooks/internal/validators"
+	"github.com/smykla-labs/klaudiush/internal/validator"
+	"github.com/smykla-labs/klaudiush/internal/validators"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 )
 
 // ExpectedSignoff can be set at build time using:
-// go build -ldflags="-X 'github.com/smykla-labs/claude-hooks/internal/validators/git.ExpectedSignoff=Your Name <your@email.com>'"
+// go build -ldflags="-X 'github.com/smykla-labs/klaudiush/internal/validators/git.ExpectedSignoff=Your Name <your@email.com>'"
 var ExpectedSignoff = "" // Default empty, must be set at build time
 
 var (
@@ -392,11 +392,12 @@ func (*CommitValidator) containsClaudeAIAttribution(message string) bool {
 
 	// Allow legitimate tool/file references:
 	// - CLAUDE.md file references
-	// - claude-hooks, claude-code (hyphenated tool names)
+	// - claude-hooks, klaudiush, claude-code (hyphenated tool names)
 	// - `claude` in backticks (code references)
 	legitimatePatterns := []string{
 		"claude.md",
 		"claude-hooks",
+		"klaudiush",
 		"claude-code",
 		"`claude",
 		"claude`",

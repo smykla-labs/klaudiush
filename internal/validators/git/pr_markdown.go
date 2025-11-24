@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
+	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
 )
 
 const (

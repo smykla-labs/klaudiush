@@ -1,4 +1,4 @@
-module github.com/smykla-labs/claude-hooks
+module github.com/smykla-labs/klaudiush
 
 go 1.25.4
 

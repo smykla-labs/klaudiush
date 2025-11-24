@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"strings"
 
-	"github.com/smykla-labs/claude-hooks/pkg/logger"
+	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 // ExtractEditFragment extracts the edit region with surrounding context lines.

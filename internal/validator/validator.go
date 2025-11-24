@@ -3,8 +3,8 @@ package validator
 import (
 	"context"
 
-	"github.com/smykla-labs/claude-hooks/pkg/hook"
-	"github.com/smykla-labs/claude-hooks/pkg/logger"
+	"github.com/smykla-labs/klaudiush/pkg/hook"
+	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 // Validator validates a hook context.

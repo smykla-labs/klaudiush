@@ -4,8 +4,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	internalgit "github.com/smykla-labs/claude-hooks/internal/git"
-	gitvalidators "github.com/smykla-labs/claude-hooks/internal/validators/git"
+	internalgit "github.com/smykla-labs/klaudiush/internal/git"
+	gitvalidators "github.com/smykla-labs/klaudiush/internal/validators/git"
 )
 
 var _ = Describe("RepositoryAdapter", func() {

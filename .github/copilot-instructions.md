@@ -4,7 +4,7 @@ This file provides guidance to GitHub Copilot when working with code in this rep
 
 ## Project Overview
 
-`claude-hooks` is a validation dispatcher for Claude Code hooks. It intercepts tool invocations (PreToolUse events) and validates commands before execution, enforcing git workflow standards and commit message conventions.
+`klaudiush` is a validation dispatcher for Claude Code hooks. It intercepts tool invocations (PreToolUse events) and validates commands before execution, enforcing git workflow standards and commit message conventions.
 
 ## Commands
 
@@ -69,7 +69,7 @@ Always run `task lint test` to ensure code quality and test coverage.
 
 ### Core Flow
 
-1. **CLI Entry** (`cmd/claude-hooks/main.go`): Receives JSON from stdin, parses `--hook-type` flag
+1. **CLI Entry** (`cmd/klaudiush/main.go`): Receives JSON from stdin, parses `--hook-type` flag
 2. **JSON Parser** (`internal/parser/json.go`): Converts JSON to `hook.Context`
 3. **Dispatcher** (`internal/dispatcher/dispatcher.go`): Orchestrates validation
 4. **Registry** (`internal/validator/registry.go`): Matches validators to context using predicates
@@ -108,7 +108,7 @@ registry.Register(
 
 1. Embed `validator.BaseValidator` for logging/naming
 2. Implement `Validate(ctx *hook.Context) *validator.Result`
-3. Register with predicate in `cmd/claude-hooks/main.go:registerValidators()`
+3. Register with predicate in `cmd/klaudiush/main.go:registerValidators()`
 
 ### Parsers
 
@@ -176,7 +176,7 @@ All validators log to `~/.claude/hooks/dispatcher.log`:
 **Signoff Validation**:
 
 ```bash
-go build -ldflags="-X 'github.com/smykla-labs/claude-hooks/internal/validators/git.ExpectedSignoff=Name <email>'" ./cmd/claude-hooks
+go build -ldflags="-X 'github.com/smykla-labs/klaudiush/internal/validators/git.ExpectedSignoff=Name <email>'" ./cmd/klaudiush
 ```
 
 This enforces exact signoff match in commit messages when using `task build:prod`.

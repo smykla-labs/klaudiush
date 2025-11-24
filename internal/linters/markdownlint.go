@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
-	"github.com/smykla-labs/claude-hooks/internal/validators"
+	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
+	"github.com/smykla-labs/klaudiush/internal/validators"
 )
 
 // ErrMarkdownCustomRules indicates custom markdown rules found issues

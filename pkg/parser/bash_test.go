@@ -4,7 +4,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/smykla-labs/claude-hooks/pkg/parser"
+	"github.com/smykla-labs/klaudiush/pkg/parser"
 )
 
 var _ = Describe("BashParser", func() {

@@ -1,10 +1,10 @@
-# Claude Hooks
+# Klaudiush
 
 A validation dispatcher for Claude Code hooks that intercepts tool invocations and enforces git workflow standards, commit message conventions, and code quality rules.
 
 ## Overview
 
-Claude Hooks is a Go-based validation system that runs as a PreToolUse hook in Claude Code. It parses commands using advanced Bash parsing (via `mvdan.cc/sh`), detects file operations, and validates them against project-specific rules before execution.
+Klaudiush is a Go-based validation system that runs as a PreToolUse hook in Claude Code. It parses commands using advanced Bash parsing (via `mvdan.cc/sh`), detects file operations, and validates them against project-specific rules before execution.
 
 **Key Features:**
 
@@ -32,7 +32,7 @@ task install
 
 ### Configure Claude Code
 
-After installation, update `~/.claude/settings.json` to use the `chook` command:
+After installation, update `~/.claude/settings.json` to use the `klaudiush` command:
 
 ```json
 {
@@ -43,7 +43,7 @@ After installation, update `~/.claude/settings.json` to use the `chook` command:
         "hooks": [
           {
             "type": "command",
-            "command": "chook -T PreToolUse"
+            "command": "klaudiush --hook-type PreToolUse"
           }
         ]
       },
@@ -52,7 +52,7 @@ After installation, update `~/.claude/settings.json` to use the `chook` command:
         "hooks": [
           {
             "type": "command",
-            "command": "chook -T PreToolUse",
+            "command": "klaudiush --hook-type PreToolUse",
             "timeout": 30
           }
         ]
@@ -63,7 +63,7 @@ After installation, update `~/.claude/settings.json` to use the `chook` command:
         "hooks": [
           {
             "type": "command",
-            "command": "chook -T Notification"
+            "command": "klaudiush --hook-type Notification"
           }
         ]
       }
@@ -72,7 +72,7 @@ After installation, update `~/.claude/settings.json` to use the `chook` command:
 }
 ```
 
-**Note**: After installation, the binary is available as `chook` (installed to `~/.local/bin` or `~/bin`). Ensure the install directory is in your `$PATH`.
+**Note**: After installation, the binary is available as `klaudiush` (installed to `~/.local/bin` or `~/bin`). Ensure the install directory is in your `$PATH`.
 
 **Important**: File validators use **PreToolUse** to block invalid writes **before** they happen, not PostToolUse which only validates after the file is written.
 
@@ -143,7 +143,7 @@ task clean  # Remove build artifacts
 Claude Code JSON → CLI → JSON Parser → Dispatcher → Registry → Validators → Result
 ```
 
-1. **CLI Entry** (`cmd/claude-hooks/main.go`): Receives JSON from stdin, parses `--hook-type` flag
+1. **CLI Entry** (`cmd/klaudiush/main.go`): Receives JSON from stdin, parses `--hook-type` flag
 2. **JSON Parser** (`internal/parser/json.go`): Converts JSON to `hook.Context`
 3. **Dispatcher** (`internal/dispatcher/dispatcher.go`): Orchestrates validation
 4. **Registry** (`internal/validator/registry.go`): Matches validators to context using predicates
@@ -152,8 +152,8 @@ Claude Code JSON → CLI → JSON Parser → Dispatcher → Registry → Validat
 ### Directory Structure
 
 ```
-claude-hooks/
-├── cmd/claude-hooks/           # CLI entry point
+klaudiush/
+├── cmd/klaudiush/           # CLI entry point
 ├── pkg/
 │   ├── hook/                   # Event types, Context
 │   ├── parser/                 # Bash/Git/command parsing
@@ -222,7 +222,7 @@ Uses `mvdan.cc/sh` for production-grade parsing supporting command chains, pipes
 
 ## Development
 
-**Adding Validators**: Create validator in `internal/validators/{category}/`, implement `Validate()` method, write tests, register in `cmd/claude-hooks/main.go` with predicates.
+**Adding Validators**: Create validator in `internal/validators/{category}/`, implement `Validate()` method, write tests, register in `cmd/klaudiush/main.go` with predicates.
 
 **Testing**: Use `task test` for all tests, `go test -v ./pkg/parser` for specific suites. Logs in `~/.claude/hooks/dispatcher.log`.
 
@@ -266,7 +266,7 @@ The project supports two git operation implementations:
 
 ```bash
 # Build with specific signoff requirement
-go build -ldflags="-X 'github.com/smykla-labs/claude-hooks/internal/validators/git.ExpectedSignoff=Name <email>'" ./cmd/claude-hooks
+go build -ldflags="-X 'github.com/smykla-labs/klaudiush/internal/validators/git.ExpectedSignoff=Name <email>'" ./cmd/klaudiush
 
 # Or use task build:prod (uses git config)
 task build:prod
@@ -276,10 +276,10 @@ task build:prod
 
 ```bash
 # Debug mode (enabled by default)
-chook -T PreToolUse --debug
+klaudiush --hook-type PreToolUse --debug
 
 # Trace mode (verbose logging)
-chook -T PreToolUse --trace
+klaudiush --hook-type PreToolUse --trace
 ```
 
 ## Performance
@@ -305,6 +305,6 @@ See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- **Issues**: https://github.com/smykla-labs/claude-hooks/issues
-- **Discussions**: https://github.com/smykla-labs/claude-hooks/discussions
+- **Issues**: https://github.com/smykla-labs/klaudiush/issues
+- **Discussions**: https://github.com/smykla-labs/klaudiush/discussions
 - **Logs**: `~/.claude/hooks/dispatcher.log`

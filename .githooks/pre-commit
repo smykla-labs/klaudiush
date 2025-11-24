@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit hook for claude-hooks
+# Pre-commit hook for klaudiush
 # Runs linting and unit tests on modified and staged files before allowing commit
 
 set -e

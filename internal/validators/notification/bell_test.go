@@ -6,9 +6,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/smykla-labs/claude-hooks/internal/validators/notification"
-	"github.com/smykla-labs/claude-hooks/pkg/hook"
-	"github.com/smykla-labs/claude-hooks/pkg/logger"
+	"github.com/smykla-labs/klaudiush/internal/validators/notification"
+	"github.com/smykla-labs/klaudiush/pkg/hook"
+	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 var _ = Describe("BellValidator", func() {

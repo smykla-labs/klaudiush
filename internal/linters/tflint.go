@@ -3,7 +3,7 @@ package linters
 import (
 	"context"
 
-	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
+	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
 )
 
 // TfLinter validates Terraform files using tflint

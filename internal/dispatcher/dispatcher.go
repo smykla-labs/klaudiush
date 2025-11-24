@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/smykla-labs/claude-hooks/internal/validator"
-	"github.com/smykla-labs/claude-hooks/pkg/hook"
-	"github.com/smykla-labs/claude-hooks/pkg/logger"
+	"github.com/smykla-labs/klaudiush/internal/validator"
+	"github.com/smykla-labs/klaudiush/pkg/hook"
+	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 var (

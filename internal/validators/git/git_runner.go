@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/smykla-labs/claude-hooks/internal/exec"
-	gitpkg "github.com/smykla-labs/claude-hooks/internal/git"
+	"github.com/smykla-labs/klaudiush/internal/exec"
+	gitpkg "github.com/smykla-labs/klaudiush/internal/git"
 )
 
 // GitRunner is an alias for the git.Runner interface

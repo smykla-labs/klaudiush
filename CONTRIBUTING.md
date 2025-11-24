@@ -1,6 +1,6 @@
-# Contributing to Claude Hooks
+# Contributing to Klaudiush
 
-Thank you for your interest in contributing to Claude Hooks! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Klaudiush! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 
@@ -30,14 +30,14 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 2. Clone your fork:
 
    ```bash
-   git clone https://github.com/YOUR_USERNAME/claude-hooks.git
-   cd claude-hooks
+   git clone https://github.com/YOUR_USERNAME/klaudiush.git
+   cd klaudiush
    ```
 
 3. Add upstream remote:
 
    ```bash
-   git remote add upstream https://github.com/smykla-labs/claude-hooks.git
+   git remote add upstream https://github.com/smykla-labs/klaudiush.git
    ```
 
 4. Install dependencies and tools:
@@ -111,8 +111,8 @@ Valid branch types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`,
    package category
    
    import (
-       "github.com/smykla-labs/claude-hooks/internal/validator"
-       "github.com/smykla-labs/claude-hooks/pkg/hook"
+       "github.com/smykla-labs/klaudiush/internal/validator"
+       "github.com/smykla-labs/klaudiush/pkg/hook"
    )
    
    type MyValidator struct {
@@ -137,7 +137,7 @@ Valid branch types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`,
 
 2. Write comprehensive tests using Ginkgo/Gomega
 
-3. Register validator in `cmd/claude-hooks/main.go`
+3. Register validator in `cmd/klaudiush/main.go`
 
 4. Update documentation in README.md and CLAUDE.md
 
@@ -404,10 +404,10 @@ git push --no-verify
 
 ## Getting Help
 
-- **Issues**: https://github.com/smykla-labs/claude-hooks/issues
-- **Discussions**: https://github.com/smykla-labs/claude-hooks/discussions
+- **Issues**: https://github.com/smykla-labs/klaudiush/issues
+- **Discussions**: https://github.com/smykla-labs/klaudiush/discussions
 - **Documentation**: See README.md and CLAUDE.md
 
 ## License
 
-By contributing to Claude Hooks, you agree that your contributions will be licensed under the MIT License.
+By contributing to Klaudiush, you agree that your contributions will be licensed under the MIT License.

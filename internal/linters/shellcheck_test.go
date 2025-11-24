@@ -9,8 +9,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	execpkg "github.com/smykla-labs/claude-hooks/internal/exec"
-	"github.com/smykla-labs/claude-hooks/internal/linters"
+	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
+	"github.com/smykla-labs/klaudiush/internal/linters"
 )
 
 var errShellcheckFailed = errors.New("shellcheck failed")

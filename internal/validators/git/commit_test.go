@@ -6,9 +6,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/smykla-labs/claude-hooks/internal/validators/git"
-	"github.com/smykla-labs/claude-hooks/pkg/hook"
-	"github.com/smykla-labs/claude-hooks/pkg/logger"
+	"github.com/smykla-labs/klaudiush/internal/validators/git"
+	"github.com/smykla-labs/klaudiush/pkg/hook"
+	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 var _ = Describe("CommitValidator", func() {
@@ -337,7 +337,7 @@ seventy-two character limit for proper formatting.`
 			It("should pass with URLs exceeding 72 characters", func() {
 				message := `feat(api): add endpoint
 
-Reference: https://github.com/smykla-labs/claude-hooks/pull/123/files#diff-abc123def456`
+Reference: https://github.com/smykla-labs/klaudiush/pull/123/files#diff-abc123def456`
 
 				ctx := &hook.Context{
 					EventType: hook.PreToolUse,
@@ -453,7 +453,7 @@ Changes:
 			It("should fail with GitHub URL reference", func() {
 				message := `fix(api): resolve issue
 
-See github.com/smykla-labs/claude-hooks/pull/123`
+See github.com/smykla-labs/klaudiush/pull/123`
 
 				ctx := &hook.Context{
 					EventType: hook.PreToolUse,

@@ -1,11 +1,11 @@
 version: '3'
 
-# Task runner configuration for claude-hooks
+# Task runner configuration for klaudiush
 # Uses mise for tool version management
 # Run 'mise install' before running tasks
 
 vars:
-  BINARY_NAME: chook
+  BINARY_NAME: klaudiush
   INSTALL_DIR:
     sh: |
       if [ -d "$HOME/.local/bin" ]; then
@@ -17,7 +17,7 @@ vars:
       else
         echo "$HOME/.local/bin"
       fi
-  INSTALL_PATH: '{{.INSTALL_DIR}}/chook'
+  INSTALL_PATH: '{{.INSTALL_DIR}}/klaudiush'
 
 tasks:
   default:
@@ -28,7 +28,7 @@ tasks:
   build:
     desc: Build the binary (without signoff validation)
     cmds:
-      - mise exec -- go build -o bin/{{.BINARY_NAME}} ./cmd/claude-hooks
+      - mise exec -- go build -o bin/{{.BINARY_NAME}} ./cmd/klaudiush
     sources:
       - '**/*.go'
     generates:
@@ -45,9 +45,9 @@ tasks:
     cmds:
       - |
         mise exec -- go build \
-          -ldflags="-X 'github.com/smykla-labs/claude-hooks/internal/validators/git.ExpectedSignoff={{.SIGNOFF}}'" \
+          -ldflags="-X 'github.com/smykla-labs/klaudiush/internal/validators/git.ExpectedSignoff={{.SIGNOFF}}'" \
           -o bin/{{.BINARY_NAME}} \
-          ./cmd/claude-hooks
+          ./cmd/klaudiush
     sources:
       - '**/*.go'
     generates:
@@ -139,7 +139,7 @@ tasks:
       - mise exec -- golangci-lint run --fix
 
   install:
-    desc: Install chook binary to user PATH (~/.local/bin or ~/bin)
+    desc: Install klaudiush binary to user PATH (~/.local/bin or ~/bin)
     deps:
       - build
     cmds:

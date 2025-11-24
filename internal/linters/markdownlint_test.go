@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/smykla-labs/claude-hooks/internal/linters"
+	"github.com/smykla-labs/klaudiush/internal/linters"
 )
 
 var _ = Describe("MarkdownLinter", func() {

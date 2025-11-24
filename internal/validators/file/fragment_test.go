@@ -4,8 +4,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/smykla-labs/claude-hooks/internal/validators/file"
-	"github.com/smykla-labs/claude-hooks/pkg/logger"
+	"github.com/smykla-labs/klaudiush/internal/validators/file"
+	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
 var _ = Describe("ExtractEditFragment", func() {

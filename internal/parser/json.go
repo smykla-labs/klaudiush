@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/smykla-labs/claude-hooks/pkg/hook"
+	"github.com/smykla-labs/klaudiush/pkg/hook"
 )
 
 var (
