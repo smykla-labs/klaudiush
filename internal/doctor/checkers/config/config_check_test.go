@@ -55,7 +55,7 @@ var _ = Describe("GlobalChecker", func() {
 				result := checker.Check(ctx)
 				// If config doesn't exist, it should be a warning
 				if result.Status == doctor.StatusFail && result.Severity == doctor.SeverityWarning {
-					Expect(result.Message).To(ContainSubstring("not found"))
+					Expect(result.Message).To(ContainSubstring("Not found"))
 					Expect(result.FixID).To(Equal("create_global_config"))
 				}
 			})
