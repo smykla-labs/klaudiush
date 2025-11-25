@@ -243,95 +243,137 @@ func Never() Predicate {
 
 // Git Command Predicates
 
-// GitSubcommandIs returns a predicate that matches if the command is a git command
-// with the given subcommand. This properly handles global options like -C.
+// GitSubcommandIs returns a predicate that matches if any git command in the chain
+// has the given subcommand. This properly handles command chains like "git add && git commit".
 func GitSubcommandIs(subcommand string) Predicate {
 	return func(ctx *hook.Context) bool {
-		gitCmd := parseGitFromContext(ctx)
-		if gitCmd == nil {
-			return false
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if gitCmd.Subcommand == subcommand {
+				return true
+			}
 		}
 
-		return gitCmd.Subcommand == subcommand
+		return false
 	}
 }
 
-// GitSubcommandIn returns a predicate that matches if the command is a git command
-// with any of the given subcommands.
+// GitSubcommandIn returns a predicate that matches if any git command in the chain
+// has any of the given subcommands.
 func GitSubcommandIn(subcommands ...string) Predicate {
 	return func(ctx *hook.Context) bool {
-		gitCmd := parseGitFromContext(ctx)
-		if gitCmd == nil {
-			return false
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if slices.Contains(subcommands, gitCmd.Subcommand) {
+				return true
+			}
 		}
 
-		return slices.Contains(subcommands, gitCmd.Subcommand)
+		return false
 	}
 }
 
-// GitHasFlag returns a predicate that matches if the git command has the given flag.
+// GitHasFlag returns a predicate that matches if any git command in the chain has the given flag.
 func GitHasFlag(flag string) Predicate {
 	return func(ctx *hook.Context) bool {
-		gitCmd := parseGitFromContext(ctx)
-		if gitCmd == nil {
-			return false
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if gitCmd.HasFlag(flag) {
+				return true
+			}
 		}
 
-		return gitCmd.HasFlag(flag)
+		return false
 	}
 }
 
-// GitHasAnyFlag returns a predicate that matches if the git command has any of the given flags.
+// GitHasAnyFlag returns a predicate that matches if any git command in the chain
+// has any of the given flags.
 func GitHasAnyFlag(flags ...string) Predicate {
 	return func(ctx *hook.Context) bool {
-		gitCmd := parseGitFromContext(ctx)
-		if gitCmd == nil {
-			return false
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if slices.ContainsFunc(flags, gitCmd.HasFlag) {
+				return true
+			}
 		}
 
-		return slices.ContainsFunc(flags, gitCmd.HasFlag)
+		return false
 	}
 }
 
-// GitSubcommandWithFlag returns a predicate that matches if the command is a git command
-// with the given subcommand AND has the given flag.
+// GitSubcommandWithFlag returns a predicate that matches if any git command in the chain
+// has the given subcommand AND has the given flag.
 func GitSubcommandWithFlag(subcommand, flag string) Predicate {
-	return And(
-		GitSubcommandIs(subcommand),
-		GitHasFlag(flag),
-	)
+	return func(ctx *hook.Context) bool {
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if gitCmd.Subcommand == subcommand && gitCmd.HasFlag(flag) {
+				return true
+			}
+		}
+
+		return false
+	}
 }
 
-// GitSubcommandWithAnyFlag returns a predicate that matches if the command is a git command
-// with the given subcommand AND has any of the given flags.
+// GitSubcommandWithAnyFlag returns a predicate that matches if any git command in the chain
+// has the given subcommand AND has any of the given flags.
 func GitSubcommandWithAnyFlag(subcommand string, flags ...string) Predicate {
-	return And(
-		GitSubcommandIs(subcommand),
-		GitHasAnyFlag(flags...),
-	)
+	return func(ctx *hook.Context) bool {
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if gitCmd.Subcommand == subcommand && slices.ContainsFunc(flags, gitCmd.HasFlag) {
+				return true
+			}
+		}
+
+		return false
+	}
 }
 
-// GitSubcommandWithoutFlag returns a predicate that matches if the command is a git command
-// with the given subcommand AND does NOT have the given flag.
+// GitSubcommandWithoutFlag returns a predicate that matches if any git command in the chain
+// has the given subcommand AND does NOT have the given flag.
 func GitSubcommandWithoutFlag(subcommand, flag string) Predicate {
-	return And(
-		GitSubcommandIs(subcommand),
-		Not(GitHasFlag(flag)),
-	)
+	return func(ctx *hook.Context) bool {
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if gitCmd.Subcommand == subcommand && !gitCmd.HasFlag(flag) {
+				return true
+			}
+		}
+
+		return false
+	}
 }
 
-// GitSubcommandWithoutAnyFlag returns a predicate that matches if the command is a git command
-// with the given subcommand AND does NOT have any of the given flags.
+// GitSubcommandWithoutAnyFlag returns a predicate that matches if any git command in the chain
+// has the given subcommand AND does NOT have any of the given flags.
 func GitSubcommandWithoutAnyFlag(subcommand string, flags ...string) Predicate {
-	return And(
-		GitSubcommandIs(subcommand),
-		Not(GitHasAnyFlag(flags...)),
-	)
+	return func(ctx *hook.Context) bool {
+		gitCmds := parseAllGitFromContext(ctx)
+
+		for _, gitCmd := range gitCmds {
+			if gitCmd.Subcommand == subcommand && !slices.ContainsFunc(flags, gitCmd.HasFlag) {
+				return true
+			}
+		}
+
+		return false
+	}
 }
 
-// parseGitFromContext parses the git command from a hook context.
-// Returns nil if the command is not a git command or parsing fails.
-func parseGitFromContext(ctx *hook.Context) *parser.GitCommand {
+// parseAllGitFromContext parses all git commands from a hook context.
+// Returns all git commands found in command chains like "git add && git commit".
+// Returns empty slice if no git commands are found or parsing fails.
+func parseAllGitFromContext(ctx *hook.Context) []*parser.GitCommand {
 	if ctx.ToolName != hook.ToolTypeBash {
 		return nil
 	}
@@ -343,16 +385,18 @@ func parseGitFromContext(ctx *hook.Context) *parser.GitCommand {
 		return nil
 	}
 
+	var gitCmds []*parser.GitCommand
+
 	for _, cmd := range result.Commands {
 		if cmd.Name == "git" {
 			gitCmd, err := parser.ParseGitCommand(cmd)
 			if err != nil {
-				return nil
+				continue // Skip invalid git commands but continue processing
 			}
 
-			return gitCmd
+			gitCmds = append(gitCmds, gitCmd)
 		}
 	}
 
-	return nil
+	return gitCmds
 }
