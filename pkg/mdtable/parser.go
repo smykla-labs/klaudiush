@@ -30,6 +30,9 @@ type ParseResult struct {
 const (
 	// dataRowStartOffset is the offset from separator to first data row.
 	dataRowStartOffset = 2
+
+	// minPipesForCell is the minimum number of pipes needed to form a valid table cell.
+	minPipesForCell = 2
 )
 
 var (
@@ -262,12 +265,12 @@ func hasInconsistentSpacing(line string) bool {
 
 	// Find pipe positions to determine cell boundaries
 	pipePositions := findPipePositions(line)
-	if len(pipePositions) < 2 {
+	if len(pipePositions) < minPipesForCell {
 		return false
 	}
 
 	// Check each cell segment between pipes
-	for i := 0; i < len(pipePositions)-1; i++ {
+	for i := range len(pipePositions) - 1 {
 		start := pipePositions[i] + 1
 		end := pipePositions[i+1]
 
@@ -300,7 +303,7 @@ func hasInconsistentSpacing(line string) bool {
 func findPipePositions(line string) []int {
 	var positions []int
 
-	for i := 0; i < len(line); i++ {
+	for i := range len(line) {
 		if line[i] == '|' {
 			// Check if escaped
 			if i > 0 && line[i-1] == '\\' {

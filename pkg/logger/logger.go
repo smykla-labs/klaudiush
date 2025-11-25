@@ -144,7 +144,7 @@ func WithContext(ctx context.Context, l Logger) context.Context {
 
 // Default returns a default logger that writes to stderr.
 //
-//nolint:ireturn // Logger is intended to return an interface for polymorphic use
+//nolint:ireturn // returns interface for polymorphic use
 func Default() Logger {
 	return NewSlogAdapter(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 }

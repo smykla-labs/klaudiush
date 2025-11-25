@@ -345,7 +345,9 @@ var _ = Describe("hasInconsistentSpacing", func() {
 			result := mdtable.Parse(content)
 
 			Expect(result.Tables).To(HaveLen(1))
-			Expect(result.Issues).To(BeEmpty(), "should not flag false positives from substring matching")
+			Expect(
+				result.Issues,
+			).To(BeEmpty(), "should not flag false positives from substring matching")
 		})
 
 		It("handles data cells that are substrings of other cells", func() {

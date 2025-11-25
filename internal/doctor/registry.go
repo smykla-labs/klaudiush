@@ -91,6 +91,8 @@ func (*Registry) runCheckers(ctx context.Context, checkers []HealthChecker) []Ch
 }
 
 // GetFixer retrieves a fixer by ID.
+//
+//nolint:ireturn // returns interface for polymorphic fixer lookup
 func (r *Registry) GetFixer(fixID string) (Fixer, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
