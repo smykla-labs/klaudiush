@@ -24,15 +24,15 @@ const (
 
 var (
 	// Regex patterns for extracting PR metadata from gh command
-	titleRegex       = regexp.MustCompile(`--title\s+"([^"]+)"`)
-	titleSingleRegex = regexp.MustCompile(`--title\s+'([^']+)'`)
-	baseRegex        = regexp.MustCompile(`--base\s+"([^"]+)"`)
-	baseSingleRegex  = regexp.MustCompile(`--base\s+'([^']+)'`)
-	labelRegex       = regexp.MustCompile(`--label\s+"([^"]+)"`)
-	labelSingleRegex = regexp.MustCompile(`--label\s+'([^']+)'`)
-	heredocRegex     = regexp.MustCompile(`<<'?EOF'?\s*\n((?s:.+?))\nEOF`)
-	bodyRegex        = regexp.MustCompile(`--body\s+"([^"]+)"`)
-	bodySingleRegex  = regexp.MustCompile(`--body\s+'([^']+)'`)
+	prTitleRegex       = regexp.MustCompile(`--title\s+"([^"]+)"`)
+	prTitleSingleRegex = regexp.MustCompile(`--title\s+'([^']+)'`)
+	baseRegex          = regexp.MustCompile(`--base\s+"([^"]+)"`)
+	baseSingleRegex    = regexp.MustCompile(`--base\s+'([^']+)'`)
+	labelRegex         = regexp.MustCompile(`--label\s+"([^"]+)"`)
+	labelSingleRegex   = regexp.MustCompile(`--label\s+'([^']+)'`)
+	heredocRegex       = regexp.MustCompile(`<<'?EOF'?\s*\n((?s:.+?))\nEOF`)
+	bodyRegex          = regexp.MustCompile(`--body\s+"([^"]+)"`)
+	bodySingleRegex    = regexp.MustCompile(`--body\s+'([^']+)'`)
 
 	// defaultPRForbiddenPatterns blocks mentions of tmp directory
 	defaultPRForbiddenPatterns = []string{
@@ -186,9 +186,9 @@ func (v *PRValidator) extractPRData(command string) PRData {
 	}
 
 	// Extract title (try double quotes first, then single quotes)
-	if matches := titleRegex.FindStringSubmatch(command); len(matches) > 1 {
+	if matches := prTitleRegex.FindStringSubmatch(command); len(matches) > 1 {
 		data.Title = matches[1]
-	} else if matches := titleSingleRegex.FindStringSubmatch(command); len(matches) > 1 {
+	} else if matches := prTitleSingleRegex.FindStringSubmatch(command); len(matches) > 1 {
 		data.Title = matches[1]
 	}
 

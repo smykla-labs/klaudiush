@@ -1,0 +1,442 @@
+package git
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+// CommitRule represents a validation rule for commit messages.
+type CommitRule interface {
+	// Name returns the rule name.
+	Name() string
+
+	// Validate checks the commit against the rule and returns errors.
+	Validate(commit *ParsedCommit, message string) []string
+}
+
+// TitleLengthRule validates the commit title length.
+type TitleLengthRule struct {
+	MaxLength int
+}
+
+func (*TitleLengthRule) Name() string {
+	return "title-length"
+}
+
+func (r *TitleLengthRule) Validate(commit *ParsedCommit, _ string) []string {
+	if len(commit.Title) <= r.MaxLength {
+		return nil
+	}
+
+	return []string{
+		fmt.Sprintf(
+			"❌ Title exceeds %d characters (%d chars): '%s'",
+			r.MaxLength,
+			len(commit.Title),
+			commit.Title,
+		),
+	}
+}
+
+// ConventionalFormatRule validates conventional commit format.
+type ConventionalFormatRule struct {
+	ValidTypes   []string
+	RequireScope bool
+}
+
+func (*ConventionalFormatRule) Name() string {
+	return "conventional-format"
+}
+
+func (r *ConventionalFormatRule) Validate(commit *ParsedCommit, _ string) []string {
+	// Skip validation for revert commits
+	if isRevertCommit(commit.Title) {
+		return nil
+	}
+
+	if !commit.Valid || commit.ParseError != "" {
+		errors := []string{
+			"❌ Title doesn't follow conventional commits format: type(scope): description",
+		}
+
+		if r.RequireScope {
+			errors = append(errors, "   Scope is mandatory and must be in parentheses")
+		}
+
+		errors = append(errors, "   Valid types: "+strings.Join(r.ValidTypes, ", "))
+		errors = append(errors, fmt.Sprintf("   Current title: '%s'", commit.Title))
+
+		return errors
+	}
+
+	// Check scope requirement
+	if r.RequireScope && commit.Scope == "" {
+		return []string{
+			"❌ Title doesn't follow conventional commits format: type(scope): description",
+			"   Scope is mandatory and must be in parentheses",
+			"   Valid types: " + strings.Join(r.ValidTypes, ", "),
+			fmt.Sprintf("   Current title: '%s'", commit.Title),
+		}
+	}
+
+	return nil
+}
+
+// InfraScopeMisuseRule blocks feat/fix with infrastructure scopes.
+type InfraScopeMisuseRule struct {
+	infraScopeMisuseRegex *regexp.Regexp
+}
+
+func NewInfraScopeMisuseRule() *InfraScopeMisuseRule {
+	return &InfraScopeMisuseRule{
+		infraScopeMisuseRegex: regexp.MustCompile(`^(feat|fix)\((ci|test|docs|build)\):`),
+	}
+}
+
+func (*InfraScopeMisuseRule) Name() string {
+	return "infra-scope-misuse"
+}
+
+func (r *InfraScopeMisuseRule) Validate(commit *ParsedCommit, _ string) []string {
+	if !r.infraScopeMisuseRegex.MatchString(commit.Title) {
+		return nil
+	}
+
+	matches := r.infraScopeMisuseRegex.FindStringSubmatch(commit.Title)
+
+	const minMatchGroups = 3 // Full match + type + scope groups
+
+	if len(matches) < minMatchGroups {
+		return nil
+	}
+
+	typeMatch := matches[1]  // feat or fix
+	scopeMatch := matches[2] // ci, test, docs, or build
+
+	return []string{
+		fmt.Sprintf(
+			"❌ Use '%s(...)' not '%s(%s)' for infrastructure changes",
+			scopeMatch,
+			typeMatch,
+			scopeMatch,
+		),
+		"   feat/fix should only be used for user-facing changes",
+	}
+}
+
+// BodyLineLengthRule validates body line lengths.
+type BodyLineLengthRule struct {
+	MaxLength int
+	Tolerance int
+	urlRegex  *regexp.Regexp
+}
+
+func NewBodyLineLengthRule(maxLength, tolerance int) *BodyLineLengthRule {
+	return &BodyLineLengthRule{
+		MaxLength: maxLength,
+		Tolerance: tolerance,
+		urlRegex:  regexp.MustCompile(`https?://`),
+	}
+}
+
+func (*BodyLineLengthRule) Name() string {
+	return "body-line-length"
+}
+
+func (r *BodyLineLengthRule) Validate(_ *ParsedCommit, message string) []string {
+	lines := strings.Split(message, "\n")
+	errors := make([]string, 0)
+	maxLenWithTolerance := r.MaxLength + r.Tolerance
+
+	for lineNum, line := range lines {
+		// Skip title (first line)
+		if lineNum == 0 {
+			continue
+		}
+
+		// Skip empty lines
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		// Allow URLs to break the rule
+		if r.urlRegex.MatchString(line) {
+			continue
+		}
+
+		lineLen := len(line)
+		if lineLen > maxLenWithTolerance {
+			truncated := truncateLine(line)
+			errors = append(errors,
+				fmt.Sprintf(
+					"❌ Line %d exceeds %d characters (%d chars, >%d over limit)",
+					lineNum+1,
+					r.MaxLength,
+					lineLen,
+					r.Tolerance,
+				),
+				fmt.Sprintf("   Line: '%s'", truncated),
+			)
+		}
+	}
+
+	return errors
+}
+
+// ListFormattingRule validates list item formatting.
+type ListFormattingRule struct {
+	listItemRegex *regexp.Regexp
+}
+
+func NewListFormattingRule() *ListFormattingRule {
+	return &ListFormattingRule{
+		listItemRegex: regexp.MustCompile(`^\s*[-*]\s+|\s*[0-9]+\.\s+`),
+	}
+}
+
+func (*ListFormattingRule) Name() string {
+	return "list-formatting"
+}
+
+func (r *ListFormattingRule) Validate(_ *ParsedCommit, message string) []string {
+	lines := strings.Split(message, "\n")
+	errors := make([]string, 0)
+	prevLineEmpty := false
+	foundFirstList := false
+
+	for lineNum, line := range lines {
+		// Skip title (first line)
+		if lineNum == 0 {
+			continue
+		}
+
+		// Check if blank line
+		if strings.TrimSpace(line) == "" {
+			prevLineEmpty = true
+
+			continue
+		}
+
+		// Check for list items
+		if r.listItemRegex.MatchString(line) {
+			// Check if this is the first list item and there was no empty line before it
+			if !foundFirstList && !prevLineEmpty {
+				truncated := truncateLine(line)
+				errors = append(
+					errors,
+					fmt.Sprintf(
+						"❌ Missing empty line before first list item at line %d",
+						lineNum+1,
+					),
+					"   List items must be preceded by an empty line",
+					fmt.Sprintf("   Line: '%s'", truncated),
+				)
+			}
+
+			foundFirstList = true
+		}
+
+		prevLineEmpty = false
+	}
+
+	return errors
+}
+
+// PRReferenceRule blocks PR references in commit messages.
+type PRReferenceRule struct {
+	prReferenceRegex *regexp.Regexp
+	hashRefRegex     *regexp.Regexp
+	urlRefRegex      *regexp.Regexp
+}
+
+func NewPRReferenceRule() *PRReferenceRule {
+	return &PRReferenceRule{
+		prReferenceRegex: regexp.MustCompile(`#[0-9]+|github\.com/.+/pull/[0-9]+`),
+		hashRefRegex:     regexp.MustCompile(`#[0-9]+`),
+		urlRefRegex:      regexp.MustCompile(`github\.com/.+/pull/[0-9]+`),
+	}
+}
+
+func (*PRReferenceRule) Name() string {
+	return "pr-reference"
+}
+
+func (r *PRReferenceRule) Validate(_ *ParsedCommit, message string) []string {
+	if !r.prReferenceRegex.MatchString(message) {
+		return nil
+	}
+
+	errors := []string{"❌ PR references found - remove '#' prefix or convert URLs to plain numbers"}
+
+	// Show examples for hash references
+	if hashMatch := r.hashRefRegex.FindString(message); hashMatch != "" {
+		fix := strings.TrimPrefix(hashMatch, "#")
+		errors = append(errors, fmt.Sprintf("   Found: '%s' → Should be: '%s'", hashMatch, fix))
+	}
+
+	// Show examples for URL references
+	if urlMatch := r.urlRefRegex.FindString(message); urlMatch != "" {
+		prNumRegex := regexp.MustCompile(`[0-9]+$`)
+		prNum := prNumRegex.FindString(urlMatch)
+		errors = append(
+			errors,
+			fmt.Sprintf("   Found: 'https://%s' → Should be: '%s'", urlMatch, prNum),
+		)
+	}
+
+	return errors
+}
+
+// AIAttributionRule blocks Claude AI attribution patterns.
+type AIAttributionRule struct{}
+
+func NewAIAttributionRule() *AIAttributionRule {
+	return &AIAttributionRule{}
+}
+
+func (*AIAttributionRule) Name() string {
+	return "ai-attribution"
+}
+
+func (*AIAttributionRule) Validate(_ *ParsedCommit, message string) []string {
+	if !containsClaudeAIAttribution(message) {
+		return nil
+	}
+
+	return []string{
+		"❌ Commit message contains AI attribution - remove any AI generation attribution",
+	}
+}
+
+// ForbiddenPatternRule blocks forbidden patterns in commit messages.
+type ForbiddenPatternRule struct {
+	Patterns []string
+}
+
+func (*ForbiddenPatternRule) Name() string {
+	return "forbidden-pattern"
+}
+
+func (r *ForbiddenPatternRule) Validate(_ *ParsedCommit, message string) []string {
+	if len(r.Patterns) == 0 {
+		return nil
+	}
+
+	errors := make([]string, 0)
+
+	for _, pattern := range r.Patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			continue
+		}
+
+		if re.MatchString(message) {
+			match := re.FindString(message)
+			errors = append(errors,
+				fmt.Sprintf("❌ Forbidden pattern found: '%s'", match),
+				"   Pattern: "+pattern,
+				"   Remove this content from your commit message",
+			)
+		}
+	}
+
+	return errors
+}
+
+// SignoffRule validates the Signed-off-by trailer.
+type SignoffRule struct {
+	ExpectedSignoff string
+}
+
+func (*SignoffRule) Name() string {
+	return "signoff"
+}
+
+func (r *SignoffRule) Validate(_ *ParsedCommit, message string) []string {
+	if r.ExpectedSignoff == "" {
+		return nil
+	}
+
+	if !strings.Contains(message, "Signed-off-by:") {
+		return nil
+	}
+
+	lines := strings.Split(message, "\n")
+	signoffLine := ""
+
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "Signed-off-by:") {
+			signoffLine = strings.TrimSpace(line)
+
+			break
+		}
+	}
+
+	expectedSignoffLine := "Signed-off-by: " + r.ExpectedSignoff
+	if signoffLine != expectedSignoffLine {
+		return []string{
+			"❌ Wrong signoff identity",
+			"   Found: " + signoffLine,
+			"   Expected: " + expectedSignoffLine,
+		}
+	}
+
+	return nil
+}
+
+// containsClaudeAIAttribution checks for AI attribution patterns.
+func containsClaudeAIAttribution(message string) bool {
+	lower := strings.ToLower(message)
+
+	// Explicit AI attribution patterns to block
+	aiPatterns := []string{
+		"generated by claude",
+		"generated with claude",
+		"assisted by claude",
+		"created by claude",
+		"written by claude",
+		"with help from claude",
+		"powered by claude",
+		"claude ai",
+		"co-authored-by: claude",
+	}
+
+	for _, pattern := range aiPatterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+
+	// Check for markdown links with Claude attribution
+	if regexp.MustCompile(`\[claude[^\]]*\]\([^)]*claude[^)]*\)`).MatchString(lower) {
+		return true
+	}
+
+	// If "claude" doesn't appear at all, it's fine
+	if !strings.Contains(lower, "claude") {
+		return false
+	}
+
+	// Allow legitimate tool/file references
+	legitimatePatterns := []string{
+		"claude.md",
+		"claude-hooks",
+		"klaudiush",
+		"`claude",
+		"claude`",
+	}
+
+	for _, pattern := range legitimatePatterns {
+		if strings.Contains(lower, pattern) {
+			return false
+		}
+	}
+
+	// Check for CLAUDE (all caps) - this is usually the file name
+	if strings.Contains(message, "CLAUDE") {
+		return false
+	}
+
+	return false
+}
