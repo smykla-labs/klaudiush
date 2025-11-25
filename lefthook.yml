@@ -2,7 +2,7 @@
 # https://github.com/evilmartians/lefthook/blob/master/docs/configuration.md
 
 # Minimum lefthook version
-min_version: 1.10.0
+min_version: 2.0.0
 
 # Pre-commit hook
 pre-commit:

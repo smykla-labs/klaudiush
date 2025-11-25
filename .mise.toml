@@ -21,9 +21,13 @@ task = "3.45.5"
 # https://github.com/dmarkham/enumer
 "go:github.com/dmarkham/enumer" = "1.5.11"
 
+# Mock generator for Go interfaces
+# https://github.com/uber-go/mock
+"go:go.uber.org/mock/mockgen" = "v0.6.0"
+
 # Git hooks manager
 # https://github.com/evilmartians/lefthook
-lefthook = "1.10.6"
+lefthook = "2.0.4"
 
 [env]
 # Ensure Go binaries are in PATH
