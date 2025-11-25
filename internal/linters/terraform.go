@@ -30,6 +30,19 @@ func NewTerraformFormatter(runner execpkg.CommandRunner) *RealTerraformFormatter
 	}
 }
 
+// NewTerraformFormatterWithDeps creates a RealTerraformFormatter with all dependencies injected (for testing).
+func NewTerraformFormatterWithDeps(
+	runner execpkg.CommandRunner,
+	toolChecker execpkg.ToolChecker,
+	tempManager execpkg.TempFileManager,
+) *RealTerraformFormatter {
+	return &RealTerraformFormatter{
+		runner:      runner,
+		toolChecker: toolChecker,
+		tempManager: tempManager,
+	}
+}
+
 // DetectTool detects whether to use tofu or terraform
 func (t *RealTerraformFormatter) DetectTool() string {
 	return t.toolChecker.FindTool("tofu", "terraform")

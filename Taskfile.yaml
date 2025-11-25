@@ -46,6 +46,7 @@ tasks:
       - internal/prompt/prompt.go
       - internal/validator/validator.go
       - internal/doctor/types.go
+      - internal/doctor/checkers/config/config_check.go
     generates:
       # Enums
       - pkg/hook/eventtype_enumer.go
@@ -66,6 +67,7 @@ tasks:
       - internal/prompt/prompt_mock.go
       - internal/validator/validator_mock.go
       - internal/doctor/types_mock.go
+      - internal/doctor/checkers/config/config_loader_mock.go
 
   build:
     desc: Build the binary (without signoff validation)
@@ -84,7 +86,9 @@ tasks:
       - task: build
 
   test:
-    desc: Run all tests
+    desc: Run all tests (including testscript integration tests)
+    deps:
+      - build
     cmds:
       - mise exec -- go test -v -race -cover ./...
 

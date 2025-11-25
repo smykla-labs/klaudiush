@@ -1,24 +1,42 @@
-// Package config provides checkers for configuration file validation.
-package config
+// Package configchecker provides checkers for configuration file validation.
+package configchecker
 
 import (
 	"context"
 	"errors"
 	"fmt"
 
-	"github.com/smykla-labs/klaudiush/internal/config"
+	internalconfig "github.com/smykla-labs/klaudiush/internal/config"
 	"github.com/smykla-labs/klaudiush/internal/doctor"
+	"github.com/smykla-labs/klaudiush/pkg/config"
 )
+
+// ConfigLoader defines the interface for configuration loading operations.
+//
+//go:generate mockgen -source=config_check.go -destination=config_loader_mock.go -package=configchecker
+type ConfigLoader interface {
+	HasGlobalConfig() bool
+	HasProjectConfig() bool
+	GlobalConfigPath() string
+	Load(flags map[string]any) (*config.Config, error)
+}
 
 // GlobalChecker checks the validity of the global configuration
 type GlobalChecker struct {
-	loader *config.KoanfLoader
+	loader ConfigLoader
 }
 
 // NewGlobalChecker creates a new global config checker
 func NewGlobalChecker() *GlobalChecker {
-	loader, _ := config.NewKoanfLoader()
+	loader, _ := internalconfig.NewKoanfLoader()
 
+	return &GlobalChecker{
+		loader: loader,
+	}
+}
+
+// NewGlobalCheckerWithLoader creates a GlobalChecker with a custom loader (for testing).
+func NewGlobalCheckerWithLoader(loader ConfigLoader) *GlobalChecker {
 	return &GlobalChecker{
 		loader: loader,
 	}
@@ -48,7 +66,7 @@ func (c *GlobalChecker) Check(_ context.Context) doctor.CheckResult {
 	// Try loading config to validate it
 	cfg, err := c.loader.Load(nil)
 	if err != nil {
-		if errors.Is(err, config.ErrInvalidTOML) {
+		if errors.Is(err, internalconfig.ErrInvalidTOML) {
 			return doctor.FailError("Global config", "Invalid TOML syntax").
 				WithDetails(
 					"File: "+c.loader.GlobalConfigPath(),
@@ -56,7 +74,7 @@ func (c *GlobalChecker) Check(_ context.Context) doctor.CheckResult {
 				)
 		}
 
-		if errors.Is(err, config.ErrInvalidPermissions) {
+		if errors.Is(err, internalconfig.ErrInvalidPermissions) {
 			return doctor.FailError("Global config", "Insecure file permissions").
 				WithDetails(
 					"File: "+c.loader.GlobalConfigPath(),
@@ -70,7 +88,7 @@ func (c *GlobalChecker) Check(_ context.Context) doctor.CheckResult {
 	}
 
 	// Validate config semantics
-	validator := config.NewValidator()
+	validator := internalconfig.NewValidator()
 	if err := validator.Validate(cfg); err != nil {
 		return doctor.FailError("Global config", "Validation failed").
 			WithDetails(
@@ -84,13 +102,20 @@ func (c *GlobalChecker) Check(_ context.Context) doctor.CheckResult {
 
 // ProjectChecker checks the validity of the project configuration
 type ProjectChecker struct {
-	loader *config.KoanfLoader
+	loader ConfigLoader
 }
 
 // NewProjectChecker creates a new project config checker
 func NewProjectChecker() *ProjectChecker {
-	loader, _ := config.NewKoanfLoader()
+	loader, _ := internalconfig.NewKoanfLoader()
 
+	return &ProjectChecker{
+		loader: loader,
+	}
+}
+
+// NewProjectCheckerWithLoader creates a ProjectChecker with a custom loader (for testing).
+func NewProjectCheckerWithLoader(loader ConfigLoader) *ProjectChecker {
 	return &ProjectChecker{
 		loader: loader,
 	}
@@ -115,12 +140,12 @@ func (c *ProjectChecker) Check(_ context.Context) doctor.CheckResult {
 
 	cfg, err := c.loader.Load(nil)
 	if err != nil {
-		if errors.Is(err, config.ErrInvalidTOML) {
+		if errors.Is(err, internalconfig.ErrInvalidTOML) {
 			return doctor.FailError("Project config", "Invalid TOML syntax").
 				WithDetails(fmt.Sprintf("Error: %v", err))
 		}
 
-		if errors.Is(err, config.ErrInvalidPermissions) {
+		if errors.Is(err, internalconfig.ErrInvalidPermissions) {
 			return doctor.FailError("Project config", "Insecure file permissions").
 				WithDetails(
 					"Config file should not be world-writable",
@@ -133,7 +158,7 @@ func (c *ProjectChecker) Check(_ context.Context) doctor.CheckResult {
 	}
 
 	// Validate config semantics
-	validator := config.NewValidator()
+	validator := internalconfig.NewValidator()
 	if err := validator.Validate(cfg); err != nil {
 		return doctor.FailError("Project config", "Validation failed").
 			WithDetails(fmt.Sprintf("Error: %v", err))
@@ -144,13 +169,20 @@ func (c *ProjectChecker) Check(_ context.Context) doctor.CheckResult {
 
 // PermissionsChecker checks if config files have secure permissions
 type PermissionsChecker struct {
-	loader *config.KoanfLoader
+	loader ConfigLoader
 }
 
 // NewPermissionsChecker creates a new permissions checker
 func NewPermissionsChecker() *PermissionsChecker {
-	loader, _ := config.NewKoanfLoader()
+	loader, _ := internalconfig.NewKoanfLoader()
 
+	return &PermissionsChecker{
+		loader: loader,
+	}
+}
+
+// NewPermissionsCheckerWithLoader creates a PermissionsChecker with a custom loader (for testing).
+func NewPermissionsCheckerWithLoader(loader ConfigLoader) *PermissionsChecker {
 	return &PermissionsChecker{
 		loader: loader,
 	}
@@ -180,7 +212,7 @@ func (c *PermissionsChecker) Check(_ context.Context) doctor.CheckResult {
 	_, err := c.loader.Load(nil)
 
 	// Check for permission errors
-	if err != nil && errors.Is(err, config.ErrInvalidPermissions) {
+	if err != nil && errors.Is(err, internalconfig.ErrInvalidPermissions) {
 		return doctor.FailError("Config permissions", "Insecure file permissions detected").
 			WithDetails(
 				fmt.Sprintf("Error: %v", err),

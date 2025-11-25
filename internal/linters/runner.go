@@ -25,6 +25,19 @@ func NewContentLinter(runner execpkg.CommandRunner) *ContentLinter {
 	}
 }
 
+// NewContentLinterWithDeps creates a ContentLinter with all dependencies injected (for testing).
+func NewContentLinterWithDeps(
+	runner execpkg.CommandRunner,
+	toolChecker execpkg.ToolChecker,
+	tempManager execpkg.TempFileManager,
+) *ContentLinter {
+	return &ContentLinter{
+		runner:      runner,
+		toolChecker: toolChecker,
+		tempManager: tempManager,
+	}
+}
+
 // LintContent validates content using a CLI tool
 // toolName: the command to run
 // tempPattern: pattern for temp file (e.g., "script-*.sh")

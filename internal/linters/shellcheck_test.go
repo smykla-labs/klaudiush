@@ -3,91 +3,78 @@ package linters_test
 import (
 	"context"
 	"errors"
-	"io"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 
 	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
 	"github.com/smykla-labs/klaudiush/internal/linters"
 )
 
-var errShellcheckFailed = errors.New("shellcheck failed")
-
-// Mock implementations for testing
-type mockCommandRunner struct {
-	runFunc          func(ctx context.Context, name string, args ...string) execpkg.CommandResult
-	runWithStdinFunc func(ctx context.Context, stdin io.Reader, name string, args ...string) execpkg.CommandResult
-}
-
-func (m *mockCommandRunner) Run(
-	ctx context.Context,
-	name string,
-	args ...string,
-) execpkg.CommandResult {
-	if m.runFunc != nil {
-		return m.runFunc(ctx, name, args...)
-	}
-
-	return execpkg.CommandResult{}
-}
-
-func (m *mockCommandRunner) RunWithStdin(
-	ctx context.Context,
-	stdin io.Reader,
-	name string,
-	args ...string,
-) execpkg.CommandResult {
-	if m.runWithStdinFunc != nil {
-		return m.runWithStdinFunc(ctx, stdin, name, args...)
-	}
-
-	return execpkg.CommandResult{}
-}
-
-func (m *mockCommandRunner) RunWithTimeout(
-	timeout time.Duration,
-	name string,
-	args ...string,
-) execpkg.CommandResult {
-	// Use context with timeout and call Run
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	return m.Run(ctx, name, args...)
-}
+var (
+	errShellcheckFailed           = errors.New("shellcheck failed")
+	errShellcheckTempFileCreation = errors.New("failed to create temp file")
+)
 
 var _ = Describe("ShellChecker", func() {
 	var (
-		checker    linters.ShellChecker
-		mockRunner *mockCommandRunner
-		ctx        context.Context
+		ctrl            *gomock.Controller
+		mockRunner      *execpkg.MockCommandRunner
+		mockToolChecker *execpkg.MockToolChecker
+		mockTempManager *execpkg.MockTempFileManager
+		checker         linters.ShellChecker
+		ctx             context.Context
 	)
 
 	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockRunner = execpkg.NewMockCommandRunner(ctrl)
+		mockToolChecker = execpkg.NewMockToolChecker(ctrl)
+		mockTempManager = execpkg.NewMockTempFileManager(ctrl)
 		ctx = context.Background()
-		mockRunner = &mockCommandRunner{}
-		checker = linters.NewShellChecker(mockRunner)
+
+		contentLinter := linters.NewContentLinterWithDeps(
+			mockRunner,
+			mockToolChecker,
+			mockTempManager,
+		)
+		checker = linters.NewShellCheckerWithDeps(contentLinter)
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
 	})
 
 	Describe("Check", func() {
+		Context("when shellcheck is not available", func() {
+			It("should return success without validation", func() {
+				mockToolChecker.EXPECT().IsAvailable("shellcheck").Return(false)
+
+				result := checker.Check(ctx, "#!/bin/bash\necho 'hello'")
+
+				Expect(result).NotTo(BeNil())
+				Expect(result.Success).To(BeTrue())
+				Expect(result.Err).To(BeNil())
+			})
+		})
+
 		Context("when shellcheck passes", func() {
 			It("should return success", func() {
-				mockRunner.runFunc = func(_ context.Context, name string, args ...string) execpkg.CommandResult {
-					Expect(name).To(Equal("shellcheck"))
-					Expect(args).To(HaveLen(2))
-					Expect(args[0]).To(Equal("--format=json"))
+				scriptContent := "#!/bin/bash\necho 'hello'"
 
-					return execpkg.CommandResult{
+				mockToolChecker.EXPECT().IsAvailable("shellcheck").Return(true)
+				mockTempManager.EXPECT().Create("script-*.sh", scriptContent).
+					Return("/tmp/script-123.sh", func() {}, nil)
+				mockRunner.EXPECT().Run(ctx, "shellcheck", "--format=json", "/tmp/script-123.sh").
+					Return(execpkg.CommandResult{
 						Stdout:   "[]",
 						Stderr:   "",
 						ExitCode: 0,
 						Err:      nil,
-					}
-				}
+					})
 
-				result := checker.Check(ctx, "#!/bin/bash\necho 'hello'")
+				result := checker.Check(ctx, scriptContent)
 
 				Expect(result).NotTo(BeNil())
 				Expect(result.Success).To(BeTrue())
@@ -98,17 +85,20 @@ var _ = Describe("ShellChecker", func() {
 		Context("when shellcheck fails", func() {
 			It("should return failure with output", func() {
 				shellcheckOutput := "script.sh:2:1: warning: Use $(...) instead of legacy backticks"
+				scriptContent := "#!/bin/bash\nvar=`ls`"
 
-				mockRunner.runFunc = func(_ context.Context, _ string, _ ...string) execpkg.CommandResult {
-					return execpkg.CommandResult{
+				mockToolChecker.EXPECT().IsAvailable("shellcheck").Return(true)
+				mockTempManager.EXPECT().Create("script-*.sh", scriptContent).
+					Return("/tmp/script-123.sh", func() {}, nil)
+				mockRunner.EXPECT().Run(ctx, "shellcheck", "--format=json", "/tmp/script-123.sh").
+					Return(execpkg.CommandResult{
 						Stdout:   shellcheckOutput,
 						Stderr:   "",
 						ExitCode: 1,
 						Err:      errShellcheckFailed,
-					}
-				}
+					})
 
-				result := checker.Check(ctx, "#!/bin/bash\nvar=`ls`")
+				result := checker.Check(ctx, scriptContent)
 
 				Expect(result).NotTo(BeNil())
 				Expect(result.Success).To(BeFalse())
@@ -118,17 +108,20 @@ var _ = Describe("ShellChecker", func() {
 
 			It("should include stderr in output when stdout is empty", func() {
 				stderrOutput := "shellcheck: error parsing script"
+				scriptContent := "#!/bin/bash\ninvalid syntax"
 
-				mockRunner.runFunc = func(_ context.Context, _ string, _ ...string) execpkg.CommandResult {
-					return execpkg.CommandResult{
+				mockToolChecker.EXPECT().IsAvailable("shellcheck").Return(true)
+				mockTempManager.EXPECT().Create("script-*.sh", scriptContent).
+					Return("/tmp/script-123.sh", func() {}, nil)
+				mockRunner.EXPECT().Run(ctx, "shellcheck", "--format=json", "/tmp/script-123.sh").
+					Return(execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   stderrOutput,
 						ExitCode: 1,
 						Err:      errShellcheckFailed,
-					}
-				}
+					})
 
-				result := checker.Check(ctx, "#!/bin/bash\ninvalid syntax")
+				result := checker.Check(ctx, scriptContent)
 
 				Expect(result).NotTo(BeNil())
 				Expect(result.Success).To(BeFalse())
@@ -138,10 +131,17 @@ var _ = Describe("ShellChecker", func() {
 
 		Context("when temp file creation fails", func() {
 			It("should return failure", func() {
-				// This test requires injecting a mock TempFileManager
-				// For now, we'll document this as a limitation
-				// In real usage, temp file creation rarely fails
-				Skip("Requires TempFileManager injection support")
+				scriptContent := "#!/bin/bash\necho 'hello'"
+
+				mockToolChecker.EXPECT().IsAvailable("shellcheck").Return(true)
+				mockTempManager.EXPECT().Create("script-*.sh", scriptContent).
+					Return("", nil, errShellcheckTempFileCreation)
+
+				result := checker.Check(ctx, scriptContent)
+
+				Expect(result).NotTo(BeNil())
+				Expect(result.Success).To(BeFalse())
+				Expect(result.Err).To(HaveOccurred())
 			})
 		})
 	})

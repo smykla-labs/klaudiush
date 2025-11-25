@@ -1,4 +1,4 @@
-package config_test
+package configchecker_test
 
 import (
 	"context"
@@ -6,9 +6,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 
+	internalconfig "github.com/smykla-labs/klaudiush/internal/config"
 	"github.com/smykla-labs/klaudiush/internal/doctor"
-	"github.com/smykla-labs/klaudiush/internal/doctor/checkers/config"
+	configchecker "github.com/smykla-labs/klaudiush/internal/doctor/checkers/config"
+	"github.com/smykla-labs/klaudiush/pkg/config"
 )
 
 func TestConfig(t *testing.T) {
@@ -18,13 +21,23 @@ func TestConfig(t *testing.T) {
 
 var _ = Describe("GlobalChecker", func() {
 	var (
-		checker *config.GlobalChecker
-		ctx     context.Context
+		ctrl        *gomock.Controller
+		mockLoader  *configchecker.MockConfigLoader
+		checker     *configchecker.GlobalChecker
+		ctx         context.Context
+		validConfig *config.Config
 	)
 
 	BeforeEach(func() {
-		checker = config.NewGlobalChecker()
+		ctrl = gomock.NewController(GinkgoT())
+		mockLoader = configchecker.NewMockConfigLoader(ctrl)
+		checker = configchecker.NewGlobalCheckerWithLoader(mockLoader)
 		ctx = context.Background()
+		validConfig = &config.Config{}
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
 	})
 
 	Describe("Name", func() {
@@ -40,24 +53,58 @@ var _ = Describe("GlobalChecker", func() {
 	})
 
 	Describe("Check", func() {
-		It("should check global config validity", func() {
-			result := checker.Check(ctx)
-			Expect(result.Name).To(Equal("Global config"))
-			// Result depends on whether global config exists and is valid
-			Expect(result.Status).To(BeElementOf(
-				doctor.StatusPass,
-				doctor.StatusFail,
-			))
+		Context("when config exists and is valid", func() {
+			It("should return pass", func() {
+				mockLoader.EXPECT().HasGlobalConfig().Return(true)
+				mockLoader.EXPECT().Load(nil).Return(validConfig, nil)
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusPass))
+				Expect(result.Message).To(ContainSubstring("Loaded and validated"))
+			})
 		})
 
 		Context("when config is missing", func() {
 			It("should return warning with fix ID", func() {
+				mockLoader.EXPECT().HasGlobalConfig().Return(false)
+				mockLoader.EXPECT().GlobalConfigPath().Return("/home/user/.klaudiush/config.toml")
+
 				result := checker.Check(ctx)
-				// If config doesn't exist, it should be a warning
-				if result.Status == doctor.StatusFail && result.Severity == doctor.SeverityWarning {
-					Expect(result.Message).To(ContainSubstring("Not found"))
-					Expect(result.FixID).To(Equal("create_global_config"))
-				}
+
+				Expect(result.Status).To(Equal(doctor.StatusFail))
+				Expect(result.Severity).To(Equal(doctor.SeverityWarning))
+				Expect(result.Message).To(ContainSubstring("Not found"))
+				Expect(result.FixID).To(Equal("create_global_config"))
+			})
+		})
+
+		Context("when config has invalid TOML", func() {
+			It("should return error", func() {
+				mockLoader.EXPECT().HasGlobalConfig().Return(true)
+				mockLoader.EXPECT().Load(nil).Return(nil, internalconfig.ErrInvalidTOML)
+				mockLoader.EXPECT().GlobalConfigPath().Return("/home/user/.klaudiush/config.toml")
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusFail))
+				Expect(result.Severity).To(Equal(doctor.SeverityError))
+				Expect(result.Message).To(ContainSubstring("Invalid TOML"))
+			})
+		})
+
+		Context("when config has invalid permissions", func() {
+			It("should return error with fix ID", func() {
+				mockLoader.EXPECT().HasGlobalConfig().Return(true)
+				mockLoader.EXPECT().Load(nil).Return(nil, internalconfig.ErrInvalidPermissions)
+				mockLoader.EXPECT().GlobalConfigPath().Return("/home/user/.klaudiush/config.toml")
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusFail))
+				Expect(result.Severity).To(Equal(doctor.SeverityError))
+				Expect(result.Message).To(ContainSubstring("Insecure file permissions"))
+				Expect(result.FixID).To(Equal("fix_config_permissions"))
 			})
 		})
 	})
@@ -65,13 +112,23 @@ var _ = Describe("GlobalChecker", func() {
 
 var _ = Describe("ProjectChecker", func() {
 	var (
-		checker *config.ProjectChecker
-		ctx     context.Context
+		ctrl        *gomock.Controller
+		mockLoader  *configchecker.MockConfigLoader
+		checker     *configchecker.ProjectChecker
+		ctx         context.Context
+		validConfig *config.Config
 	)
 
 	BeforeEach(func() {
-		checker = config.NewProjectChecker()
+		ctrl = gomock.NewController(GinkgoT())
+		mockLoader = configchecker.NewMockConfigLoader(ctrl)
+		checker = configchecker.NewProjectCheckerWithLoader(mockLoader)
 		ctx = context.Background()
+		validConfig = &config.Config{}
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
 	})
 
 	Describe("Name", func() {
@@ -87,25 +144,53 @@ var _ = Describe("ProjectChecker", func() {
 	})
 
 	Describe("Check", func() {
-		It("should check project config validity", func() {
-			result := checker.Check(ctx)
-			Expect(result.Name).To(Equal("Project config"))
-			// Result depends on whether project config exists and is valid
-			// Can be pass, fail, or skipped (if not found, it's optional)
-			Expect(result.Status).To(BeElementOf(
-				doctor.StatusPass,
-				doctor.StatusFail,
-				doctor.StatusSkipped,
-			))
+		Context("when config exists and is valid", func() {
+			It("should return pass", func() {
+				mockLoader.EXPECT().HasProjectConfig().Return(true)
+				mockLoader.EXPECT().Load(nil).Return(validConfig, nil)
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusPass))
+				Expect(result.Message).To(ContainSubstring("Loaded and validated"))
+			})
 		})
 
 		Context("when config is missing", func() {
 			It("should return skipped status", func() {
+				mockLoader.EXPECT().HasProjectConfig().Return(false)
+
 				result := checker.Check(ctx)
-				// If config doesn't exist, it should be skipped (optional)
-				if result.Status == doctor.StatusSkipped {
-					Expect(result.Message).To(ContainSubstring("Not found"))
-				}
+
+				Expect(result.Status).To(Equal(doctor.StatusSkipped))
+				Expect(result.Message).To(ContainSubstring("Not found"))
+			})
+		})
+
+		Context("when config has invalid TOML", func() {
+			It("should return error", func() {
+				mockLoader.EXPECT().HasProjectConfig().Return(true)
+				mockLoader.EXPECT().Load(nil).Return(nil, internalconfig.ErrInvalidTOML)
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusFail))
+				Expect(result.Severity).To(Equal(doctor.SeverityError))
+				Expect(result.Message).To(ContainSubstring("Invalid TOML"))
+			})
+		})
+
+		Context("when config has invalid permissions", func() {
+			It("should return error with fix ID", func() {
+				mockLoader.EXPECT().HasProjectConfig().Return(true)
+				mockLoader.EXPECT().Load(nil).Return(nil, internalconfig.ErrInvalidPermissions)
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusFail))
+				Expect(result.Severity).To(Equal(doctor.SeverityError))
+				Expect(result.Message).To(ContainSubstring("Insecure file permissions"))
+				Expect(result.FixID).To(Equal("fix_config_permissions"))
 			})
 		})
 	})
@@ -113,13 +198,21 @@ var _ = Describe("ProjectChecker", func() {
 
 var _ = Describe("PermissionsChecker", func() {
 	var (
-		checker *config.PermissionsChecker
-		ctx     context.Context
+		ctrl       *gomock.Controller
+		mockLoader *configchecker.MockConfigLoader
+		checker    *configchecker.PermissionsChecker
+		ctx        context.Context
 	)
 
 	BeforeEach(func() {
-		checker = config.NewPermissionsChecker()
+		ctrl = gomock.NewController(GinkgoT())
+		mockLoader = configchecker.NewMockConfigLoader(ctrl)
+		checker = configchecker.NewPermissionsCheckerWithLoader(mockLoader)
 		ctx = context.Background()
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
 	})
 
 	Describe("Name", func() {
@@ -135,24 +228,43 @@ var _ = Describe("PermissionsChecker", func() {
 	})
 
 	Describe("Check", func() {
-		It("should check config file permissions", func() {
-			result := checker.Check(ctx)
-			Expect(result.Name).To(Equal("Config permissions"))
-			// Result depends on whether config files exist and their permissions
-			Expect(result.Status).To(BeElementOf(
-				doctor.StatusPass,
-				doctor.StatusFail,
-				doctor.StatusSkipped,
-			))
-		})
-
 		Context("when no config files exist", func() {
 			It("should skip the check", func() {
+				mockLoader.EXPECT().HasGlobalConfig().Return(false)
+				mockLoader.EXPECT().HasProjectConfig().Return(false)
+
 				result := checker.Check(ctx)
-				// If no config files exist, check should be skipped
-				if result.Status == doctor.StatusSkipped {
-					Expect(result.Message).To(ContainSubstring("No config files found"))
-				}
+
+				Expect(result.Status).To(Equal(doctor.StatusSkipped))
+				Expect(result.Message).To(ContainSubstring("No config files found"))
+			})
+		})
+
+		Context("when config files exist with correct permissions", func() {
+			It("should return pass", func() {
+				mockLoader.EXPECT().HasGlobalConfig().Return(true)
+				mockLoader.EXPECT().HasProjectConfig().Return(false)
+				mockLoader.EXPECT().Load(nil).Return(&config.Config{}, nil)
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusPass))
+				Expect(result.Message).To(ContainSubstring("secured"))
+			})
+		})
+
+		Context("when config files have insecure permissions", func() {
+			It("should return error with fix ID", func() {
+				mockLoader.EXPECT().HasGlobalConfig().Return(true)
+				mockLoader.EXPECT().HasProjectConfig().Return(false)
+				mockLoader.EXPECT().Load(nil).Return(nil, internalconfig.ErrInvalidPermissions)
+
+				result := checker.Check(ctx)
+
+				Expect(result.Status).To(Equal(doctor.StatusFail))
+				Expect(result.Severity).To(Equal(doctor.SeverityError))
+				Expect(result.Message).To(ContainSubstring("Insecure file permissions"))
+				Expect(result.FixID).To(Equal("fix_config_permissions"))
 			})
 		})
 	})

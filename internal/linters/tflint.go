@@ -33,6 +33,17 @@ func NewTfLinter(runner execpkg.CommandRunner) *RealTfLinter {
 	}
 }
 
+// NewTfLinterWithDeps creates a RealTfLinter with all dependencies injected (for testing).
+func NewTfLinterWithDeps(
+	runner execpkg.CommandRunner,
+	toolChecker execpkg.ToolChecker,
+) *RealTfLinter {
+	return &RealTfLinter{
+		runner:      runner,
+		toolChecker: toolChecker,
+	}
+}
+
 // Lint validates Terraform file using tflint
 func (t *RealTfLinter) Lint(ctx context.Context, filePath string) *LintResult {
 	// Check if tflint is available

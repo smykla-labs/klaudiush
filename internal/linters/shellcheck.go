@@ -37,6 +37,13 @@ func NewShellChecker(runner execpkg.CommandRunner) *RealShellChecker {
 	}
 }
 
+// NewShellCheckerWithDeps creates a RealShellChecker with a custom ContentLinter (for testing).
+func NewShellCheckerWithDeps(linter *ContentLinter) *RealShellChecker {
+	return &RealShellChecker{
+		linter: linter,
+	}
+}
+
 // Check validates shell script content using shellcheck
 func (s *RealShellChecker) Check(ctx context.Context, content string) *LintResult {
 	return s.linter.LintContent(

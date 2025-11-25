@@ -6,62 +6,100 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 
 	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
 	"github.com/smykla-labs/klaudiush/internal/linters"
 )
 
-var errTerraformFailed = errors.New("terraform fmt failed")
+var (
+	errTerraformFailed  = errors.New("terraform fmt failed")
+	errTempFileCreation = errors.New("failed to create temp file")
+)
 
 var _ = Describe("TerraformFormatter", func() {
 	var (
-		formatter  linters.TerraformFormatter
-		mockRunner *mockCommandRunner
-		ctx        context.Context
+		ctrl            *gomock.Controller
+		mockRunner      *execpkg.MockCommandRunner
+		mockToolChecker *execpkg.MockToolChecker
+		mockTempManager *execpkg.MockTempFileManager
+		formatter       linters.TerraformFormatter
+		ctx             context.Context
 	)
 
 	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		mockRunner = execpkg.NewMockCommandRunner(ctrl)
+		mockToolChecker = execpkg.NewMockToolChecker(ctrl)
+		mockTempManager = execpkg.NewMockTempFileManager(ctrl)
 		ctx = context.Background()
-		mockRunner = &mockCommandRunner{}
-		formatter = linters.NewTerraformFormatter(mockRunner)
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
 	})
 
 	Describe("DetectTool", func() {
+		BeforeEach(func() {
+			formatter = linters.NewTerraformFormatterWithDeps(
+				mockRunner,
+				mockToolChecker,
+				mockTempManager,
+			)
+		})
+
 		Context("when tofu is available", func() {
 			It("should return tofu", func() {
-				// This test depends on the actual system PATH
-				// For now we'll test the behavior indirectly through CheckFormat
-				Skip("DetectTool depends on system PATH - tested indirectly")
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("tofu")
+
+				result := formatter.DetectTool()
+
+				Expect(result).To(Equal("tofu"))
 			})
 		})
 
 		Context("when only terraform is available", func() {
 			It("should return terraform", func() {
-				Skip("DetectTool depends on system PATH - tested indirectly")
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("terraform")
+
+				result := formatter.DetectTool()
+
+				Expect(result).To(Equal("terraform"))
 			})
 		})
 
 		Context("when neither tool is available", func() {
 			It("should return empty string", func() {
-				Skip("DetectTool depends on system PATH - tested indirectly")
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("")
+
+				result := formatter.DetectTool()
+
+				Expect(result).To(Equal(""))
 			})
 		})
 	})
 
 	Describe("CheckFormat", func() {
+		BeforeEach(func() {
+			formatter = linters.NewTerraformFormatterWithDeps(
+				mockRunner,
+				mockToolChecker,
+				mockTempManager,
+			)
+		})
+
 		Context("when terraform fmt succeeds", func() {
 			It("should return success", func() {
-				mockRunner.runFunc = func(_ context.Context, name string, args ...string) execpkg.CommandResult {
-					// Expect either tofu or terraform
-					Expect(name).To(Or(Equal("tofu"), Equal("terraform")))
-					Expect(args).To(ContainElements("fmt", "-check", "-diff"))
-
-					return execpkg.CommandResult{
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("terraform")
+				mockTempManager.EXPECT().Create("terraform-*.tf", gomock.Any()).
+					Return("/tmp/terraform-123.tf", func() {}, nil)
+				mockRunner.EXPECT().
+					Run(ctx, "terraform", "fmt", "-check", "-diff", "/tmp/terraform-123.tf").
+					Return(execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   "",
 						ExitCode: 0,
-					}
-				}
+					})
 
 				result := formatter.CheckFormat(ctx, `resource "aws_instance" "example" {
   ami           = "ami-12345"
@@ -84,14 +122,17 @@ var _ = Describe("TerraformFormatter", func() {
 +  ami = "ami-12345"
  }`
 
-				mockRunner.runFunc = func(_ context.Context, _ string, _ ...string) execpkg.CommandResult {
-					return execpkg.CommandResult{
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("terraform")
+				mockTempManager.EXPECT().Create("terraform-*.tf", gomock.Any()).
+					Return("/tmp/terraform-123.tf", func() {}, nil)
+				mockRunner.EXPECT().
+					Run(ctx, "terraform", "fmt", "-check", "-diff", "/tmp/terraform-123.tf").
+					Return(execpkg.CommandResult{
 						Stdout:   diffOutput,
 						Stderr:   "",
 						ExitCode: 3,
 						Err:      errTerraformFailed,
-					}
-				}
+					})
 
 				result := formatter.CheckFormat(ctx, `resource "aws_instance" "example" {
 ami = "ami-12345"
@@ -108,14 +149,17 @@ ami = "ami-12345"
 			It("should include stderr in output", func() {
 				stderrOutput := "Error: Invalid Terraform configuration"
 
-				mockRunner.runFunc = func(_ context.Context, _ string, _ ...string) execpkg.CommandResult {
-					return execpkg.CommandResult{
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("terraform")
+				mockTempManager.EXPECT().Create("terraform-*.tf", gomock.Any()).
+					Return("/tmp/terraform-123.tf", func() {}, nil)
+				mockRunner.EXPECT().
+					Run(ctx, "terraform", "fmt", "-check", "-diff", "/tmp/terraform-123.tf").
+					Return(execpkg.CommandResult{
 						Stdout:   "",
 						Stderr:   stderrOutput,
 						ExitCode: 1,
 						Err:      errTerraformFailed,
-					}
-				}
+					})
 
 				result := formatter.CheckFormat(ctx, "invalid terraform syntax")
 
@@ -127,22 +171,27 @@ ami = "ami-12345"
 
 		Context("when neither terraform nor tofu is available", func() {
 			It("should return success without validation", func() {
-				// If no tool is available, DetectTool returns ""
-				// and CheckFormat returns success
-				// This is tested by not setting up any mocks
-				// The real implementation will detect no tool available
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("")
 
-				// Create a new formatter that will detect no tool
-				// Since we can't easily mock ToolChecker, we rely on
-				// the system not having the tool or use integration tests
-				Skip("Requires ToolChecker injection - behavior verified in integration tests")
+				result := formatter.CheckFormat(ctx, `resource "aws_instance" "example" {}`)
+
+				Expect(result).NotTo(BeNil())
+				Expect(result.Success).To(BeTrue())
+				Expect(result.Err).To(BeNil())
 			})
 		})
 
 		Context("when temp file creation fails", func() {
 			It("should return failure", func() {
-				// This test requires injecting a mock TempFileManager
-				Skip("Requires TempFileManager injection support")
+				mockToolChecker.EXPECT().FindTool("tofu", "terraform").Return("terraform")
+				mockTempManager.EXPECT().Create("terraform-*.tf", gomock.Any()).
+					Return("", nil, errTempFileCreation)
+
+				result := formatter.CheckFormat(ctx, `resource "aws_instance" "example" {}`)
+
+				Expect(result).NotTo(BeNil())
+				Expect(result.Success).To(BeFalse())
+				Expect(result.Err).To(HaveOccurred())
 			})
 		})
 	})

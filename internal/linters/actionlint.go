@@ -31,6 +31,13 @@ func NewActionLinter(runner execpkg.CommandRunner) *RealActionLinter {
 	}
 }
 
+// NewActionLinterWithDeps creates a RealActionLinter with a custom ContentLinter (for testing).
+func NewActionLinterWithDeps(linter *ContentLinter) *RealActionLinter {
+	return &RealActionLinter{
+		linter: linter,
+	}
+}
+
 // Lint validates GitHub Actions workflow file content
 func (a *RealActionLinter) Lint(ctx context.Context, content string, _ string) *LintResult {
 	return a.linter.LintContent(
