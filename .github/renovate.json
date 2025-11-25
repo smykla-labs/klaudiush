@@ -6,41 +6,66 @@
     ":semanticCommits",
     ":dependencyDashboard"
   ],
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "automerge": false,
-  "schedule": ["before 4am on Monday"],
+  "schedule": [
+    "before 4am on Monday"
+  ],
   "packageRules": [
     {
       "description": "Automerge patch updates for GitHub Actions",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["patch"],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Automerge minor Go dependency updates",
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "matchDepTypes": ["indirect"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "matchDepTypes": [
+        "indirect"
+      ],
       "automerge": true,
       "automergeType": "pr"
     },
     {
       "description": "Group Go tool dependencies",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["require"],
-      "matchPackagePatterns": ["^golang.org/x/tools"],
-      "groupName": "Go tooling"
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "require"
+      ],
+      "groupName": "Go tooling",
+      "matchPackageNames": [
+        "/^golang.org/x/tools/"
+      ]
     },
     {
       "description": "Pin GitHub Action digests",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "pinDigests": true
     }
   ],
   "vulnerabilityAlerts": {
     "enabled": true,
-    "labels": ["security"],
+    "labels": [
+      "security"
+    ],
     "automerge": true
   }
 }
