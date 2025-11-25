@@ -381,26 +381,21 @@ From `CLAUDE.md`:
 - Prefer `switch` over `if` chains
 - Package-level consts/vars instead of hardcoded strings
 
-### Pre-commit Hooks
+### Git Hooks
 
-The project includes git hooks that run automatically:
+The project uses [Lefthook](https://github.com/evilmartians/lefthook) for fast, parallel git hook management.
 
-**Pre-commit**:
+**Pre-commit** (runs in parallel):
 
 - Lints staged files
 - Tests packages with changes
 
-**Pre-push**:
+**Pre-push** (runs in parallel):
 
 - Full linting
 - Full test suite
 
-To bypass hooks (not recommended):
-
-```bash
-git commit --no-verify
-git push --no-verify
-```
+Configuration is in `lefthook.yml`.
 
 ## Getting Help
 

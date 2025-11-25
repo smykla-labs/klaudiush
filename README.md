@@ -112,20 +112,22 @@ task verify       # Run fmt + lint + test
 task install:hooks  # Install pre-commit and pre-push hooks
 ```
 
-The project includes two git hooks for quality assurance:
+The project uses [Lefthook](https://github.com/evilmartians/lefthook) for git hook management.
 
-**Pre-commit hook** runs before each commit:
-- `task lint:staged` - Lints only modified and staged files
-- `task test:staged` - Tests only packages with changes
+**Pre-commit hook** runs before each commit (parallel):
 
-**Pre-push hook** runs before each push:
-- `task lint` - Full linting of entire codebase
-- `task test` - Full test suite
+- Lints only modified and staged files
+- Tests only packages with changes
 
-To bypass hooks (not recommended), use:
+**Pre-push hook** runs before each push (parallel):
+
+- Full linting of entire codebase
+- Full test suite
+
+Install hooks:
+
 ```bash
-git commit --no-verify    # Skip pre-commit hook
-git push --no-verify      # Skip pre-push hook
+task install:hooks
 ```
 
 ### Other
