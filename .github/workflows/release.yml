@@ -82,6 +82,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
+
       - name: Import GPG key
         id: import-gpg
         uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 # v6.1.0
