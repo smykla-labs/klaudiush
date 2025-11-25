@@ -252,34 +252,66 @@ func validateTable(table *ParsedTable) []TableIssue {
 
 // hasInconsistentSpacing checks if a table row has inconsistent padding.
 func hasInconsistentSpacing(line string) bool {
+	// Separator rows don't need space padding - skip them
+	if separatorRowRegex.MatchString(line) {
+		return false
+	}
+
 	// Simple check: are there cells without space padding?
 	// A well-formatted table should have "| cell |" not "|cell|"
-	cells := parseCells(line)
 
-	for _, cell := range cells {
-		// If cell is empty, that's fine
-		if cell == "" {
+	// Find pipe positions to determine cell boundaries
+	pipePositions := findPipePositions(line)
+	if len(pipePositions) < 2 {
+		return false
+	}
+
+	// Check each cell segment between pipes
+	for i := 0; i < len(pipePositions)-1; i++ {
+		start := pipePositions[i] + 1
+		end := pipePositions[i+1]
+
+		if start >= end {
 			continue
 		}
 
-		// Check original line for this cell's context
-		idx := strings.Index(line, cell)
-		if idx > 0 && idx+len(cell) < len(line) {
-			before := line[idx-1]
-			after := line[idx+len(cell)]
+		cellContent := line[start:end]
 
-			// Either should have space or be adjacent to pipe
-			if before != ' ' && before != '|' {
-				return true
-			}
+		// Skip empty cells or cells with only whitespace
+		if strings.TrimSpace(cellContent) == "" {
+			continue
+		}
 
-			if after != ' ' && after != '|' {
-				return true
-			}
+		// Check if cell has proper padding (space after opening pipe, space before closing pipe)
+		// A well-formatted cell looks like " content " not "content"
+		if len(cellContent) > 0 && cellContent[0] != ' ' {
+			return true
+		}
+
+		if len(cellContent) > 0 && cellContent[len(cellContent)-1] != ' ' {
+			return true
 		}
 	}
 
 	return false
+}
+
+// findPipePositions returns the positions of unescaped pipe characters in the line.
+func findPipePositions(line string) []int {
+	var positions []int
+
+	for i := 0; i < len(line); i++ {
+		if line[i] == '|' {
+			// Check if escaped
+			if i > 0 && line[i-1] == '\\' {
+				continue
+			}
+
+			positions = append(positions, i)
+		}
+	}
+
+	return positions
 }
 
 // FormatTable formats a parsed table into proper markdown.

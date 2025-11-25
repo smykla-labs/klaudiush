@@ -232,3 +232,135 @@ var _ = Describe("Complex table parsing", func() {
 		Expect(result.Tables[0].Rows).To(HaveLen(2))
 	})
 })
+
+var _ = Describe("hasInconsistentSpacing", func() {
+	Describe("separator rows", func() {
+		It("does not flag separator rows as having inconsistent spacing", func() {
+			content := `| Phase | Item                      | Status         |
+|:------|:--------------------------|:---------------|
+| 1.1   | enumer                    | ✅ Complete    |`
+
+			result := mdtable.Parse(content)
+
+			Expect(result.Tables).To(HaveLen(1))
+			Expect(result.Issues).To(BeEmpty(), "separator row should not trigger spacing warning")
+		})
+
+		It("does not flag separator with varying dash lengths", func() {
+			content := `| A | B |
+|:--|:---------------------------|
+| x | y |`
+
+			result := mdtable.Parse(content)
+
+			Expect(result.Tables).To(HaveLen(1))
+			Expect(result.Issues).To(BeEmpty())
+		})
+
+		It("does not flag right-aligned separator", func() {
+			content := `| Num | Name |
+|----:|:-----|
+| 1   | test |`
+
+			result := mdtable.Parse(content)
+
+			Expect(result.Tables).To(HaveLen(1))
+			Expect(result.Issues).To(BeEmpty())
+		})
+
+		It("does not flag center-aligned separator", func() {
+			content := `| Col |
+|:---:|
+| val |`
+
+			result := mdtable.Parse(content)
+
+			Expect(result.Tables).To(HaveLen(1))
+			Expect(result.Issues).To(BeEmpty())
+		})
+	})
+
+	Describe("data rows", func() {
+		It("flags data rows without leading space", func() {
+			content := `| A | B |
+|---|---|
+|x  | y |`
+
+			result := mdtable.Parse(content)
+
+			var found bool
+
+			for _, issue := range result.Issues {
+				if issue.Message == "Inconsistent spacing in table row" {
+					found = true
+
+					break
+				}
+			}
+
+			Expect(found).To(BeTrue(), "should detect missing leading space")
+		})
+
+		It("flags data rows without trailing space", func() {
+			content := `| A | B |
+|---|---|
+| x| y |`
+
+			result := mdtable.Parse(content)
+
+			var found bool
+
+			for _, issue := range result.Issues {
+				if issue.Message == "Inconsistent spacing in table row" {
+					found = true
+
+					break
+				}
+			}
+
+			Expect(found).To(BeTrue(), "should detect missing trailing space")
+		})
+
+		It("accepts properly spaced data rows", func() {
+			content := `| A | B |
+|---|---|
+| x | y |`
+
+			result := mdtable.Parse(content)
+
+			for _, issue := range result.Issues {
+				Expect(issue.Message).NotTo(Equal("Inconsistent spacing in table row"))
+			}
+		})
+	})
+
+	Describe("substring cell content edge cases", func() {
+		It("handles cells that are substrings of other cells", func() {
+			// This was the original bug: ":---------------" is substring of ":--------------------------"
+			content := `| Phase | Item                      | Status         |
+|:------|:--------------------------|:---------------|
+| 1.1   | enumer                    | ✅ Complete    |
+| 1.2   | slog                      | ⏳ Pending     |`
+
+			result := mdtable.Parse(content)
+
+			Expect(result.Tables).To(HaveLen(1))
+			Expect(result.Issues).To(BeEmpty(), "should not flag false positives from substring matching")
+		})
+
+		It("handles data cells that are substrings of other cells", func() {
+			content := `| Name | Description |
+|------|-------------|
+| foo  | foo bar baz |
+| bar  | bar         |`
+
+			result := mdtable.Parse(content)
+
+			Expect(result.Tables).To(HaveLen(1))
+			// Should not have spacing issues for properly formatted table
+			for _, issue := range result.Issues {
+				Expect(issue.Message).NotTo(Equal("Inconsistent spacing in table row"))
+			}
+		})
+	})
+})
