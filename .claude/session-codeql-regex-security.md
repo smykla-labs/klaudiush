@@ -63,6 +63,42 @@ For `#123` style references, only trailing boundary works:
 `#[0-9]{1,10}\b`
 ```
 
+### Prefix Consumption in Matches
+
+When using prefix anchors, the prefix becomes part of the match. This can break error message formatting:
+
+```go
+// Pattern captures the prefix (e.g., "://" or space)
+pattern := `(?:^|://|[^/a-zA-Z0-9])github\.com/...`
+
+// BAD - Will produce "https://://github.com/..." or "https:// github.com/..."
+fmt.Sprintf("Found: 'https://%s'", urlMatch)
+
+// GOOD - Strip prefix before display
+cleanURL := urlMatch
+if idx := strings.Index(urlMatch, "github.com"); idx > 0 {
+    cleanURL = urlMatch[idx:]
+}
+fmt.Sprintf("Found: 'https://%s'", cleanURL)
+```
+
+## GitHub Push Protection Bypass
+
+When pushing test files containing intentional secrets (e.g., test patterns for secret detection), GitHub may block the push. Bypass with:
+
+```bash
+# Extract placeholder_id from error URL (last path segment)
+# e.g., .../unblock-secret/PLACEHOLDER_ID
+
+gh api repos/OWNER/REPO/secret-scanning/push-protection-bypasses \
+  -X POST \
+  -f secret_type="slack_incoming_webhook_url" \
+  -f reason="used_in_tests" \
+  -f placeholder_id="PLACEHOLDER_ID"
+```
+
+Valid reasons: `used_in_tests`, `false_positive`, `will_fix_later`
+
 ## GitHub PR Review Workflow
 
 ### Reply to Review Comments
@@ -100,3 +136,5 @@ mutation {
 
 - `internal/validators/secrets/patterns.go` - Slack webhook URL pattern
 - `internal/validators/git/commit_rules.go` - GitHub PR URL and hash reference patterns
+- `internal/validators/git/commit_rules_test.go` - PR reference rule tests
+- `internal/validators/secrets/detector_test.go` - Slack webhook URL tests
