@@ -88,6 +88,8 @@ Represents tool invocations: `EventType` (PreToolUse/PostToolUse/Notification), 
 
 **Notification** (`internal/validators/notification/`): BellValidator (ASCII 7 to `/dev/tty` for dock bounce)
 
+**Plugins** (`internal/plugin/`): External validators via Go plugins (.so), exec plugins (JSON over stdin/stdout), or gRPC (future). Predicate-based matching (event/tool/file/command filters), per-plugin config, enable/disable flags. See `session-plugin-system.md`.
+
 ### Linter Abstractions (`internal/linters/`)
 
 Type-safe interfaces for external tools: **ShellChecker** (shellcheck), **TerraformFormatter** (tofu/terraform fmt), **TfLinter** (tflint), **ActionLinter** (actionlint), **MarkdownLinter** (custom rules), **GitleaksChecker** (gitleaks)
@@ -186,6 +188,7 @@ Additional implementation details from specific sessions are in `.claude/session
 - `session-parallel-execution.md` - Parallel validator execution, category-specific worker pools, race detection testing
 - `session-error-reporting.md` - Error codes, suggestions/doc links registries, FailWithCode pattern, cognitive complexity refactoring
 - `session-secrets-detection.md` - Secrets validator with 25+ regex patterns, two-tier detection (patterns + gitleaks), configuration schema for allow lists/custom patterns
+- `session-plugin-system.md` - Plugin system with Go/exec loaders, predicate-based matching, flexible configuration, validator adapter integration
 - `session-fuzzing.md` - Go native fuzzing for parsers, fuzz targets by risk, type limitations, progress tracking in `tmp/fuzzing/`
 - `session-github-quality.md` - OSSF Scorecard, branch rulesets API, Renovate version sync (customManagers:githubActionsVersions), smyklot bot workflows
 - `session-codeql-regex-security.md` - CodeQL regex anchor fixes (CWE-020), URL pattern anchoring with `(?:^|://|[^/a-zA-Z0-9])`, bounded quantifiers for ReDoS, prefix consumption in matches, GitHub push protection bypass for test secrets, PR review thread resolution

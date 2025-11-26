@@ -8,6 +8,9 @@ type Config struct {
 
 	// Global settings that apply across all validators.
 	Global *GlobalConfig `json:"global,omitempty" koanf:"global" toml:"global"`
+
+	// Plugins contains configuration for external plugins.
+	Plugins *PluginConfig `json:"plugins,omitempty" koanf:"plugins" toml:"plugins"`
 }
 
 // ValidatorsConfig groups all validator configurations by category.
@@ -114,4 +117,13 @@ func (v *ValidatorsConfig) GetSecrets() *SecretsConfig {
 	}
 
 	return v.Secrets
+}
+
+// GetPlugins returns the plugins config, creating it if it doesn't exist.
+func (c *Config) GetPlugins() *PluginConfig {
+	if c.Plugins == nil {
+		c.Plugins = &PluginConfig{}
+	}
+
+	return c.Plugins
 }
