@@ -14,15 +14,15 @@ Go native fuzzing (Go 1.18+) for parser components to discover edge cases, crash
 
 ## Fuzz Targets (by risk)
 
-| Priority | Target                     | Risk                                               |
-|:---------|:---------------------------|:---------------------------------------------------|
-| 1        | `ParseGitCommand()`        | Hand-written string manipulation, index arithmetic |
-| 2        | `BashParser.Parse()`       | Wraps mvdan.cc/sh, custom heredoc extraction       |
-| 3        | `mdtable.Parse()`          | Regex-based, ReDoS risk, manual `splitByPipe()`    |
-| 4        | `JSONParser.Parse()`       | Standard library, low risk                         |
-| 5        | `PatternDetector.Detect()` | 25+ regex patterns, `getPosition()` offset calc    |
+| Priority | Target                     | File                                                | Risk                                               |
+|:---------|:---------------------------|:----------------------------------------------------|:---------------------------------------------------|
+| 1        | `ParseGitCommand()`        | `pkg/parser/git_fuzz_test.go`                       | Hand-written string manipulation, index arithmetic |
+| 2        | `BashParser.Parse()`       | `pkg/parser/bash_fuzz_test.go`                      | Wraps mvdan.cc/sh, custom heredoc extraction       |
+| 3        | `mdtable.Parse()`          | `pkg/mdtable/parser_fuzz_test.go`                   | Regex-based, ReDoS risk, manual `splitByPipe()`    |
+| 4        | `JSONParser.Parse()`       | `internal/parser/json_fuzz_test.go`                 | Standard library, low risk                         |
+| 5        | `PatternDetector.Detect()` | `internal/validators/secrets/detector_fuzz_test.go` | 25+ regex patterns, `getPosition()` offset calc    |
 
-## Key Implementation Details
+## Implementation Details
 
 ### Git Parser Fuzz Encoding
 
@@ -33,49 +33,106 @@ f.Add("git\tcommit\t-sS\t-m\tmessage")  // name\targ1\targ2...
 
 f.Fuzz(func(t *testing.T, input string) {
     parts := strings.Split(input, "\t")
+    if len(parts) == 0 {
+        return
+    }
     cmd := Command{Name: parts[0], Args: parts[1:]}
-    // ...
+    result, err := ParseGitCommand(cmd)
+    if err == nil {
+        // Exercise all methods - should not panic
+        _ = result.HasFlag("-s")
+        _ = result.ExtractCommitMessage()
+        // ...
+    }
 })
 ```
 
 ### Package Placement
 
-- `pkg/` packages: Use same package (no `_test` suffix) to access internal types
-- `internal/` packages: Same - need access to unexported constructors
+Follow existing test patterns in the codebase:
+
+- `pkg/` packages: Use `package xxx_test` suffix (external test package)
+- `internal/` packages: Use `package xxx` (same package) for access to unexported constructors
+
+### Fuzz Function Parameter Naming
+
+When fuzz callback doesn't use `t *testing.T`, rename to `_` to satisfy linters:
+
+```go
+// Wrong - triggers revive unused-parameter lint
+f.Fuzz(func(t *testing.T, input string) { ... })
+
+// Correct - when t is unused
+f.Fuzz(func(_ *testing.T, input string) { ... })
+```
+
+### Nil Check Pattern
+
+When checking for nil and accessing fields, must return after the nil check:
+
+```go
+// Wrong - staticcheck SA5011 possible nil pointer dereference
+if result == nil {
+    t.Error("nil result")
+}
+_ = result.Tables  // SA5011: possible nil pointer dereference
+
+// Correct
+if result == nil {
+    t.Error("nil result")
+    return
+}
+_ = result.Tables
+```
 
 ### Corpus Storage
 
 Go fuzzer stores interesting inputs in `testdata/fuzz/<FuzzFunctionName>/`. Commit these for reproducibility.
 
+## Taskfile Tasks
+
+```bash
+# Run all fuzz tests (10s each, suitable for CI)
+task test:fuzz
+
+# Run specific fuzz test with default 60s duration
+task test:fuzz:git
+task test:fuzz:bash
+task test:fuzz:mdtable
+task test:fuzz:json
+task test:fuzz:secrets
+
+# Run with custom duration
+FUZZ_TIME=5m task test:fuzz:git
+FUZZ_TIME=1m task test:fuzz
+```
+
+## Lint Issues Encountered
+
+| Issue                   | File                  | Fix                                                 |
+|:------------------------|:----------------------|:----------------------------------------------------|
+| golines (line too long) | `json_fuzz_test.go`   | Split long `f.Add()` into multiple calls            |
+| revive unused-parameter | All fuzz tests        | Rename `t *testing.T` to `_ *testing.T` when unused |
+| staticcheck SA5011      | `parser_fuzz_test.go` | Add `return` after nil check                        |
+
 ## Testing Infrastructure Stats
 
-- 50 test files, ~13,285 lines of test code
+- 55 test files total (50 unit + 5 fuzz)
 - 17 generated mock files via `mockgen`
 - 19 testscript `.txtar` integration tests
 - Benchmark tests in `internal/validators/git/runner_benchmark_test.go`
 
-## Progress Tracking
+## Best Practices
 
-Implementation tracked in `tmp/fuzzing/`:
+1. **Seed with real inputs**: Add corpus entries from existing unit tests
+2. **Exercise all methods**: Call all public methods on parsed result to catch panics
+3. **Check invariants**: Verify line/column numbers are ≥1, required fields are non-empty
+4. **Handle parse errors gracefully**: Only validate results when `err == nil`
+5. **Multiple event types**: For parsers with modes, test all (e.g., `JSONParser` with different `EventType`s)
 
-- `PLAN.md` - Full implementation plan with code examples
-- `PROGRESS.md` - Checklist and session log
+## Future Improvements
 
-## Taskfile Tasks (to add)
-
-```yaml
-test:fuzz:       # All fuzz tests, 10s each (CI)
-test:fuzz:git:   # Git parser, 60s
-test:fuzz:bash:  # Bash parser, 60s
-test:fuzz:mdtable:  # Markdown table, 60s
-test:fuzz:json:  # JSON parser, 60s
-test:fuzz:secrets:  # Secrets detector, 60s
-```
-
-## Files to Create
-
-- `pkg/parser/git_fuzz_test.go`
-- `pkg/parser/bash_fuzz_test.go`
-- `pkg/mdtable/parser_fuzz_test.go`
-- `internal/parser/json_fuzz_test.go`
-- `internal/validators/secrets/detector_fuzz_test.go`
+- Add corpus files to git for regression testing
+- Run extended fuzzing in CI nightly job
+- Add coverage-guided fuzzing metrics
+- Consider property-based testing with `rapid` for more complex invariants
