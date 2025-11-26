@@ -262,10 +262,10 @@ type PRReferenceRule struct {
 func NewPRReferenceRule() *PRReferenceRule {
 	return &PRReferenceRule{
 		prReferenceRegex: regexp.MustCompile(
-			`#[0-9]{1,10}|github\.com/[^/]+/[^/]+/pull/[0-9]{1,10}`,
+			`#[0-9]{1,10}|\bgithub\.com/[^/]+/[^/]+/pull/[0-9]{1,10}\b`,
 		),
 		hashRefRegex: regexp.MustCompile(`#[0-9]{1,10}`),
-		urlRefRegex:  regexp.MustCompile(`github\.com/[^/]+/[^/]+/pull/[0-9]{1,10}`),
+		urlRefRegex:  regexp.MustCompile(`\bgithub\.com/[^/]+/[^/]+/pull/[0-9]{1,10}\b`),
 	}
 }
 
