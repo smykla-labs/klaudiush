@@ -128,7 +128,10 @@ func (*goPluginAdapter) Close() error {
 // This allows tests to inject mock plugin implementations without needing .so files.
 //
 //nolint:ireturn // interface return is required for testing
-func NewGoPluginAdapterForTesting(impl plugin.Plugin, config map[string]any) Plugin {
+func NewGoPluginAdapterForTesting(
+	impl plugin.Plugin,
+	config map[string]any,
+) Plugin {
 	return &goPluginAdapter{
 		impl:   impl,
 		config: config,

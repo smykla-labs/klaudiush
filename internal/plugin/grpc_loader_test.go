@@ -214,7 +214,10 @@ var _ = Describe("GRPCLoader", func() {
 			})
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
+			Expect(err.Error()).To(Or(
+				ContainSubstring("context deadline exceeded"),
+				ContainSubstring("DeadlineExceeded"),
+			))
 		})
 
 		It("should respect context cancellation", func() {
