@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"time"
 
@@ -119,12 +121,33 @@ func (p *PluginConfig) GetDefaultTimeout() time.Duration {
 }
 
 // GetDirectory returns the plugin directory, with default fallback.
+// Expands ~ to user home directory if present at the start of the path.
 func (p *PluginConfig) GetDirectory() string {
+	var dir string
 	if p == nil || p.Directory == "" {
-		return "~/.klaudiush/plugins"
+		dir = "~/.klaudiush/plugins"
+	} else {
+		dir = p.Directory
 	}
 
-	return p.Directory
+	// Expand ~ to home directory
+	if len(dir) > 0 && dir[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			// Fallback to unexpanded path if home dir cannot be determined
+			return dir
+		}
+
+		if len(dir) == 1 {
+			return homeDir
+		}
+
+		if dir[1] == '/' || dir[1] == filepath.Separator {
+			return filepath.Join(homeDir, dir[2:])
+		}
+	}
+
+	return dir
 }
 
 // IsInstanceEnabled returns whether this plugin instance is enabled.

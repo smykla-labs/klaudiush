@@ -84,9 +84,21 @@ func (l *ExecLoader) verifyExecutable(path string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultExecPluginTimeout)
 	defer cancel()
 
-	_ = l.runner.Run(ctx, path, "--version")
+	result := l.runner.Run(ctx, path, "--version")
+	if result.Err != nil {
+		return errors.Wrapf(result.Err, "failed to execute plugin at path %q with --version", path)
+	}
 
-	return nil // If we got here, the executable exists
+	if result.ExitCode != 0 {
+		return errors.Errorf(
+			"plugin at path %q --version exited with code %d: %s",
+			path,
+			result.ExitCode,
+			result.Stderr,
+		)
+	}
+
+	return nil
 }
 
 // fetchInfo fetches plugin metadata by executing with --info flag.

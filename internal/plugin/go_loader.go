@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 	goplugin "plugin"
 
 	"github.com/pkg/errors"
@@ -88,9 +89,28 @@ func (a *goPluginAdapter) Validate(
 	default:
 	}
 
-	// Call the plugin's Validate method
+	// Call the plugin's Validate method with panic recovery
 	// Note: Go plugins run synchronously in the same process
-	resp := a.impl.Validate(req)
+	var resp *plugin.ValidateResponse
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				resp = &plugin.ValidateResponse{
+					Passed:      false,
+					ShouldBlock: true,
+					Message:     "Plugin panicked during validation",
+					Details: map[string]string{
+						"panic":  fmt.Sprintf("%v", r),
+						"plugin": a.impl.Info().Name,
+					},
+				}
+			}
+		}()
+
+		resp = a.impl.Validate(req)
+	}()
+
 	if resp == nil {
 		return nil, errors.Wrapf(ErrPluginNilResponse, "plugin %s", a.impl.Info().Name)
 	}

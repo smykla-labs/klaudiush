@@ -63,6 +63,8 @@ func (r *Registry) LoadPlugins(cfg *config.PluginConfig) error {
 		return nil
 	}
 
+	var loadErrors []error
+
 	for _, pluginCfg := range cfg.Plugins {
 		if !pluginCfg.IsInstanceEnabled() {
 			r.logger.Debug("skipping disabled plugin", "name", pluginCfg.Name)
@@ -77,13 +79,25 @@ func (r *Registry) LoadPlugins(cfg *config.PluginConfig) error {
 				"error", err,
 			)
 
-			return errors.Wrapf(err, "failed to load plugin %s", pluginCfg.Name)
+			// Collect error but continue loading other plugins
+			if loadErrors == nil {
+				loadErrors = []error{}
+			}
+
+			loadErrors = append(loadErrors, errors.Wrapf(err, "plugin %s", pluginCfg.Name))
+
+			continue
 		}
 
 		r.logger.Info("loaded plugin",
 			"name", pluginCfg.Name,
 			"type", pluginCfg.Type,
 		)
+	}
+
+	// Return aggregated errors if any plugins failed to load
+	if len(loadErrors) > 0 {
+		return errors.Errorf("failed to load %d plugin(s): %v", len(loadErrors), loadErrors)
 	}
 
 	return nil
@@ -253,8 +267,9 @@ func (p *PredicateMatcher) matchesFilePatterns(hookCtx *hook.Context) bool {
 		return true
 	}
 
+	// If patterns are specified, only match file tools
 	if !hookCtx.IsFileTool() {
-		return true
+		return false
 	}
 
 	filePath := hookCtx.GetFilePath()
@@ -277,8 +292,9 @@ func (p *PredicateMatcher) matchesCommandPatterns(hookCtx *hook.Context) bool {
 		return true
 	}
 
+	// If patterns are specified, only match Bash tools
 	if !hookCtx.IsBashTool() {
-		return true
+		return false
 	}
 
 	command := hookCtx.GetCommand()

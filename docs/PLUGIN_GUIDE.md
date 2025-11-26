@@ -1104,8 +1104,7 @@ examples/plugins/
 ├── go-plugin/          # Go plugin with build script
 ├── exec-shell/         # Shell script exec plugin
 ├── exec-python/        # Python exec plugin
-├── grpc-go/            # Go gRPC server
-└── grpc-python/        # Python gRPC server
+└── grpc-go/            # Go gRPC server
 ```
 
 Each example includes:

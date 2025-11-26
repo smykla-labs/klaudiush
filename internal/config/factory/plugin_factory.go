@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"strings"
 
 	"github.com/smykla-labs/klaudiush/internal/plugin"
 	"github.com/smykla-labs/klaudiush/internal/validator"
@@ -76,13 +77,42 @@ func (v *PluginRegistryValidator) Validate(
 		return validator.Pass()
 	}
 
-	// Run all matching plugins and collect failures
+	// Run all matching plugins and aggregate results
+	var warnings []string
+
+	var blockingResult validator.Result
+
+	var hasBlockingResult bool
+
 	for _, p := range plugins {
 		result := p.Validate(ctx, hookCtx)
-		if !result.Passed {
-			// Return first failure
-			return result
+
+		// Collect warnings
+		if !result.Passed && !result.ShouldBlock {
+			warnings = append(warnings, result.Message)
 		}
+
+		// Keep first blocking result
+		if result.ShouldBlock && !hasBlockingResult {
+			blockingResult = *result
+			hasBlockingResult = true
+		}
+	}
+
+	// If any plugin blocked, return aggregated blocking result
+	if hasBlockingResult {
+		// Append any warnings to the blocking message
+		if len(warnings) > 0 {
+			blockingResult.Message += "\n\nWarnings from other plugins:\n- " +
+				strings.Join(warnings, "\n- ")
+		}
+
+		return &blockingResult
+	}
+
+	// If only warnings, return warning result with all warnings
+	if len(warnings) > 0 {
+		return validator.Warn(strings.Join(warnings, "\n"))
 	}
 
 	return validator.Pass()

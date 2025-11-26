@@ -65,8 +65,12 @@ func (l *GRPCLoader) Load(cfg *config.PluginInstanceConfig) (Plugin, error) {
 		return nil, ErrGRPCAddressRequired
 	}
 
+	// Create context with dial timeout for connection establishment
+	ctx, cancel := context.WithTimeout(context.Background(), l.dialTimeout)
+	defer cancel()
+
 	// Get or create connection
-	conn, err := l.getOrCreateConnection(cfg.Address)
+	conn, err := l.getOrCreateConnection(ctx, cfg.Address)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to establish gRPC connection")
 	}
@@ -74,8 +78,8 @@ func (l *GRPCLoader) Load(cfg *config.PluginInstanceConfig) (Plugin, error) {
 	// Create client
 	client := pluginv1.NewValidatorPluginClient(conn)
 
-	// Fetch plugin info
-	info, err := l.fetchInfo(client, cfg.GetTimeout(defaultGRPCTimeout))
+	// Fetch plugin info (reuses ctx if not expired, otherwise creates new)
+	info, err := l.fetchInfo(ctx, client, cfg.GetTimeout(defaultGRPCTimeout))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch plugin info")
 	}
@@ -111,7 +115,13 @@ func (l *GRPCLoader) Close() error {
 }
 
 // getOrCreateConnection gets an existing connection or creates a new one.
-func (l *GRPCLoader) getOrCreateConnection(address string) (*grpc.ClientConn, error) {
+//
+// Note: grpc.NewClient is lazy and doesn't establish connection immediately.
+// The dialTimeout will be enforced when the first RPC is made (e.g., Info call).
+func (l *GRPCLoader) getOrCreateConnection(
+	_ context.Context,
+	address string,
+) (*grpc.ClientConn, error) {
 	// Fast path: check if connection exists
 	l.mu.RLock()
 	existingConn, exists := l.connections[address]
@@ -130,7 +140,8 @@ func (l *GRPCLoader) getOrCreateConnection(address string) (*grpc.ClientConn, er
 		return existingConn, nil
 	}
 
-	// Create new connection (lazy, non-blocking)
+	// Create new connection (lazy, won't dial until first RPC)
+	// The parent context with dialTimeout will be used for the first RPC
 	conn, err := grpc.NewClient(
 		address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -146,10 +157,11 @@ func (l *GRPCLoader) getOrCreateConnection(address string) (*grpc.ClientConn, er
 
 // fetchInfo fetches plugin metadata via gRPC.
 func (*GRPCLoader) fetchInfo(
+	parentCtx context.Context,
 	client pluginv1.ValidatorPluginClient,
 	timeout time.Duration,
 ) (plugin.Info, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(parentCtx, timeout)
 	defer cancel()
 
 	resp, err := client.Info(ctx, &pluginv1.InfoRequest{})

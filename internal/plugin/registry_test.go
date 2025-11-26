@@ -434,13 +434,13 @@ var _ = Describe("PredicateMatcher", func() {
 				Expect(matcher.Matches(hookCtx)).To(BeFalse())
 			})
 
-			It("should match when tool is not a file tool", func() {
+			It("should not match when tool is not a file tool", func() {
 				hookCtx := &hook.Context{
 					EventType: hook.EventTypePreToolUse,
 					ToolName:  hook.ToolTypeBash,
 				}
 
-				Expect(matcher.Matches(hookCtx)).To(BeTrue())
+				Expect(matcher.Matches(hookCtx)).To(BeFalse())
 			})
 
 			It("should not match when file path is empty", func() {
@@ -495,13 +495,13 @@ var _ = Describe("PredicateMatcher", func() {
 				Expect(matcher.Matches(hookCtx)).To(BeFalse())
 			})
 
-			It("should match when tool is not Bash", func() {
+			It("should not match when tool is not Bash", func() {
 				hookCtx := &hook.Context{
 					EventType: hook.EventTypePreToolUse,
 					ToolName:  hook.ToolTypeWrite,
 				}
 
-				Expect(matcher.Matches(hookCtx)).To(BeTrue())
+				Expect(matcher.Matches(hookCtx)).To(BeFalse())
 			})
 
 			It("should not match when command is empty", func() {
