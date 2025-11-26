@@ -103,3 +103,14 @@ func (*goPluginAdapter) Close() error {
 	// Go plugins cannot be unloaded, so this is a no-op
 	return nil
 }
+
+// NewGoPluginAdapterForTesting creates a goPluginAdapter for testing purposes.
+// This allows tests to inject mock plugin implementations without needing .so files.
+//
+//nolint:ireturn // interface return is required for testing
+func NewGoPluginAdapterForTesting(impl plugin.Plugin, config map[string]any) Plugin {
+	return &goPluginAdapter{
+		impl:   impl,
+		config: config,
+	}
+}

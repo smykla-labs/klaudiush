@@ -294,3 +294,36 @@ func (p *PredicateMatcher) matchesCommandPatterns(hookCtx *hook.Context) bool {
 
 	return false
 }
+
+// LoadPluginForTesting loads a plugin directly for testing purposes.
+// This bypasses the loader system and allows injection of mock plugins.
+func (r *Registry) LoadPluginForTesting(
+	p Plugin,
+	cfg *config.PluginInstanceConfig,
+) error {
+	// Build predicate matcher
+	predicate, err := NewPredicateMatcher(cfg.Predicate)
+	if err != nil {
+		return errors.Wrap(err, "failed to build predicate matcher")
+	}
+
+	// Determine plugin category
+	category := validator.CategoryCPU
+	if cfg.Type == config.PluginTypeExec {
+		category = validator.CategoryIO
+	}
+
+	// Create validator adapter
+	validatorAdapter := NewValidatorAdapter(p, category, r.logger)
+
+	entry := &PluginEntry{
+		Plugin:    p,
+		Config:    cfg,
+		Predicate: predicate,
+		Validator: validatorAdapter,
+	}
+
+	r.plugins = append(r.plugins, entry)
+
+	return nil
+}
