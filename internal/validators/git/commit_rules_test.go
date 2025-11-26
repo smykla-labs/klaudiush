@@ -22,11 +22,12 @@ var _ = Describe("PRReferenceRule", func() {
 				"detects hash references",
 				func(message string) {
 					commit := &git.ParsedCommit{Title: "test", Valid: true}
-					errors := rule.Validate(commit, message)
+					result := rule.Validate(commit, message)
 					Expect(
-						errors,
-					).NotTo(BeEmpty(), "Expected PR reference to be detected in: %s", message)
-					Expect(errors[0]).To(ContainSubstring("PR references found"))
+						result,
+					).NotTo(BeNil(), "Expected PR reference to be detected in: %s", message)
+					Expect(result.Errors).NotTo(BeEmpty())
+					Expect(result.Errors[0]).To(ContainSubstring("PR references found"))
 				},
 				Entry("simple hash reference", "fixes #123"),
 				Entry("hash at start", "#123 is the issue"),
@@ -42,8 +43,8 @@ var _ = Describe("PRReferenceRule", func() {
 				"ignores non-PR hash patterns",
 				func(message string) {
 					commit := &git.ParsedCommit{Title: "test", Valid: true}
-					errors := rule.Validate(commit, message)
-					Expect(errors).To(BeEmpty(), "Should not detect PR reference in: %s", message)
+					result := rule.Validate(commit, message)
+					Expect(result).To(BeNil(), "Should not detect PR reference in: %s", message)
 				},
 				Entry("hash followed by letters", "version#123abc"),
 				Entry("color hex code", "color: #ff0000"),
@@ -58,8 +59,8 @@ var _ = Describe("PRReferenceRule", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
 
 				// 20 digits exceeds the 10-digit limit
-				errors := rule.Validate(commit, "test #12345678901234567890 test")
-				Expect(errors).To(BeEmpty())
+				result := rule.Validate(commit, "test #12345678901234567890 test")
+				Expect(result).To(BeNil())
 			})
 
 			It("should handle extremely long digit sequences efficiently", func() {
@@ -67,28 +68,28 @@ var _ = Describe("PRReferenceRule", func() {
 
 				// 1000 digits - would cause ReDoS without bounded quantifier
 				longNumber := "#" + strings.Repeat("1", 1000)
-				errors := rule.Validate(commit, "test "+longNumber+" test")
+				result := rule.Validate(commit, "test "+longNumber+" test")
 
 				// Should not match (exceeds 10 digits) and should complete quickly
-				Expect(errors).To(BeEmpty())
+				Expect(result).To(BeNil())
 			})
 
 			It("should match numbers up to 10 digits", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
-				errors := rule.Validate(commit, "issue #1234567890 fixed")
-				Expect(errors).NotTo(BeEmpty())
+				result := rule.Validate(commit, "issue #1234567890 fixed")
+				Expect(result).NotTo(BeNil())
 			})
 
 			It("should match exactly at the boundary (10 digits)", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
 
 				// 10 digits - exactly at the limit
-				errors := rule.Validate(commit, "issue #1234567890 fixed")
-				Expect(errors).NotTo(BeEmpty())
+				result := rule.Validate(commit, "issue #1234567890 fixed")
+				Expect(result).NotTo(BeNil())
 
 				// 11 digits - one over the limit
-				errors = rule.Validate(commit, "issue #12345678901 fixed")
-				Expect(errors).To(BeEmpty())
+				result = rule.Validate(commit, "issue #12345678901 fixed")
+				Expect(result).To(BeNil())
 			})
 		})
 	})
@@ -99,11 +100,12 @@ var _ = Describe("PRReferenceRule", func() {
 				"detects GitHub PR URLs",
 				func(message string) {
 					commit := &git.ParsedCommit{Title: "test", Valid: true}
-					errors := rule.Validate(commit, message)
+					result := rule.Validate(commit, message)
 					Expect(
-						errors,
-					).NotTo(BeEmpty(), "Expected PR URL to be detected in: %s", message)
-					Expect(errors[0]).To(ContainSubstring("PR references found"))
+						result,
+					).NotTo(BeNil(), "Expected PR URL to be detected in: %s", message)
+					Expect(result.Errors).NotTo(BeEmpty())
+					Expect(result.Errors[0]).To(ContainSubstring("PR references found"))
 				},
 				Entry("full URL", "see https://github.com/owner/repo/pull/123"),
 				Entry("URL without https", "see github.com/owner/repo/pull/456"),
@@ -117,8 +119,8 @@ var _ = Describe("PRReferenceRule", func() {
 				"rejects embedded URLs (prevents URL injection attacks)",
 				func(message string) {
 					commit := &git.ParsedCommit{Title: "test", Valid: true}
-					errors := rule.Validate(commit, message)
-					Expect(errors).To(BeEmpty(), "Should not detect PR reference in: %s", message)
+					result := rule.Validate(commit, message)
+					Expect(result).To(BeNil(), "Should not detect PR reference in: %s", message)
 				},
 				Entry(
 					"URL in path",
@@ -136,10 +138,10 @@ var _ = Describe("PRReferenceRule", func() {
 				"detects URLs with valid prefixes",
 				func(message string) {
 					commit := &git.ParsedCommit{Title: "test", Valid: true}
-					errors := rule.Validate(commit, message)
+					result := rule.Validate(commit, message)
 					Expect(
-						errors,
-					).NotTo(BeEmpty(), "Expected PR URL to be detected in: %s", message)
+						result,
+					).NotTo(BeNil(), "Expected PR URL to be detected in: %s", message)
 				},
 				Entry("after space", "See github.com/owner/repo/pull/123"),
 				Entry("after newline", "Related:\ngithub.com/owner/repo/pull/123"),
@@ -151,18 +153,19 @@ var _ = Describe("PRReferenceRule", func() {
 		Context("error message formatting", func() {
 			It("should not produce malformed URLs in error messages", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
-				errors := rule.Validate(commit, "See https://github.com/owner/repo/pull/123")
-				Expect(errors).NotTo(BeEmpty())
+				result := rule.Validate(commit, "See https://github.com/owner/repo/pull/123")
+				Expect(result).NotTo(BeNil())
+				Expect(result.Errors).NotTo(BeEmpty())
 
 				// Check error messages don't contain malformed URLs
-				for _, err := range errors {
+				for _, err := range result.Errors {
 					Expect(err).NotTo(ContainSubstring("https://://"))
 					Expect(err).NotTo(ContainSubstring("https://https://"))
 				}
 
 				// Verify the correct URL format is shown
 				foundURLError := false
-				for _, err := range errors {
+				for _, err := range result.Errors {
 					match, _ := ContainSubstring("github.com/owner/repo/pull/123").Match(err)
 					if match {
 						foundURLError = true
@@ -174,10 +177,11 @@ var _ = Describe("PRReferenceRule", func() {
 
 			It("should format error correctly for URL at start of body", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
-				errors := rule.Validate(commit, "fix:\n\ngithub.com/owner/repo/pull/456")
-				Expect(errors).NotTo(BeEmpty())
+				result := rule.Validate(commit, "fix:\n\ngithub.com/owner/repo/pull/456")
+				Expect(result).NotTo(BeNil())
+				Expect(result.Errors).NotTo(BeEmpty())
 
-				for _, err := range errors {
+				for _, err := range result.Errors {
 					Expect(err).NotTo(ContainSubstring("https://://"))
 					Expect(err).NotTo(ContainSubstring("https:// "))
 				}
@@ -189,11 +193,11 @@ var _ = Describe("PRReferenceRule", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
 
 				// 20 digits exceeds the 10-digit limit
-				errors := rule.Validate(
+				result := rule.Validate(
 					commit,
 					"see https://github.com/owner/repo/pull/12345678901234567890",
 				)
-				Expect(errors).To(BeEmpty())
+				Expect(result).To(BeNil())
 			})
 
 			It("should handle extremely long PR numbers efficiently", func() {
@@ -201,40 +205,40 @@ var _ = Describe("PRReferenceRule", func() {
 
 				// 1000 digits - would cause ReDoS without bounded quantifier
 				longPRNum := strings.Repeat("1", 1000)
-				errors := rule.Validate(
+				result := rule.Validate(
 					commit,
 					"see https://github.com/owner/repo/pull/"+longPRNum,
 				)
 
 				// Should not match (exceeds 10 digits) and should complete quickly
-				Expect(errors).To(BeEmpty())
+				Expect(result).To(BeNil())
 			})
 
 			It("should match PR numbers up to 10 digits", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
-				errors := rule.Validate(
+				result := rule.Validate(
 					commit,
 					"see https://github.com/owner/repo/pull/1234567890",
 				)
-				Expect(errors).NotTo(BeEmpty())
+				Expect(result).NotTo(BeNil())
 			})
 
 			It("should match exactly at the boundary (10 digits)", func() {
 				commit := &git.ParsedCommit{Title: "test", Valid: true}
 
 				// 10 digits - exactly at the limit
-				errors := rule.Validate(
+				result := rule.Validate(
 					commit,
 					"see https://github.com/owner/repo/pull/1234567890",
 				)
-				Expect(errors).NotTo(BeEmpty())
+				Expect(result).NotTo(BeNil())
 
 				// 11 digits - one over the limit
-				errors = rule.Validate(
+				result = rule.Validate(
 					commit,
 					"see https://github.com/owner/repo/pull/12345678901",
 				)
-				Expect(errors).To(BeEmpty())
+				Expect(result).To(BeNil())
 			})
 		})
 	})

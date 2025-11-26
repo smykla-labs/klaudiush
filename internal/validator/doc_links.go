@@ -21,6 +21,9 @@ var DefaultDocLinks = map[ErrorCode]string{
 	ErrGitPRRef:              BaseDocURL + "/GIT011.md",
 	ErrGitClaudeAttr:         BaseDocURL + "/GIT012.md",
 	ErrGitConventionalCommit: BaseDocURL + "/GIT013.md",
+	ErrGitForbiddenPattern:   BaseDocURL + "/GIT014.md",
+	ErrGitSignoffMismatch:    BaseDocURL + "/GIT015.md",
+	ErrGitListFormat:         BaseDocURL + "/GIT016.md",
 
 	// File documentation
 	ErrShellcheck:   BaseDocURL + "/FILE001.md",

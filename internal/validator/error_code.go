@@ -44,6 +44,15 @@ const (
 
 	// ErrGitConventionalCommit indicates invalid conventional commit format.
 	ErrGitConventionalCommit ErrorCode = "GIT013"
+
+	// ErrGitForbiddenPattern indicates forbidden pattern in commit message.
+	ErrGitForbiddenPattern ErrorCode = "GIT014"
+
+	// ErrGitSignoffMismatch indicates signoff identity mismatch.
+	ErrGitSignoffMismatch ErrorCode = "GIT015"
+
+	// ErrGitListFormat indicates list formatting issues in commit body.
+	ErrGitListFormat ErrorCode = "GIT016"
 )
 
 // File-related error codes (FILE001-FILE099).

@@ -4,15 +4,26 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/smykla-labs/klaudiush/internal/validator"
 )
+
+// RuleResult contains the result of a rule validation including error code.
+type RuleResult struct {
+	// Errors contains the error messages from this rule.
+	Errors []string
+
+	// ErrorCode is the specific error code for this type of validation failure.
+	ErrorCode validator.ErrorCode
+}
 
 // CommitRule represents a validation rule for commit messages.
 type CommitRule interface {
 	// Name returns the rule name.
 	Name() string
 
-	// Validate checks the commit against the rule and returns errors.
-	Validate(commit *ParsedCommit, message string) []string
+	// Validate checks the commit against the rule and returns a RuleResult.
+	Validate(commit *ParsedCommit, message string) *RuleResult
 }
 
 // TitleLengthRule validates the commit title length.
@@ -25,7 +36,7 @@ func (*TitleLengthRule) Name() string {
 	return "title-length"
 }
 
-func (r *TitleLengthRule) Validate(commit *ParsedCommit, _ string) []string {
+func (r *TitleLengthRule) Validate(commit *ParsedCommit, _ string) *RuleResult {
 	// Skip length validation for revert commits if configured
 	if r.AllowUnlimitedRevertTitle && isRevertCommit(commit.Title) {
 		return nil
@@ -35,14 +46,17 @@ func (r *TitleLengthRule) Validate(commit *ParsedCommit, _ string) []string {
 		return nil
 	}
 
-	return []string{
-		fmt.Sprintf(
-			"❌ Title exceeds %d characters (%d chars): '%s'",
-			r.MaxLength,
-			len(commit.Title),
-			commit.Title,
-		),
-		"   Note: Revert commits (Revert \"...\") are exempt from this limit",
+	return &RuleResult{
+		ErrorCode: validator.ErrGitBadTitle,
+		Errors: []string{
+			fmt.Sprintf(
+				"❌ Title exceeds %d characters (%d chars): '%s'",
+				r.MaxLength,
+				len(commit.Title),
+				commit.Title,
+			),
+			"   Note: Revert commits (Revert \"...\") are exempt from this limit",
+		},
 	}
 }
 
@@ -56,7 +70,7 @@ func (*ConventionalFormatRule) Name() string {
 	return "conventional-format"
 }
 
-func (r *ConventionalFormatRule) Validate(commit *ParsedCommit, _ string) []string {
+func (r *ConventionalFormatRule) Validate(commit *ParsedCommit, _ string) *RuleResult {
 	// Skip validation for revert commits
 	if isRevertCommit(commit.Title) {
 		return nil
@@ -75,17 +89,23 @@ func (r *ConventionalFormatRule) Validate(commit *ParsedCommit, _ string) []stri
 		errors = append(errors, "   Alternative: Revert \"original commit title\"")
 		errors = append(errors, fmt.Sprintf("   Current title: '%s'", commit.Title))
 
-		return errors
+		return &RuleResult{
+			ErrorCode: validator.ErrGitConventionalCommit,
+			Errors:    errors,
+		}
 	}
 
 	// Check scope requirement
 	if r.RequireScope && commit.Scope == "" {
-		return []string{
-			"❌ Title doesn't follow conventional commits format: type(scope): description",
-			"   Scope is mandatory and must be in parentheses",
-			"   Valid types: " + strings.Join(r.ValidTypes, ", "),
-			"   Alternative: Revert \"original commit title\"",
-			fmt.Sprintf("   Current title: '%s'", commit.Title),
+		return &RuleResult{
+			ErrorCode: validator.ErrGitConventionalCommit,
+			Errors: []string{
+				"❌ Title doesn't follow conventional commits format: type(scope): description",
+				"   Scope is mandatory and must be in parentheses",
+				"   Valid types: " + strings.Join(r.ValidTypes, ", "),
+				"   Alternative: Revert \"original commit title\"",
+				fmt.Sprintf("   Current title: '%s'", commit.Title),
+			},
 		}
 	}
 
@@ -107,7 +127,7 @@ func (*InfraScopeMisuseRule) Name() string {
 	return "infra-scope-misuse"
 }
 
-func (r *InfraScopeMisuseRule) Validate(commit *ParsedCommit, _ string) []string {
+func (r *InfraScopeMisuseRule) Validate(commit *ParsedCommit, _ string) *RuleResult {
 	if !r.infraScopeMisuseRegex.MatchString(commit.Title) {
 		return nil
 	}
@@ -123,14 +143,17 @@ func (r *InfraScopeMisuseRule) Validate(commit *ParsedCommit, _ string) []string
 	typeMatch := matches[1]  // feat or fix
 	scopeMatch := matches[2] // ci, test, docs, or build
 
-	return []string{
-		fmt.Sprintf(
-			"❌ Use '%s(...)' not '%s(%s)' for infrastructure changes",
-			scopeMatch,
-			typeMatch,
-			scopeMatch,
-		),
-		"   feat/fix should only be used for user-facing changes",
+	return &RuleResult{
+		ErrorCode: validator.ErrGitFeatCI,
+		Errors: []string{
+			fmt.Sprintf(
+				"❌ Use '%s(...)' not '%s(%s)' for infrastructure changes",
+				scopeMatch,
+				typeMatch,
+				scopeMatch,
+			),
+			"   feat/fix should only be used for user-facing changes",
+		},
 	}
 }
 
@@ -153,7 +176,7 @@ func (*BodyLineLengthRule) Name() string {
 	return "body-line-length"
 }
 
-func (r *BodyLineLengthRule) Validate(_ *ParsedCommit, message string) []string {
+func (r *BodyLineLengthRule) Validate(_ *ParsedCommit, message string) *RuleResult {
 	lines := strings.Split(message, "\n")
 	errors := make([]string, 0)
 	maxLenWithTolerance := r.MaxLength + r.Tolerance
@@ -190,7 +213,14 @@ func (r *BodyLineLengthRule) Validate(_ *ParsedCommit, message string) []string 
 		}
 	}
 
-	return errors
+	if len(errors) == 0 {
+		return nil
+	}
+
+	return &RuleResult{
+		ErrorCode: validator.ErrGitBadBody,
+		Errors:    errors,
+	}
 }
 
 // ListFormattingRule validates list item formatting.
@@ -208,7 +238,7 @@ func (*ListFormattingRule) Name() string {
 	return "list-formatting"
 }
 
-func (r *ListFormattingRule) Validate(_ *ParsedCommit, message string) []string {
+func (r *ListFormattingRule) Validate(_ *ParsedCommit, message string) *RuleResult {
 	lines := strings.Split(message, "\n")
 	errors := make([]string, 0)
 	prevLineEmpty := false
@@ -249,7 +279,14 @@ func (r *ListFormattingRule) Validate(_ *ParsedCommit, message string) []string 
 		prevLineEmpty = false
 	}
 
-	return errors
+	if len(errors) == 0 {
+		return nil
+	}
+
+	return &RuleResult{
+		ErrorCode: validator.ErrGitListFormat,
+		Errors:    errors,
+	}
 }
 
 // PRReferenceRule blocks PR references in commit messages.
@@ -275,7 +312,7 @@ func (*PRReferenceRule) Name() string {
 	return "pr-reference"
 }
 
-func (r *PRReferenceRule) Validate(_ *ParsedCommit, message string) []string {
+func (r *PRReferenceRule) Validate(_ *ParsedCommit, message string) *RuleResult {
 	if !r.prReferenceRegex.MatchString(message) {
 		return nil
 	}
@@ -305,7 +342,10 @@ func (r *PRReferenceRule) Validate(_ *ParsedCommit, message string) []string {
 		)
 	}
 
-	return errors
+	return &RuleResult{
+		ErrorCode: validator.ErrGitPRRef,
+		Errors:    errors,
+	}
 }
 
 // AIAttributionRule blocks Claude AI attribution patterns.
@@ -319,13 +359,16 @@ func (*AIAttributionRule) Name() string {
 	return "ai-attribution"
 }
 
-func (*AIAttributionRule) Validate(_ *ParsedCommit, message string) []string {
+func (*AIAttributionRule) Validate(_ *ParsedCommit, message string) *RuleResult {
 	if !containsClaudeAIAttribution(message) {
 		return nil
 	}
 
-	return []string{
-		"❌ Commit message contains AI attribution - remove any AI generation attribution",
+	return &RuleResult{
+		ErrorCode: validator.ErrGitClaudeAttr,
+		Errors: []string{
+			"❌ Commit message contains AI attribution - remove any AI generation attribution",
+		},
 	}
 }
 
@@ -338,7 +381,7 @@ func (*ForbiddenPatternRule) Name() string {
 	return "forbidden-pattern"
 }
 
-func (r *ForbiddenPatternRule) Validate(_ *ParsedCommit, message string) []string {
+func (r *ForbiddenPatternRule) Validate(_ *ParsedCommit, message string) *RuleResult {
 	if len(r.Patterns) == 0 {
 		return nil
 	}
@@ -361,7 +404,14 @@ func (r *ForbiddenPatternRule) Validate(_ *ParsedCommit, message string) []strin
 		}
 	}
 
-	return errors
+	if len(errors) == 0 {
+		return nil
+	}
+
+	return &RuleResult{
+		ErrorCode: validator.ErrGitForbiddenPattern,
+		Errors:    errors,
+	}
 }
 
 // SignoffRule validates the Signed-off-by trailer.
@@ -373,7 +423,7 @@ func (*SignoffRule) Name() string {
 	return "signoff"
 }
 
-func (r *SignoffRule) Validate(_ *ParsedCommit, message string) []string {
+func (r *SignoffRule) Validate(_ *ParsedCommit, message string) *RuleResult {
 	if r.ExpectedSignoff == "" {
 		return nil
 	}
@@ -395,10 +445,13 @@ func (r *SignoffRule) Validate(_ *ParsedCommit, message string) []string {
 
 	expectedSignoffLine := "Signed-off-by: " + r.ExpectedSignoff
 	if signoffLine != expectedSignoffLine {
-		return []string{
-			"❌ Wrong signoff identity",
-			"   Found: " + signoffLine,
-			"   Expected: " + expectedSignoffLine,
+		return &RuleResult{
+			ErrorCode: validator.ErrGitSignoffMismatch,
+			Errors: []string{
+				"❌ Wrong signoff identity",
+				"   Found: " + signoffLine,
+				"   Expected: " + expectedSignoffLine,
+			},
 		}
 	}
 

@@ -62,22 +62,30 @@ func (v *CommitValidator) validateMessage(message string) *validator.Result {
 
 	// Build and execute validation rules
 	rules := v.buildRules()
-	errors := make([]string, 0)
+	ruleResults := make([]*RuleResult, 0)
 
 	for _, rule := range rules {
-		ruleErrors := rule.Validate(parsed, message)
-		errors = append(errors, ruleErrors...)
+		result := rule.Validate(parsed, message)
+		if result != nil && len(result.Errors) > 0 {
+			ruleResults = append(ruleResults, result)
+		}
 	}
 
 	// Validate markdown formatting in body
 	if len(strings.Split(message, "\n")) > 1 {
 		markdownErrors := v.validateMarkdownInBody(strings.Split(message, "\n"))
-		errors = append(errors, markdownErrors...)
+		if len(markdownErrors) > 0 {
+			// Markdown errors are body-related warnings
+			ruleResults = append(ruleResults, &RuleResult{
+				ErrorCode: validator.ErrGitBadBody,
+				Errors:    markdownErrors,
+			})
+		}
 	}
 
 	// Report errors if any
-	if len(errors) > 0 {
-		return v.buildErrorResult(errors, message)
+	if len(ruleResults) > 0 {
+		return v.buildErrorResult(ruleResults, message)
 	}
 
 	log.Debug("Commit message validation passed")
@@ -161,12 +169,18 @@ func (*CommitValidator) validateMarkdownInBody(lines []string) []string {
 }
 
 // buildErrorResult constructs the error result with details.
-func (*CommitValidator) buildErrorResult(errors []string, message string) *validator.Result {
+// It selects the most appropriate error code based on what rules failed.
+func (*CommitValidator) buildErrorResult(results []*RuleResult, message string) *validator.Result {
 	var details strings.Builder
 
-	for _, err := range errors {
-		details.WriteString(err)
-		details.WriteString("\n")
+	// Collect all errors and determine the primary error code
+	errorCode := selectPrimaryErrorCode(results)
+
+	for _, result := range results {
+		for _, err := range result.Errors {
+			details.WriteString(err)
+			details.WriteString("\n")
+		}
 	}
 
 	details.WriteString("\n📝 Commit message:\n")
@@ -175,9 +189,60 @@ func (*CommitValidator) buildErrorResult(errors []string, message string) *valid
 	details.WriteString("\n---")
 
 	return validator.FailWithCode(
-		validator.ErrGitConventionalCommit,
+		errorCode,
 		"Commit message validation failed",
 	).AddDetail("errors", details.String())
+}
+
+// selectPrimaryErrorCode selects the most appropriate error code from rule results.
+// Priority order (highest to lowest):
+// 1. Conventional commit format errors (GIT013)
+// 2. Infrastructure scope misuse (GIT006)
+// 3. Title length errors (GIT004)
+// 4. Body errors (GIT005)
+// 5. List formatting (GIT016)
+// 6. PR references (GIT011)
+// 7. AI attribution (GIT012)
+// 8. Forbidden patterns (GIT014)
+// 9. Signoff mismatch (GIT015)
+func selectPrimaryErrorCode(results []*RuleResult) validator.ErrorCode {
+	if len(results) == 0 {
+		return validator.ErrGitConventionalCommit // fallback
+	}
+
+	// If only one result, use its error code
+	if len(results) == 1 {
+		return results[0].ErrorCode
+	}
+
+	// Priority-based selection for multiple errors
+	// Use a map to track which error codes are present
+	errorCodes := make(map[validator.ErrorCode]bool)
+	for _, result := range results {
+		errorCodes[result.ErrorCode] = true
+	}
+
+	// Check in priority order
+	priorityOrder := []validator.ErrorCode{
+		validator.ErrGitConventionalCommit, // Format issues are fundamental
+		validator.ErrGitFeatCI,             // Semantic type misuse
+		validator.ErrGitBadTitle,           // Title issues
+		validator.ErrGitBadBody,            // Body issues
+		validator.ErrGitListFormat,         // List formatting
+		validator.ErrGitPRRef,              // Content issues
+		validator.ErrGitClaudeAttr,         // Content issues
+		validator.ErrGitForbiddenPattern,   // Content issues
+		validator.ErrGitSignoffMismatch,    // Signoff issues
+	}
+
+	for _, code := range priorityOrder {
+		if errorCodes[code] {
+			return code
+		}
+	}
+
+	// Fallback to first result's error code
+	return results[0].ErrorCode
 }
 
 // truncateLine truncates a line for display in error messages.

@@ -17,6 +17,9 @@ var DefaultSuggestions = map[ErrorCode]string{
 	ErrGitPRRef:              "Remove PR reference from commit message (use in PR body instead)",
 	ErrGitClaudeAttr:         "Remove Claude attribution from commit message",
 	ErrGitConventionalCommit: "Use conventional commit format: type(scope): description",
+	ErrGitForbiddenPattern:   "Remove forbidden pattern from commit message",
+	ErrGitSignoffMismatch:    "Use correct signoff identity: git config user.name and user.email",
+	ErrGitListFormat:         "Add empty line before list items in commit body",
 
 	// File suggestions
 	ErrShellcheck:   "Run 'shellcheck <file>' to see detailed errors",
