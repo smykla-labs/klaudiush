@@ -1,0 +1,41 @@
+# Poll Reactions workflow for klaudiush
+# Polls PR reactions via smyklot bot for auto-merge
+
+name: Poll Reactions
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  poll-reactions:
+    name: Poll PR Reactions
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
+        with:
+          app-id: ${{ vars.SMYKLOT_APP_ID }}
+          private-key: ${{ secrets.SMYKLOT_PRIVATE_KEY }}
+
+      - name: Poll reactions on open PRs
+        uses: bartsmykla/smyklot@22fe4f0403f6c6bc8a4efe84f6d9cc32f700dedf # v1.7.10
+        with:
+          args: poll
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          SMYKLOT_CONFIG: ${{ vars.SMYKLOT_CONFIG }}
