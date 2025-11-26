@@ -109,7 +109,51 @@ tasks:
     cmds:
       - mise exec -- go test -v ./cmd/klaudiush -run 'TestScript.*'
 
+  test:fuzz:
+    desc: Run all fuzz tests (short duration for CI)
+    vars:
+      FUZZ_TIME: '{{.FUZZ_TIME | default "10s"}}'
+    cmds:
+      - mise exec -- go test -fuzz=FuzzParseGitCommand -fuzztime={{.FUZZ_TIME}} ./pkg/parser
+      - mise exec -- go test -fuzz=FuzzBashParse -fuzztime={{.FUZZ_TIME}} ./pkg/parser
+      - mise exec -- go test -fuzz=FuzzMdtableParse -fuzztime={{.FUZZ_TIME}} ./pkg/mdtable
+      - mise exec -- go test -fuzz=FuzzJSONParse -fuzztime={{.FUZZ_TIME}} ./internal/parser
+      - mise exec -- go test -fuzz=FuzzSecretsDetect -fuzztime={{.FUZZ_TIME}} ./internal/validators/secrets
 
+  test:fuzz:git:
+    desc: Run git parser fuzz test
+    vars:
+      FUZZ_TIME: '{{.FUZZ_TIME | default "60s"}}'
+    cmds:
+      - mise exec -- go test -fuzz=FuzzParseGitCommand -fuzztime={{.FUZZ_TIME}} ./pkg/parser
+
+  test:fuzz:bash:
+    desc: Run bash parser fuzz test
+    vars:
+      FUZZ_TIME: '{{.FUZZ_TIME | default "60s"}}'
+    cmds:
+      - mise exec -- go test -fuzz=FuzzBashParse -fuzztime={{.FUZZ_TIME}} ./pkg/parser
+
+  test:fuzz:mdtable:
+    desc: Run markdown table parser fuzz test
+    vars:
+      FUZZ_TIME: '{{.FUZZ_TIME | default "60s"}}'
+    cmds:
+      - mise exec -- go test -fuzz=FuzzMdtableParse -fuzztime={{.FUZZ_TIME}} ./pkg/mdtable
+
+  test:fuzz:json:
+    desc: Run JSON parser fuzz test
+    vars:
+      FUZZ_TIME: '{{.FUZZ_TIME | default "60s"}}'
+    cmds:
+      - mise exec -- go test -fuzz=FuzzJSONParse -fuzztime={{.FUZZ_TIME}} ./internal/parser
+
+  test:fuzz:secrets:
+    desc: Run secrets detector fuzz test
+    vars:
+      FUZZ_TIME: '{{.FUZZ_TIME | default "60s"}}'
+    cmds:
+      - mise exec -- go test -fuzz=FuzzSecretsDetect -fuzztime={{.FUZZ_TIME}} ./internal/validators/secrets
 
   lint:
     desc: Run linters on all files

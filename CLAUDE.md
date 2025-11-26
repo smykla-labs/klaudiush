@@ -163,3 +163,4 @@ Additional implementation details from specific sessions are in `.claude/session
 - `session-parallel-execution.md` - Parallel validator execution, category-specific worker pools, race detection testing
 - `session-error-reporting.md` - Error codes, suggestions/doc links registries, FailWithCode pattern, cognitive complexity refactoring
 - `session-secrets-detection.md` - Secrets validator with 25+ regex patterns, two-tier detection (patterns + gitleaks), configuration schema for allow lists/custom patterns
+- `session-fuzzing.md` - Go native fuzzing for parsers, fuzz targets by risk, type limitations, progress tracking in `tmp/fuzzing/`
