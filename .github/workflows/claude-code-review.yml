@@ -65,8 +65,8 @@ jobs:
               ;;
             issue_comment)
               # Check if comment is on a PR and contains "/claude review" command
-              # Pattern requires start-of-line or whitespace before command, word boundary after
-              if [[ "$IS_PR_COMMENT" == "true" ]] && grep -qiE '(^|\s)/claude\s+review\b' <<< "$COMMENT_BODY"; then
+              # Pattern matches command at line boundaries to avoid false positives
+              if [[ "$IS_PR_COMMENT" == "true" ]] && grep -qiE '(^|\n)\s*/claude\s+review\s*($|\n)' <<< "$COMMENT_BODY"; then
                 should_run="true"
                 pr_number="$ISSUE_NUMBER"
                 echo "Triggered via /claude review command on PR #$pr_number"
