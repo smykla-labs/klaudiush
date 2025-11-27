@@ -15,6 +15,9 @@ type GitConfig struct {
 	// PR validator configuration
 	PR *PRValidatorConfig `json:"pr,omitempty" koanf:"pr" toml:"pr"`
 
+	// Merge validator configuration
+	Merge *MergeValidatorConfig `json:"merge,omitempty" koanf:"merge" toml:"merge"`
+
 	// Branch validator configuration
 	Branch *BranchValidatorConfig `json:"branch,omitempty" koanf:"branch" toml:"branch"`
 
@@ -94,7 +97,7 @@ type CommitMessageConfig struct {
 
 	// ExpectedSignoff is the expected Signed-off-by trailer value.
 	// When set, commits with Signed-off-by trailers must match this exactly.
-	// Format: "Name <email@example.com>"
+	// Format: "Name <email@klaudiu.sh>"
 	// Default: "" (no signoff validation)
 	ExpectedSignoff string `json:"expected_signoff,omitempty" koanf:"expected_signoff" toml:"expected_signoff"`
 }
@@ -164,6 +167,82 @@ type PRValidatorConfig struct {
 	// ForbiddenPatterns is a list of regex patterns that are forbidden in PR title and body.
 	// Each pattern is a regular expression that will be checked against the PR title and body.
 	// Default: ["\\btmp/", "\\btmp\\b"] (blocks mentions of tmp directory)
+	ForbiddenPatterns []string `json:"forbidden_patterns,omitempty" koanf:"forbidden_patterns" toml:"forbidden_patterns"`
+}
+
+// MergeValidatorConfig configures the gh pr merge validator.
+type MergeValidatorConfig struct {
+	ValidatorConfig
+
+	// Message contains merge message validation settings.
+	// Validates PR title + body format before merge.
+	Message *MergeMessageConfig `json:"message,omitempty" koanf:"message" toml:"message"`
+
+	// ValidateAutomerge validates PR before enabling auto-merge.
+	// Default: true
+	ValidateAutomerge *bool `json:"validate_automerge,omitempty" koanf:"validate_automerge" toml:"validate_automerge"`
+
+	// RequireSignoff requires Signed-off-by trailer in merge commit body.
+	// The signoff must be provided via --body flag in gh pr merge command.
+	// Default: true
+	RequireSignoff *bool `json:"require_signoff,omitempty" koanf:"require_signoff" toml:"require_signoff"`
+
+	// ExpectedSignoff is the expected Signed-off-by trailer value.
+	// When set, the merge commit body must contain this exact signoff.
+	// Format: "Name <email@klaudiu.sh>"
+	// Default: "" (any signoff accepted if RequireSignoff is true)
+	ExpectedSignoff string `json:"expected_signoff,omitempty" koanf:"expected_signoff" toml:"expected_signoff"`
+}
+
+// MergeMessageConfig configures merge commit message validation rules.
+// These rules are applied to the PR title + body which becomes the commit message on squash merge.
+type MergeMessageConfig struct {
+	// Enabled controls whether merge message validation is performed.
+	// Default: true
+	Enabled *bool `json:"enabled,omitempty" koanf:"enabled" toml:"enabled"`
+
+	// TitleMaxLength is the maximum allowed length for the PR title (commit title).
+	// Default: 50
+	TitleMaxLength *int `json:"title_max_length,omitempty" koanf:"title_max_length" toml:"title_max_length"`
+
+	// AllowUnlimitedRevertTitle skips title length validation for revert commits.
+	// Default: true
+	AllowUnlimitedRevertTitle *bool `json:"allow_unlimited_revert_title,omitempty" koanf:"allow_unlimited_revert_title" toml:"allow_unlimited_revert_title"`
+
+	// BodyMaxLineLength is the maximum allowed length for body lines.
+	// Default: 72
+	BodyMaxLineLength *int `json:"body_max_line_length,omitempty" koanf:"body_max_line_length" toml:"body_max_line_length"`
+
+	// BodyLineTolerance allows body lines to exceed max length by this amount.
+	// Default: 5 (total: 77 characters)
+	BodyLineTolerance *int `json:"body_line_tolerance,omitempty" koanf:"body_line_tolerance" toml:"body_line_tolerance"`
+
+	// ConventionalCommits enforces conventional commit format for PR title.
+	// Default: true
+	ConventionalCommits *bool `json:"conventional_commits,omitempty" koanf:"conventional_commits" toml:"conventional_commits"`
+
+	// ValidTypes is the list of valid commit types for PR titles.
+	// Default: ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"]
+	ValidTypes []string `json:"valid_types,omitempty" koanf:"valid_types" toml:"valid_types"`
+
+	// RequireScope enforces that conventional commits must have a scope.
+	// Default: true
+	RequireScope *bool `json:"require_scope,omitempty" koanf:"require_scope" toml:"require_scope"`
+
+	// BlockInfraScopeMisuse blocks feat/fix with infrastructure scopes (ci, test, docs, build).
+	// Default: true
+	BlockInfraScopeMisuse *bool `json:"block_infra_scope_misuse,omitempty" koanf:"block_infra_scope_misuse" toml:"block_infra_scope_misuse"`
+
+	// BlockPRReferences blocks PR references (#123 or GitHub URLs) in PR body.
+	// Default: true
+	BlockPRReferences *bool `json:"block_pr_references,omitempty" koanf:"block_pr_references" toml:"block_pr_references"`
+
+	// BlockAIAttribution blocks Claude AI attribution in PR body.
+	// Default: true
+	BlockAIAttribution *bool `json:"block_ai_attribution,omitempty" koanf:"block_ai_attribution" toml:"block_ai_attribution"`
+
+	// ForbiddenPatterns is a list of regex patterns that are forbidden in PR body.
+	// Default: ["\\btmp/", "\\btmp\\b"]
 	ForbiddenPatterns []string `json:"forbidden_patterns,omitempty" koanf:"forbidden_patterns" toml:"forbidden_patterns"`
 }
 

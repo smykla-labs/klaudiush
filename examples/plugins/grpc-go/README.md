@@ -260,7 +260,7 @@ Response (Fail):
   "message": "Error message",
   "error_code": "ERROR_CODE",
   "fix_hint": "Suggested fix",
-  "doc_link": "https://docs.example.com",
+  "doc_link": "https://docs.klaudiu.sh",
   "details": {
     "key": "value"
   }

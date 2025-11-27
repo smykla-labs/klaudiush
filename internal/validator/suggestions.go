@@ -20,6 +20,8 @@ var DefaultSuggestions = map[Reference]string{
 	RefGitForbiddenPattern:   "Remove forbidden pattern from commit message",
 	RefGitSignoffMismatch:    "Use correct signoff identity: git config user.name and user.email",
 	RefGitListFormat:         "Add empty line before list items in commit body",
+	RefGitMergeMessage:       "Fix PR title/body to follow commit message conventions before merge",
+	RefGitMergeSignoff:       "Add --body flag with Signed-off-by trailer to gh pr merge command",
 
 	// File suggestions
 	RefShellcheck:   "Run 'shellcheck <file>' to see detailed errors",

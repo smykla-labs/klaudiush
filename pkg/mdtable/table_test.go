@@ -576,10 +576,10 @@ var _ = Describe("Edge cases", func() {
 
 	It("handles URLs in cells", func() {
 		table := mdtable.New("Service", "URL").
-			AddRow("API", "https://api.example.com")
+			AddRow("API", "https://api.klaudiu.sh")
 
 		result := table.String()
 
-		Expect(result).To(ContainSubstring("https://api.example.com"))
+		Expect(result).To(ContainSubstring("https://api.klaudiu.sh"))
 	})
 })

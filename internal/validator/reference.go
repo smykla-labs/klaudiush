@@ -58,6 +58,12 @@ const (
 
 	// RefGitListFormat indicates list formatting issues in commit body.
 	RefGitListFormat Reference = ReferenceBaseURL + "/GIT016"
+
+	// RefGitMergeMessage indicates merge commit message validation failure.
+	RefGitMergeMessage Reference = ReferenceBaseURL + "/GIT017"
+
+	// RefGitMergeSignoff indicates missing signoff in merge commit body.
+	RefGitMergeSignoff Reference = ReferenceBaseURL + "/GIT018"
 )
 
 // File-related references (FILE001-FILE005).

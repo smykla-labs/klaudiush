@@ -201,7 +201,7 @@ func (p *ConfigurablePlugin) Validate(req *plugin.ValidateRequest) *plugin.Valid
                 "BLOCKED_PATTERN",
                 "Command matches blocked pattern: "+pattern,
                 "Avoid using this command pattern",
-                "https://docs.example.com/blocked-patterns",
+                "https://docs.klaudiu.sh/blocked-patterns",
             )
         }
     }
@@ -422,7 +422,7 @@ tool_types = ["Bash", "Write", "Edit"]
   "message": "Validation failed",
   "error_code": "EXAMPLE_001",
   "fix_hint": "Try this instead...",
-  "doc_link": "https://docs.example.com/errors/EXAMPLE_001"
+  "doc_link": "https://docs.klaudiu.sh/errors/EXAMPLE_001"
 }
 ```
 
@@ -523,7 +523,7 @@ func (s *server) Validate(ctx context.Context, req *pluginv1.ValidateRequest) (*
             Message:     "Force push detected",
             ErrorCode:   "NO_FORCE_PUSH",
             FixHint:     "Use --force-with-lease instead",
-            DocLink:     "https://docs.example.com/git-best-practices",
+            DocLink:     "https://docs.klaudiu.sh/git-best-practices",
         }, nil
     }
 
@@ -831,7 +831,7 @@ tool_types = ["Write", "Edit"]
        "CUSTOM_001",
        "Descriptive message",
        "Suggested fix",
-       "https://docs.example.com/errors/CUSTOM_001",
+       "https://docs.klaudiu.sh/errors/CUSTOM_001",
    )
    ```
 

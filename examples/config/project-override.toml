@@ -13,7 +13,7 @@ title_max_length = 72
 check_conventional_commits = false
 
 # This project uses a different signoff
-expected_signoff = "Project Bot <bot@project.example.com>"
+expected_signoff = "Project Bot <bot@project.klaudiu.sh>"
 
 # Allow tmp references in this project (remove forbidden patterns)
 forbidden_patterns = []

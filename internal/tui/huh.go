@@ -45,7 +45,7 @@ func buildInitForm(opts InitFormOptions, result *InitFormResult) *huh.Form {
 	signoffInput := huh.NewInput().
 		Title("Git Commit Signoff").
 		Description("Validates that commits are signed off with this name/email.\nLeave empty to skip signoff validation.").
-		Placeholder("Name <email@example.com>").
+		Placeholder("Name <email@klaudiu.sh>").
 		Value(&result.Signoff)
 
 	if opts.DefaultSignoff != "" {

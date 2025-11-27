@@ -321,7 +321,7 @@ New feature
 
 ## Supporting documentation
 <!-- Links to relevant issues, discussions, or external documentation -->
-See https://example.com/docs`
+See https://klaudiu.sh/docs`
 
 			result := git.ValidatePRBody(body, "feat")
 			Expect(result.Errors).To(BeEmpty())
@@ -350,7 +350,7 @@ New feature
 - Added endpoint
 
 ## Supporting documentation
-See https://example.com/docs
+See https://klaudiu.sh/docs
 
 ## Test plan
 N/A`
@@ -368,7 +368,7 @@ New feature
 - Added endpoint
 
 ## Supporting documentation
-See https://example.com/docs
+See https://klaudiu.sh/docs
 
 > Changelog: skip`
 

@@ -812,7 +812,7 @@ EOF
 			It("should pass with signoff when no expected signoff configured", func() {
 				message := `feat(api): add endpoint
 
-Signed-off-by: Test User <test@example.com>`
+Signed-off-by: Test User <test@klaudiu.sh>`
 
 				ctx := &hook.Context{
 					EventType: hook.EventTypePreToolUse,

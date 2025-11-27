@@ -40,7 +40,7 @@ forbidden_patterns = [
   "\\btmp\\b"  # Block standalone tmp word
 ]
 
-expected_signoff = "Your Name <your.email@example.com>"
+expected_signoff = "Your Name <your.email@klaudiu.sh>"
 
 # Git Push Validator
 [validators.git.push]

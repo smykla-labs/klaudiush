@@ -342,7 +342,7 @@ func (m *mockGRPCServer) Info(
 		Version:     "1.0.0",
 		Description: "Mock gRPC plugin for testing",
 		Author:      "Test Author",
-		Url:         "https://example.com",
+		Url:         "https://klaudiu.sh",
 	}, nil
 }
 
