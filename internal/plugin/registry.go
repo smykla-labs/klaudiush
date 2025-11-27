@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 
 	"github.com/smykla-labs/klaudiush/internal/exec"
 	"github.com/smykla-labs/klaudiush/internal/validator"

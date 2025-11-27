@@ -1,6 +1,6 @@
 package git
 
-import "errors"
+import "github.com/cockroachdb/errors"
 
 var (
 	// ErrNotRepository is returned when the working directory is not a git repository

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	goplugin "plugin"
 
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 
 	"github.com/smykla-labs/klaudiush/pkg/config"
 	"github.com/smykla-labs/klaudiush/pkg/plugin"

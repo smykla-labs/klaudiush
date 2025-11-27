@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 
 	"github.com/smykla-labs/klaudiush/internal/prompt"
 	"github.com/smykla-labs/klaudiush/pkg/logger"

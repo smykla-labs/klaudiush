@@ -5,6 +5,7 @@ go 1.25.4
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/charmbracelet/huh v0.8.0
+	github.com/cockroachdb/errors v1.12.0
 	github.com/dmarkham/enumer v1.6.1
 	github.com/go-git/go-git/v6 v6.0.0-20251125231338-2d242db0996d
 	github.com/go-viper/mapstructure/v2 v2.4.0
@@ -20,7 +21,6 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/pelletier/go-toml/v2 v2.2.4
-	github.com/pkg/errors v0.9.1
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/spf13/cobra v1.10.1
 	go.uber.org/mock v0.6.0
@@ -48,15 +48,19 @@ require (
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
+	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
+	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
 	github.com/go-git/go-billy/v6 v6.0.0-20251120215217-80673c4ccbfb // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
@@ -65,6 +69,8 @@ require (
 	github.com/kevinburke/ssh_config v1.4.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
@@ -75,6 +81,7 @@ require (
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/pascaldekloe/name v1.0.1 // indirect
 	github.com/pjbgf/sha1cd v0.5.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect

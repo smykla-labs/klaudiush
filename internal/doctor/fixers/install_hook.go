@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 
 	"github.com/smykla-labs/klaudiush/internal/doctor"
 	"github.com/smykla-labs/klaudiush/internal/doctor/settings"

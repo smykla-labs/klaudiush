@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
-	"github.com/pkg/errors"
+	"github.com/cockroachdb/errors"
 )
 
 // Repository defines the interface for git repository operations
