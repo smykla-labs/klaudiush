@@ -23,7 +23,7 @@ var _ = Describe("SDKRepository", func() {
 		origDir    string
 		testAuthor = &object.Signature{
 			Name:  "Test User",
-			Email: "test@example.com",
+			Email: "test@klaudiu.sh",
 		}
 	)
 

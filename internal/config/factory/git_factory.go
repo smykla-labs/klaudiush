@@ -65,6 +65,10 @@ func (f *GitValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorWi
 		validators = append(validators, f.createBranchValidator(cfg.Validators.Git.Branch))
 	}
 
+	if cfg.Validators.Git.Merge != nil && cfg.Validators.Git.Merge.IsEnabled() {
+		validators = append(validators, f.createMergeValidator(cfg.Validators.Git.Merge))
+	}
+
 	return validators
 }
 
@@ -150,6 +154,19 @@ func (f *GitValidatorFactory) createBranchValidator(
 				// git branch without delete flags (create new branch)
 				validator.GitSubcommandWithoutAnyFlag("branch", "-d", "-D", "--delete"),
 			),
+		),
+	}
+}
+
+func (f *GitValidatorFactory) createMergeValidator(
+	cfg *config.MergeValidatorConfig,
+) ValidatorWithPredicate {
+	return ValidatorWithPredicate{
+		Validator: gitvalidators.NewMergeValidator(f.log, f.getGitRunner(), cfg),
+		Predicate: validator.And(
+			validator.EventTypeIs(hook.EventTypePreToolUse),
+			validator.ToolTypeIs(hook.ToolTypeBash),
+			validator.CommandContains("gh pr merge"),
 		),
 	}
 }

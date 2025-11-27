@@ -212,12 +212,12 @@ var _ = Describe("Complex table parsing", func() {
 	It("handles table with links", func() {
 		content := `| Name | Link |
 |------|------|
-| Docs | [Link](https://example.com) |`
+| Docs | [Link](https://klaudiu.sh) |`
 
 		result := mdtable.Parse(content)
 
 		Expect(result.Tables).To(HaveLen(1))
-		Expect(result.Tables[0].Rows[0][1]).To(Equal("[Link](https://example.com)"))
+		Expect(result.Tables[0].Rows[0][1]).To(Equal("[Link](https://klaudiu.sh)"))
 	})
 
 	It("handles table with emoji", func() {

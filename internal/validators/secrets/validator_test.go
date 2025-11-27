@@ -135,7 +135,7 @@ MHQCAQEEIBhzUvl...
 		})
 
 		It("should detect PostgreSQL connection string", func() {
-			hookCtx.ToolInput.Content = `postgresql://admin:secretpass@db.example.com:5432/mydb`
+			hookCtx.ToolInput.Content = `postgresql://admin:secretpass@db.klaudiu.sh:5432/mydb`
 			result := v.Validate(context.Background(), hookCtx)
 			Expect(result.Passed).To(BeFalse())
 			Expect(result.Reference).To(Equal(validator.RefSecretsConnString))
@@ -149,7 +149,7 @@ MHQCAQEEIBhzUvl...
 		})
 
 		It("should detect Redis connection string", func() {
-			hookCtx.ToolInput.Content = `redis://default:mypassword@redis.example.com:6379`
+			hookCtx.ToolInput.Content = `redis://default:mypassword@redis.klaudiu.sh:6379`
 			result := v.Validate(context.Background(), hookCtx)
 			Expect(result.Passed).To(BeFalse())
 			Expect(result.Reference).To(Equal(validator.RefSecretsConnString))

@@ -97,7 +97,7 @@ export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_BLOCK_PR_REFERENCES=true
 export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_BLOCK_AI_ATTRIBUTION=true
 
 # Expected signoff
-export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_EXPECTED_SIGNOFF="Your Name <your.email@example.com>"
+export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_EXPECTED_SIGNOFF="Your Name <your.email@klaudiu.sh>"
 ```
 
 ### Git Push Validator
@@ -376,7 +376,7 @@ klaudiush --hook-type PreToolUse
 ### Use Custom Signoff
 
 ```bash
-export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_EXPECTED_SIGNOFF="CI Bot <bot@example.com>"
+export KLAUDIUSH_VALIDATORS_GIT_COMMIT_MESSAGE_EXPECTED_SIGNOFF="CI Bot <bot@klaudiu.sh>"
 klaudiush --hook-type PreToolUse
 ```
 

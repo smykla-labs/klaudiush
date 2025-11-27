@@ -15,14 +15,14 @@ var _ = Describe("API", func() {
 				Version:     "1.0.0",
 				Description: "A test plugin",
 				Author:      "test-author",
-				URL:         "https://example.com",
+				URL:         "https://klaudiu.sh",
 			}
 
 			Expect(info.Name).To(Equal("test-plugin"))
 			Expect(info.Version).To(Equal("1.0.0"))
 			Expect(info.Description).To(Equal("A test plugin"))
 			Expect(info.Author).To(Equal("test-author"))
-			Expect(info.URL).To(Equal("https://example.com"))
+			Expect(info.URL).To(Equal("https://klaudiu.sh"))
 		})
 
 		It("should allow optional fields to be empty", func() {
@@ -89,7 +89,7 @@ var _ = Describe("API", func() {
 				Message:     "Validation failed",
 				ErrorCode:   "TEST001",
 				FixHint:     "Fix the issue",
-				DocLink:     "https://docs.example.com/TEST001",
+				DocLink:     "https://docs.klaudiu.sh/TEST001",
 				Details: map[string]string{
 					"reason": "test failure",
 				},
@@ -100,7 +100,7 @@ var _ = Describe("API", func() {
 			Expect(resp.Message).To(Equal("Validation failed"))
 			Expect(resp.ErrorCode).To(Equal("TEST001"))
 			Expect(resp.FixHint).To(Equal("Fix the issue"))
-			Expect(resp.DocLink).To(Equal("https://docs.example.com/TEST001"))
+			Expect(resp.DocLink).To(Equal("https://docs.klaudiu.sh/TEST001"))
 			Expect(resp.Details).To(HaveKeyWithValue("reason", "test failure"))
 		})
 
@@ -199,7 +199,7 @@ var _ = Describe("API", func() {
 					"TEST001",
 					"Validation failed",
 					"Fix the issue",
-					"https://docs.example.com/TEST001",
+					"https://docs.klaudiu.sh/TEST001",
 				)
 
 				Expect(resp.Passed).To(BeFalse())
@@ -207,7 +207,7 @@ var _ = Describe("API", func() {
 				Expect(resp.Message).To(Equal("Validation failed"))
 				Expect(resp.ErrorCode).To(Equal("TEST001"))
 				Expect(resp.FixHint).To(Equal("Fix the issue"))
-				Expect(resp.DocLink).To(Equal("https://docs.example.com/TEST001"))
+				Expect(resp.DocLink).To(Equal("https://docs.klaudiu.sh/TEST001"))
 			})
 
 			It("should handle empty hints and links", func() {
@@ -228,7 +228,7 @@ var _ = Describe("API", func() {
 					"TEST002",
 					"Warning message",
 					"Consider fixing",
-					"https://docs.example.com/TEST002",
+					"https://docs.klaudiu.sh/TEST002",
 				)
 
 				Expect(resp.Passed).To(BeFalse())
@@ -236,7 +236,7 @@ var _ = Describe("API", func() {
 				Expect(resp.Message).To(Equal("Warning message"))
 				Expect(resp.ErrorCode).To(Equal("TEST002"))
 				Expect(resp.FixHint).To(Equal("Consider fixing"))
-				Expect(resp.DocLink).To(Equal("https://docs.example.com/TEST002"))
+				Expect(resp.DocLink).To(Equal("https://docs.klaudiu.sh/TEST002"))
 			})
 
 			It("should handle empty hints and links", func() {

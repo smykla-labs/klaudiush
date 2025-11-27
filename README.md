@@ -385,7 +385,7 @@ title_max_length = 72
 check_conventional_commits = false
 
 # Set custom signoff
-expected_signoff = "Your Name <your.email@example.com>"
+expected_signoff = "Your Name <your.email@klaudiu.sh>"
 
 # Disable Markdown validation
 [validators.file.markdown]
