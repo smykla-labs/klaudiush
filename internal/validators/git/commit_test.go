@@ -206,6 +206,21 @@ var _ = Describe("CommitValidator", func() {
 				Expect(result.Details["errors"]).To(ContainSubstring("Title exceeds 50 characters"))
 			})
 
+			It("should pass with Unicode ellipsis at exactly 50 characters", func() {
+				// Unicode ellipsis (…) is 3 bytes but counts as 1 character
+				// This message is 50 characters (runes) but 52 bytes
+				ctx := &hook.Context{
+					EventType: hook.EventTypePreToolUse,
+					ToolName:  hook.ToolTypeBash,
+					ToolInput: hook.ToolInput{
+						Command: `git commit -sS -a -m "chore(makefile): correct quote escaping in gke.mk…"`,
+					},
+				}
+
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
 			It("should fail with non-conventional format", func() {
 				ctx := &hook.Context{
 					EventType: hook.EventTypePreToolUse,
