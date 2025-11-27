@@ -235,6 +235,45 @@ More text`
 				result := validators.AnalyzeMarkdown(fragment, initialState)
 				Expect(result.Warnings).To(BeEmpty())
 			})
+
+			It("should ignore # comments inside code blocks", func() {
+				// Fragment with # comments that should not be treated as headers
+				fragment := `Some text
+
+` + "```bash" + `
+# This is a bash comment, not a header
+echo "test"
+` + "```" + `
+
+More text`
+
+				result := validators.AnalyzeMarkdown(fragment, nil)
+				Expect(result.Warnings).To(BeEmpty(), "# inside code block should not be treated as header")
+			})
+
+			It("should ignore # in various programming languages inside code blocks", func() {
+				// Test multiple languages that use # for comments
+				fragment := `# Real Header
+
+` + "```python" + `
+# Python comment
+def foo():
+    pass
+` + "```" + `
+
+` + "```ruby" + `
+# Ruby comment
+puts "hello"
+` + "```" + `
+
+` + "```yaml" + `
+# YAML comment
+key: value
+` + "```"
+
+				result := validators.AnalyzeMarkdown(fragment, nil)
+				Expect(result.Warnings).To(BeEmpty(), "# inside any code block should not be treated as header")
+			})
 		})
 
 		Context("when starting outside code block", func() {

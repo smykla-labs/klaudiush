@@ -524,6 +524,16 @@ func AnalyzeMarkdown(
 			continue
 		}
 
+		// Skip header/list validation on code block markers to avoid treating
+		// content from inside the code block as markdown when closing,
+		// or validating against code block content when opening
+		if isCodeBlockMarker(line) {
+			prevPrevLine = prevLine
+			prevLine = line
+
+			continue
+		}
+
 		// Skip validation for first line (can't check previous line)
 		if lineNum > 1 {
 			// Check for first list item (transition from non-list to list)
