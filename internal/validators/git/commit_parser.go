@@ -8,6 +8,10 @@ import (
 	ccp "github.com/leodido/go-conventionalcommits/parser"
 )
 
+// footerPattern matches git trailer format: "Token: value"
+// Compiled once at package initialization for efficiency.
+var footerPattern = regexp.MustCompile(`^([A-Za-z0-9-]+):\s*(.*)$`)
+
 // ParsedCommit represents a parsed conventional commit message.
 type ParsedCommit struct {
 	// Type is the commit type (e.g., "feat", "fix", "chore").
@@ -218,7 +222,6 @@ func (*CommitParser) extractBodyAndFooters(message string, result *ParsedCommit)
 // Git trailers appear at the end, separated from the body by a blank line.
 func findFooterStartIndex(bodyLines []string) int {
 	footerStartIdx := len(bodyLines)
-	footerPattern := regexp.MustCompile(`^([A-Za-z0-9-]+):\s*(.*)$`)
 
 	for i := len(bodyLines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(bodyLines[i])
@@ -241,8 +244,6 @@ func extractFootersFromLines(footerLines []string, result *ParsedCommit) {
 	if result.Footers == nil {
 		result.Footers = make(map[string][]string)
 	}
-
-	footerPattern := regexp.MustCompile(`^([A-Za-z0-9-]+):\s*(.*)$`)
 
 	const expectedFooterMatches = 3 // full match + 2 capture groups
 
