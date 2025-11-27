@@ -19,6 +19,9 @@ linters:
     # Nil Safety & Pointer Issues
     - nilnesserr     # Checks for returning wrong nil error
 
+    # Dependency Management
+    - depguard       # Enforce package import restrictions
+
     # Code Quality
     - gocyclo        # Cyclomatic complexity
     - goconst        # Repeated strings -> constants
@@ -219,6 +222,18 @@ linters:
       allow-first-in-block: true
       allow-whole-block: false
       branch-max-lines: 2
+
+    depguard:
+      rules:
+        errors:
+          list-mode: lax
+          files:
+            - $all
+          deny:
+            - pkg: "errors$"
+              desc: "use github.com/cockroachdb/errors instead"
+            - pkg: "github.com/pkg/errors"
+              desc: "use github.com/cockroachdb/errors instead"
 
 formatters:
   enable:
