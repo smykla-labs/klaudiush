@@ -234,7 +234,14 @@ code
 				Stdout:   "",
 				Stderr:   "",
 			}
-			lintResult := linters.ProcessMarkdownlintOutput(result, "/tmp/test.md", 0)
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				0,
+				0,
+				false,
+				"<file>",
+			)
 			Expect(lintResult.Success).To(BeTrue())
 			Expect(lintResult.RawOut).To(BeEmpty())
 		})
@@ -245,10 +252,36 @@ code
 				Stdout:   "/tmp/test.md:10 MD022/blanks-around-headings",
 				Stderr:   "",
 			}
-			lintResult := linters.ProcessMarkdownlintOutput(result, "/tmp/test.md", 0)
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				0,
+				0,
+				false,
+				"<file>",
+			)
 			Expect(lintResult.Success).To(BeFalse())
 			Expect(lintResult.RawOut).To(ContainSubstring("<file>:10"))
 			Expect(lintResult.RawOut).NotTo(ContainSubstring("/tmp/test.md"))
+		})
+
+		It("should use actual file path when provided", func() {
+			result := &execpkg.CommandResult{
+				ExitCode: 1,
+				Stdout:   "/tmp/test.md:10 MD022/blanks-around-headings",
+				Stderr:   "",
+			}
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				0,
+				0,
+				false,
+				"README.md",
+			)
+			Expect(lintResult.Success).To(BeFalse())
+			Expect(lintResult.RawOut).To(ContainSubstring("README.md:10"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("/tmp/"))
 		})
 
 		It("should adjust line numbers when preamble exists", func() {
@@ -257,9 +290,34 @@ code
 				Stdout:   "<file>:15 MD022/blanks-around-headings",
 				Stderr:   "",
 			}
-			lintResult := linters.ProcessMarkdownlintOutput(result, "/tmp/test.md", 5)
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				5,
+				0,
+				false,
+				"<file>",
+			)
 			Expect(lintResult.Success).To(BeFalse())
-			Expect(lintResult.RawOut).To(ContainSubstring("<file>:10"))
+			Expect(lintResult.RawOut).To(ContainSubstring("<file>:11"))
+		})
+
+		It("should adjust line numbers with fragment start line", func() {
+			result := &execpkg.CommandResult{
+				ExitCode: 1,
+				Stdout:   "<file>:5 MD022/blanks-around-headings",
+				Stderr:   "",
+			}
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				2,
+				10,
+				false,
+				"<file>",
+			)
+			Expect(lintResult.Success).To(BeFalse())
+			Expect(lintResult.RawOut).To(ContainSubstring("<file>:14"))
 		})
 
 		It("should filter out preamble errors", func() {
@@ -268,10 +326,17 @@ code
 				Stdout:   "<file>:3 MD022/blanks-around-headings\n<file>:10 MD001/heading-increment",
 				Stderr:   "",
 			}
-			lintResult := linters.ProcessMarkdownlintOutput(result, "/tmp/test.md", 5)
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				5,
+				0,
+				false,
+				"<file>",
+			)
 			Expect(lintResult.Success).To(BeFalse())
 			Expect(lintResult.RawOut).NotTo(ContainSubstring("<file>:3"))
-			Expect(lintResult.RawOut).To(ContainSubstring("<file>:5"))
+			Expect(lintResult.RawOut).To(ContainSubstring("<file>:6"))
 		})
 
 		It("should return success when all errors are in preamble", func() {
@@ -280,7 +345,14 @@ code
 				Stdout:   "<file>:1 MD022\n<file>:2 MD001",
 				Stderr:   "",
 			}
-			lintResult := linters.ProcessMarkdownlintOutput(result, "/tmp/test.md", 5)
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				5,
+				0,
+				false,
+				"<file>",
+			)
 			Expect(lintResult.Success).To(BeTrue())
 		})
 
@@ -290,10 +362,102 @@ code
 				Stdout:   "<file>:10 MD022",
 				Stderr:   "Warning: some warning",
 			}
-			lintResult := linters.ProcessMarkdownlintOutput(result, "/tmp/test.md", 0)
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				0,
+				0,
+				false,
+				"<file>",
+			)
 			Expect(lintResult.Success).To(BeFalse())
 			Expect(lintResult.RawOut).To(ContainSubstring("MD022"))
 			Expect(lintResult.RawOut).To(ContainSubstring("Warning"))
+		})
+
+		It("should filter out markdownlint-cli2 status messages", func() {
+			result := &execpkg.CommandResult{
+				ExitCode: 1,
+				Stdout: `markdownlint-cli2 v0.17.1 (markdownlint v0.37.3)
+Finding: <file>
+Linting: 1 file(s)
+Summary: 1 error(s)
+<file>:10 MD022/blanks-around-headings`,
+				Stderr: "",
+			}
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				0,
+				0,
+				true,
+				"<file>",
+			)
+			Expect(lintResult.Success).To(BeFalse())
+			Expect(lintResult.RawOut).To(ContainSubstring("<file>:10 MD022"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("markdownlint-cli2"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("Finding:"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("Linting:"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("Summary:"))
+		})
+
+		It("should not filter status messages for markdownlint-cli", func() {
+			result := &execpkg.CommandResult{
+				ExitCode: 1,
+				Stdout:   "Finding: <file>\n<file>:10 MD022/blanks-around-headings",
+				Stderr:   "",
+			}
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				0,
+				0,
+				false,
+				"<file>",
+			)
+			Expect(lintResult.Success).To(BeFalse())
+			Expect(lintResult.RawOut).To(ContainSubstring("Finding:"))
+		})
+
+		It("should replace relative temp file paths with display path", func() {
+			result := &execpkg.CommandResult{
+				ExitCode: 1,
+				Stdout:   "../../../tmp/markdownlint-test123.md:10 MD022/blanks-around-headings",
+				Stderr:   "",
+			}
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/markdownlint-test123.md",
+				0,
+				0,
+				false,
+				"README.md",
+			)
+			Expect(lintResult.Success).To(BeFalse())
+			Expect(lintResult.RawOut).To(ContainSubstring("README.md:10"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("../../../"))
+		})
+
+		It("should replace complex relative paths with display path", func() {
+			result := &execpkg.CommandResult{
+				ExitCode: 1,
+				Stdout: `../../../../../../var/folders/d1/tvmyp5cs1gz38rltf390ddpw0000gn/T/markdownlint-456.md:5 MD022/blanks-around-headings
+../../../../../../var/folders/d1/tvmyp5cs1gz38rltf390ddpw0000gn/T/markdownlint-456.md:10 MD001/heading-increment`,
+				Stderr: "",
+			}
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/var/folders/d1/tvmyp5cs1gz38rltf390ddpw0000gn/T/markdownlint-456.md",
+				0,
+				0,
+				false,
+				".claude/session.md",
+			)
+			Expect(lintResult.Success).To(BeFalse())
+			Expect(lintResult.RawOut).To(ContainSubstring(".claude/session.md:5"))
+			Expect(lintResult.RawOut).To(ContainSubstring(".claude/session.md:10"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("../"))
+			Expect(lintResult.RawOut).NotTo(ContainSubstring("/var/folders/"))
 		})
 	})
 

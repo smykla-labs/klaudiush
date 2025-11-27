@@ -54,3 +54,17 @@ func (mr *MockMarkdownLinterMockRecorder) Lint(ctx, content, initialState any) *
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lint", reflect.TypeOf((*MockMarkdownLinter)(nil).Lint), ctx, content, initialState)
 }
+
+// LintWithPath mocks base method.
+func (m *MockMarkdownLinter) LintWithPath(ctx context.Context, content string, initialState *validators.MarkdownState, originalPath string) *LintResult {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LintWithPath", ctx, content, initialState, originalPath)
+	ret0, _ := ret[0].(*LintResult)
+	return ret0
+}
+
+// LintWithPath indicates an expected call of LintWithPath.
+func (mr *MockMarkdownLinterMockRecorder) LintWithPath(ctx, content, initialState, originalPath any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LintWithPath", reflect.TypeOf((*MockMarkdownLinter)(nil).LintWithPath), ctx, content, initialState, originalPath)
+}
