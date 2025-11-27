@@ -5,6 +5,12 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1](https://github.com/smykla-labs/klaudiush/compare/v1.1.0...v1.1.1) (2025-11-27)
+
+### Bug Fixes
+
+* **ci:** address Copilot review suggestions for Claude review workflow ([#30](https://github.com/smykla-labs/klaudiush/issues/30)) ([0690734](https://github.com/smykla-labs/klaudiush/commit/0690734fd7bc2dcdcc219052183ea9e7a0119f1b)), closes [#28](https://github.com/smykla-labs/klaudiush/issues/28)
+
 ## [1.1.0](https://github.com/smykla-labs/klaudiush/compare/v1.0.2...v1.1.0) (2025-11-26)
 
 ### Features
