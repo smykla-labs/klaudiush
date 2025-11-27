@@ -42,7 +42,9 @@ func (r *TitleLengthRule) Validate(commit *ParsedCommit, _ string) *RuleResult {
 		return nil
 	}
 
-	if len(commit.Title) <= r.MaxLength {
+	// Use rune count to properly handle Unicode characters
+	titleLength := len([]rune(commit.Title))
+	if titleLength <= r.MaxLength {
 		return nil
 	}
 
@@ -52,7 +54,7 @@ func (r *TitleLengthRule) Validate(commit *ParsedCommit, _ string) *RuleResult {
 			fmt.Sprintf(
 				"❌ Title exceeds %d characters (%d chars): '%s'",
 				r.MaxLength,
-				len(commit.Title),
+				titleLength,
 				commit.Title,
 			),
 			"   Note: Revert commits (Revert \"...\") are exempt from this limit",
