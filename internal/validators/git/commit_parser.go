@@ -164,7 +164,7 @@ func (p *CommitParser) Parse(message string) *ParsedCommit {
 // it encounters invalid trailer syntax. We detect this by checking for "trailer" in
 // the error message. If the library changes its error messages, this may break.
 //
-//nolint:ireturn // Must return interface type from go-conventionalcommits library
+//nolint:ireturn // Returns interface type from go-conventionalcommits library
 func (p *CommitParser) handleParseError(
 	err error,
 	title string,
