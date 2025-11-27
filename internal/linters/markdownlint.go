@@ -257,6 +257,7 @@ func ProcessMarkdownlintOutput(
 	result *execpkg.CommandResult,
 	tempFile string,
 	preambleLines int,
+	fragmentStartLine int,
 	isCli2 bool,
 	displayPath string,
 ) *LintResult {
@@ -278,7 +279,7 @@ func ProcessMarkdownlintOutput(
 	}
 
 	if preambleLines > 0 {
-		output = adjustLineNumbers(output, preambleLines)
+		output = adjustLineNumbers(output, preambleLines, fragmentStartLine)
 	}
 
 	if strings.TrimSpace(output) == "" {
@@ -352,7 +353,20 @@ func (l *RealMarkdownLinter) runMarkdownlint(
 		displayPath = originalPath
 	}
 
-	return ProcessMarkdownlintOutput(&result, tempFile, preambleLines, isCli2, displayPath)
+	// Extract fragment start line if available (0 if not a fragment)
+	fragmentStartLine := 0
+	if initialState != nil {
+		fragmentStartLine = initialState.StartLine
+	}
+
+	return ProcessMarkdownlintOutput(
+		&result,
+		tempFile,
+		preambleLines,
+		fragmentStartLine,
+		isCli2,
+		displayPath,
+	)
 }
 
 const (
@@ -407,9 +421,10 @@ func filterStatusMessages(output string) string {
 	return strings.Join(result, "\n")
 }
 
-// adjustLineNumbers adjusts line numbers in markdownlint output to account for preamble lines.
-// It also filters out errors that occur in the preamble itself.
-func adjustLineNumbers(output string, preambleLines int) string {
+// adjustLineNumbers adjusts line numbers in markdownlint output to account for preamble lines
+// and fragment offset. It also filters out errors that occur in the preamble itself.
+// fragmentStartLine is 0-indexed and represents where the fragment starts in the original file.
+func adjustLineNumbers(output string, preambleLines, fragmentStartLine int) string {
 	lines := strings.Split(output, "\n")
 	result := make([]string, 0, len(lines))
 
@@ -435,8 +450,11 @@ func adjustLineNumbers(output string, preambleLines int) string {
 			continue
 		}
 
-		// Adjust line number by subtracting preamble lines
-		adjustedLine := lineNum - preambleLines
+		// Adjust line number:
+		// 1. Subtract preamble lines to get line in fragment content (1-indexed)
+		// 2. Add fragment start line (0-indexed) + 1 to get absolute line (1-indexed)
+		// Formula: fragmentStartLine + lineNum - preambleLines + 1
+		adjustedLine := fragmentStartLine + lineNum - preambleLines + 1
 		adjustedOutput := lineNumberRegex.ReplaceAllString(
 			line,
 			fmt.Sprintf("<file>:%d", adjustedLine),

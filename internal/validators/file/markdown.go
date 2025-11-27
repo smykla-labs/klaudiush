@@ -105,17 +105,7 @@ func (v *MarkdownValidator) Validate(ctx context.Context, hookCtx *hook.Context)
 
 	// Get the file path for error reporting
 	filePath := hookCtx.GetFilePath()
-	displayPath := "<content>"
-
-	if filePath != "" {
-		// Try to make path relative to current directory
-		if relPath, err := filepath.Rel(".", filePath); err == nil &&
-			!strings.HasPrefix(relPath, "..") {
-			displayPath = relPath
-		} else {
-			displayPath = filePath
-		}
-	}
+	displayPath := getDisplayPath(filePath)
 
 	result := v.linter.LintWithPath(lintCtx, content, initialState, displayPath)
 
@@ -230,6 +220,27 @@ func (v *MarkdownValidator) getContentWithState(
 // formatTableSuggestion formats a table suggestion for display in error details.
 func formatTableSuggestion(lineNum int, suggestion string) string {
 	return fmt.Sprintf("Line %d - Use this properly formatted table:\n\n%s", lineNum, suggestion)
+}
+
+// getDisplayPath converts an absolute file path to a relative path for display.
+// Returns "<content>" if the path is empty, or the relative path if it can be computed,
+// otherwise returns the original path.
+func getDisplayPath(filePath string) string {
+	if filePath == "" {
+		return "<content>"
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return filePath
+	}
+
+	relPath, err := filepath.Rel(cwd, filePath)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		return filePath
+	}
+
+	return relPath
 }
 
 // Category returns the validator category for parallel execution.

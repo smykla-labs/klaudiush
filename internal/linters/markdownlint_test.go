@@ -238,6 +238,7 @@ code
 				result,
 				"/tmp/test.md",
 				0,
+				0,
 				false,
 				"<file>",
 			)
@@ -254,6 +255,7 @@ code
 			lintResult := linters.ProcessMarkdownlintOutput(
 				result,
 				"/tmp/test.md",
+				0,
 				0,
 				false,
 				"<file>",
@@ -273,6 +275,7 @@ code
 				result,
 				"/tmp/test.md",
 				0,
+				0,
 				false,
 				"README.md",
 			)
@@ -291,11 +294,30 @@ code
 				result,
 				"/tmp/test.md",
 				5,
+				0,
 				false,
 				"<file>",
 			)
 			Expect(lintResult.Success).To(BeFalse())
-			Expect(lintResult.RawOut).To(ContainSubstring("<file>:10"))
+			Expect(lintResult.RawOut).To(ContainSubstring("<file>:11"))
+		})
+
+		It("should adjust line numbers with fragment start line", func() {
+			result := &execpkg.CommandResult{
+				ExitCode: 1,
+				Stdout:   "<file>:5 MD022/blanks-around-headings",
+				Stderr:   "",
+			}
+			lintResult := linters.ProcessMarkdownlintOutput(
+				result,
+				"/tmp/test.md",
+				2,
+				10,
+				false,
+				"<file>",
+			)
+			Expect(lintResult.Success).To(BeFalse())
+			Expect(lintResult.RawOut).To(ContainSubstring("<file>:14"))
 		})
 
 		It("should filter out preamble errors", func() {
@@ -308,12 +330,13 @@ code
 				result,
 				"/tmp/test.md",
 				5,
+				0,
 				false,
 				"<file>",
 			)
 			Expect(lintResult.Success).To(BeFalse())
 			Expect(lintResult.RawOut).NotTo(ContainSubstring("<file>:3"))
-			Expect(lintResult.RawOut).To(ContainSubstring("<file>:5"))
+			Expect(lintResult.RawOut).To(ContainSubstring("<file>:6"))
 		})
 
 		It("should return success when all errors are in preamble", func() {
@@ -326,6 +349,7 @@ code
 				result,
 				"/tmp/test.md",
 				5,
+				0,
 				false,
 				"<file>",
 			)
@@ -341,6 +365,7 @@ code
 			lintResult := linters.ProcessMarkdownlintOutput(
 				result,
 				"/tmp/test.md",
+				0,
 				0,
 				false,
 				"<file>",
@@ -364,6 +389,7 @@ Summary: 1 error(s)
 				result,
 				"/tmp/test.md",
 				0,
+				0,
 				true,
 				"<file>",
 			)
@@ -385,6 +411,7 @@ Summary: 1 error(s)
 				result,
 				"/tmp/test.md",
 				0,
+				0,
 				false,
 				"<file>",
 			)
@@ -401,6 +428,7 @@ Summary: 1 error(s)
 			lintResult := linters.ProcessMarkdownlintOutput(
 				result,
 				"/tmp/markdownlint-test123.md",
+				0,
 				0,
 				false,
 				"README.md",
@@ -420,6 +448,7 @@ Summary: 1 error(s)
 			lintResult := linters.ProcessMarkdownlintOutput(
 				result,
 				"/var/folders/d1/tvmyp5cs1gz38rltf390ddpw0000gn/T/markdownlint-456.md",
+				0,
 				0,
 				false,
 				".claude/session.md",
