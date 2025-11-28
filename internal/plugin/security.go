@@ -309,7 +309,7 @@ func expandPath(path string) (string, error) {
 		return homeDir, nil
 	}
 
-	if path[1] == '/' || path[1] == filepath.Separator {
+	if len(path) > 1 && (path[1] == '/' || path[1] == filepath.Separator) {
 		return filepath.Join(homeDir, path[2:]), nil
 	}
 
