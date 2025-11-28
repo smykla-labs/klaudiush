@@ -166,6 +166,22 @@ Messages must be **actionable** - tell the user what to do, not what's wrong.
 - Bad: "Shellcheck error" → Good: "Add a shebang (#!/bin/bash) at line 1"
 - Bad: "Table formatting error" → Good: "Align table columns (see suggestion)"
 
+### Multi-Line Messages
+
+Continuation lines are indented by 2 spaces relative to the first line:
+
+```text
+  ✖ GIT013: Title doesn't follow conventional commits format
+    Expected: type(scope): description
+    Valid types: feat, fix, docs, style, refactor, test, chore
+```
+
+```text
+  Line 42 ✖ SEC001: Potential AWS access key detected
+    Value matches pattern: AKIA[0-9A-Z]{16}
+    Remove or use environment variable instead
+```
+
 ## Implementation
 
 ### Shared Output Package
