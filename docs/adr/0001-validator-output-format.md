@@ -186,26 +186,70 @@ Continuation lines are indented by 2 spaces relative to the first line:
 
 ### Shared Output Package
 
-Create `internal/output/format.go` with:
+Create `internal/output/` with types for validators to return and a single format function for the dispatcher.
+
+**Core types:**
 
 ```go
-// FormatValidationErrors formats multiple validation errors
-func FormatValidationErrors(errors []ValidationError) string
+// Finding represents a single validation finding
+type Finding struct {
+    Severity   Severity
+    Code       string     // e.g., "GIT010", "SC2148"
+    Message    string     // actionable message
+    Line       int        // 0 if not line-based
+    EndLine    int        // 0 if single line or not line-based
+    Suggestion string     // optional fix content
+    Details    []string   // optional continuation lines
+}
 
-// FormatLineFinding formats a line-based finding
-func FormatLineFinding(line int, severity Severity, rule, msg string) string
+// ValidatorResult is returned by each validator
+type ValidatorResult struct {
+    Name      string      // validator name (e.g., "commit", "shellscript")
+    Findings  []Finding
+    Reference Reference   // documentation URL
+}
 
-// FormatFinding formats a non-line-based finding
-func FormatFinding(severity Severity, code, message string) string
+// Severity levels
+type Severity int
 
-// FormatSuggestion formats a copy-pasteable fix
-func FormatSuggestion(lineStart, lineEnd int, content string) string
+const (
+    Error   Severity = iota  // ✖ blocks operation
+    Warning                  // ⚠ allows, logs warning
+    Info                     // ℹ informational
+)
+```
 
-// FormatList formats a bulleted list with header
-func FormatList(header string, items []string) string
+**Format function:**
 
-// FormatReferences formats reference URLs
-func FormatReferences(refs []Reference) string
+```go
+// Format produces the final formatted output from validator results
+func Format(results []ValidatorResult, opts ...Option) string
+
+// Option configures formatting behavior
+type Option func(*config)
+
+func WithIndent(s string) Option
+func WithMaxFindings(n int) Option
+```
+
+**Usage in dispatcher:**
+
+```go
+output.Format(results)
+output.Format(results, output.WithMaxFindings(10))
+```
+
+**Usage in validators:**
+
+```go
+func (v *CommitValidator) Validate(ctx, hookCtx) *validator.Result {
+    return &validator.Result{
+        Findings: []output.Finding{
+            {Severity: output.Error, Code: "GIT010", Message: "Add -sS flags"},
+        },
+        Reference: validator.RefGitMissingFlags,
+    }
+}
 ```
 
 ### Validator Updates
