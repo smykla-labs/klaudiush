@@ -1,0 +1,32 @@
+# Test: Debug rules with configuration shows rules
+# This tests that the debug rules command displays configured rules
+
+mkdir .klaudiush
+
+# Create config with rules
+cp config.toml .klaudiush/config.toml
+
+exec klaudiush debug rules
+stdout 'Validation Rules'
+stdout 'Engine Enabled: true'
+stdout 'Rule #1: test-block-origin'
+stdout 'Priority: 100'
+stdout 'Remote: origin'
+stdout 'Action:'
+stdout 'Type: block'
+
+-- config.toml --
+[rules]
+enabled = true
+
+[[rules.rules]]
+name = "test-block-origin"
+priority = 100
+
+[rules.rules.match]
+validator_type = "git.push"
+remote = "origin"
+
+[rules.rules.action]
+type = "block"
+message = "Pushing to origin is blocked"

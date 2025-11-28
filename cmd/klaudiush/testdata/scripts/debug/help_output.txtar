@@ -1,0 +1,6 @@
+# Test: Debug command shows help correctly
+# This tests that the debug command help output is correct
+
+exec klaudiush debug --help
+stdout 'Debug klaudiush configuration'
+stdout 'rules'

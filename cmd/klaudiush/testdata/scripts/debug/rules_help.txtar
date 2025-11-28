@@ -1,0 +1,7 @@
+# Test: Debug rules subcommand shows help correctly
+# This tests that the debug rules command help output is correct
+
+exec klaudiush debug rules --help
+stdout 'Show loaded validation rules'
+stdout 'validator'
+stdout 'Examples'

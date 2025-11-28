@@ -1,0 +1,52 @@
+# Test: Debug rules displays all match condition fields
+# This tests that all match conditions are displayed correctly
+
+mkdir .klaudiush
+
+# Create config with all match fields
+cp config.toml .klaudiush/config.toml
+
+exec klaudiush debug rules
+stdout 'Validation Rules'
+stdout 'Rule #1: comprehensive-rule'
+stdout 'Description: A comprehensive test rule'
+stdout 'Match:'
+stdout 'Validator Type: git.push'
+stdout 'Repo Pattern: \*\*/myorg/\*\*'
+stdout 'Remote: origin'
+stdout 'Branch Pattern: main'
+stdout 'File Pattern: \*.go'
+stdout 'Content Pattern: TODO'
+stdout 'Command Pattern: git push'
+stdout 'Tool Type: Bash'
+stdout 'Event Type: PreToolUse'
+stdout 'Action:'
+stdout 'Type: block'
+stdout 'Message: Blocked by comprehensive rule'
+stdout 'Reference: GIT001'
+
+-- config.toml --
+[rules]
+enabled = true
+stop_on_first_match = false
+
+[[rules.rules]]
+name = "comprehensive-rule"
+description = "A comprehensive test rule"
+priority = 100
+
+[rules.rules.match]
+validator_type = "git.push"
+repo_pattern = "**/myorg/**"
+remote = "origin"
+branch_pattern = "main"
+file_pattern = "*.go"
+content_pattern = "TODO"
+command_pattern = "git push"
+tool_type = "Bash"
+event_type = "PreToolUse"
+
+[rules.rules.action]
+type = "block"
+message = "Blocked by comprehensive rule"
+reference = "GIT001"

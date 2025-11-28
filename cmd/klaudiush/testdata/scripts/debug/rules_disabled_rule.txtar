@@ -1,0 +1,30 @@
+# Test: Debug rules shows disabled rules with DISABLED marker
+# This tests that disabled rules are marked appropriately
+
+mkdir .klaudiush
+
+# Create config with a disabled rule
+cp config.toml .klaudiush/config.toml
+
+exec klaudiush debug rules
+stdout 'Rule #1: disabled-rule \[DISABLED\]'
+stdout 'Rule #2: enabled-rule \[enabled\]'
+
+-- config.toml --
+[rules]
+enabled = true
+
+[[rules.rules]]
+name = "disabled-rule"
+enabled = false
+priority = 100
+
+[rules.rules.action]
+type = "block"
+
+[[rules.rules]]
+name = "enabled-rule"
+priority = 90
+
+[rules.rules.action]
+type = "warn"

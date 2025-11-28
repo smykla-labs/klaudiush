@@ -404,4 +404,94 @@ var _ = Describe("Pattern", func() {
 			Expect(rules.PatternModeAll).To(Equal("all"))
 		})
 	})
+
+	Describe("GetCachedPattern", func() {
+		It("should return cached pattern", func() {
+			// Clear cache first to ensure clean state.
+			rules.ClearPatternCache()
+
+			pattern1, err := rules.GetCachedPattern("*.go")
+			Expect(err).NotTo(HaveOccurred())
+
+			pattern2, err := rules.GetCachedPattern("*.go")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should be the same instance from cache.
+			Expect(pattern1).To(BeIdenticalTo(pattern2))
+		})
+
+		It("should return error for invalid pattern", func() {
+			rules.ClearPatternCache()
+
+			_, err := rules.GetCachedPattern("[invalid")
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Describe("ClearPatternCache", func() {
+		It("should clear the default cache", func() {
+			// Add a pattern to cache.
+			_, _ = rules.GetCachedPattern("*.test")
+
+			// Clear cache.
+			rules.ClearPatternCache()
+
+			// Pattern should be recompiled (can't easily verify instance change,
+			// but this exercises the code path).
+			pattern, err := rules.GetCachedPattern("*.test")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pattern).NotTo(BeNil())
+		})
+	})
+
+	Describe("MultiPattern edge cases", func() {
+		It("should handle unknown mode in Match", func() {
+			patterns := []rules.Pattern{
+				mustCompilePattern("*.go"),
+				mustCompilePattern("*.ts"),
+			}
+
+			// Create MultiPattern with invalid mode value to test default case.
+			mp := rules.NewMultiPattern(patterns, rules.MultiPatternMode(99), "test")
+
+			// Unknown mode should return false.
+			Expect(mp.Match("main.go")).To(BeFalse())
+		})
+	})
+
+	Describe("NegatedPattern", func() {
+		It("should create and invert pattern", func() {
+			inner := mustCompilePattern("*.tmp")
+			negated := rules.NewNegatedPattern(inner)
+
+			Expect(negated.Match("file.go")).To(BeTrue())
+			Expect(negated.Match("file.tmp")).To(BeFalse())
+			Expect(negated.String()).To(Equal("!*.tmp"))
+		})
+	})
+
+	Describe("CaseInsensitivePattern", func() {
+		It("should return original pattern string", func() {
+			pattern, err := rules.NewCaseInsensitiveGlobPattern("*.Md")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pattern.String()).To(Equal("*.Md"))
+		})
+
+		It("should return error for invalid pattern", func() {
+			_, err := rules.NewCaseInsensitiveGlobPattern("[invalid")
+			Expect(err).To(HaveOccurred())
+		})
+	})
 })
+
+// Helper function to compile a pattern without error handling.
+//
+//nolint:ireturn // test helper returns interface intentionally
+func mustCompilePattern(s string) rules.Pattern {
+	p, err := rules.CompilePattern(s)
+	if err != nil {
+		panic(err)
+	}
+
+	return p
+}

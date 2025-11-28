@@ -1,0 +1,56 @@
+# Test: Debug rules with filter shows only matching rules
+# This tests that the --validator filter works correctly
+
+mkdir .klaudiush
+
+# Create config with multiple rules
+cp config.toml .klaudiush/config.toml
+
+# Filter should only show git.push rules
+exec klaudiush debug rules --validator git.push
+stdout 'Rule #1: push-rule'
+! stdout 'commit-rule'
+
+# Wildcard filter should show all git rules
+exec klaudiush debug rules --validator 'git.*'
+stdout 'push-rule'
+stdout 'commit-rule'
+! stdout 'secrets-rule'
+
+# No match should show appropriate message
+exec klaudiush debug rules --validator file.markdown
+stdout 'No rules match filter'
+
+-- config.toml --
+[rules]
+enabled = true
+
+[[rules.rules]]
+name = "push-rule"
+priority = 100
+
+[rules.rules.match]
+validator_type = "git.push"
+
+[rules.rules.action]
+type = "block"
+
+[[rules.rules]]
+name = "commit-rule"
+priority = 90
+
+[rules.rules.match]
+validator_type = "git.commit"
+
+[rules.rules.action]
+type = "warn"
+
+[[rules.rules]]
+name = "secrets-rule"
+priority = 80
+
+[rules.rules.match]
+validator_type = "secrets.secrets"
+
+[rules.rules.action]
+type = "block"

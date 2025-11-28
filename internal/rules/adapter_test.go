@@ -387,4 +387,162 @@ var _ = Describe("RuleValidatorAdapter", func() {
 			Expect(result.ShouldBlock).To(BeTrue())
 		})
 	})
+
+	Describe("Warn with reference", func() {
+		It("should return warn result with reference", func() {
+			ruleList := []*rules.Rule{
+				{
+					Name:    "warn-with-ref",
+					Enabled: true,
+					Match: &rules.RuleMatch{
+						Remote: "upstream",
+					},
+					Action: &rules.RuleAction{
+						Type:      rules.ActionWarn,
+						Message:   "warning message",
+						Reference: "GIT020",
+					},
+				},
+			}
+
+			engine, _ = rules.NewRuleEngine(ruleList)
+			adapter = rules.NewRuleValidatorAdapter(
+				engine,
+				rules.ValidatorGitPush,
+				rules.WithGitContextProvider(func() *rules.GitContext {
+					return &rules.GitContext{
+						Remote: "upstream",
+					}
+				}),
+			)
+
+			result := adapter.CheckRules(ctx, &hook.Context{})
+			Expect(result).NotTo(BeNil())
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeFalse())
+			Expect(result.Message).To(Equal("warning message"))
+			Expect(string(result.Reference)).To(Equal("GIT020"))
+		})
+	})
+
+	Describe("Block without reference", func() {
+		It("should return fail result without reference", func() {
+			ruleList := []*rules.Rule{
+				{
+					Name:    "block-no-ref",
+					Enabled: true,
+					Match: &rules.RuleMatch{
+						Remote: "blocked",
+					},
+					Action: &rules.RuleAction{
+						Type:    rules.ActionBlock,
+						Message: "blocked message",
+						// No reference
+					},
+				},
+			}
+
+			engine, _ = rules.NewRuleEngine(ruleList)
+			adapter = rules.NewRuleValidatorAdapter(
+				engine,
+				rules.ValidatorGitPush,
+				rules.WithGitContextProvider(func() *rules.GitContext {
+					return &rules.GitContext{
+						Remote: "blocked",
+					}
+				}),
+			)
+
+			result := adapter.CheckRules(ctx, &hook.Context{})
+			Expect(result).NotTo(BeNil())
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+			Expect(result.Message).To(Equal("blocked message"))
+			Expect(result.Reference).To(BeEmpty())
+		})
+	})
+
+	Describe("Unknown action type", func() {
+		It("should return nil for unknown action type", func() {
+			ruleList := []*rules.Rule{
+				{
+					Name:    "unknown-action",
+					Enabled: true,
+					Action: &rules.RuleAction{
+						Type:    rules.ActionType("unknown"),
+						Message: "test",
+					},
+				},
+			}
+
+			engine, _ = rules.NewRuleEngine(ruleList)
+			adapter = rules.NewRuleValidatorAdapter(engine, rules.ValidatorGitPush)
+
+			result := adapter.CheckRules(ctx, &hook.Context{})
+			Expect(result).To(BeNil())
+		})
+	})
+
+	Describe("CheckRulesWithContext with nil engine", func() {
+		It("should return nil", func() {
+			adapter = rules.NewRuleValidatorAdapter(nil, rules.ValidatorGitPush)
+
+			result := adapter.CheckRulesWithContext(ctx, &hook.Context{}, nil, nil)
+			Expect(result).To(BeNil())
+		})
+	})
+
+	Describe("Warn without reference", func() {
+		It("should return warn result without reference", func() {
+			ruleList := []*rules.Rule{
+				{
+					Name:    "warn-no-ref",
+					Enabled: true,
+					Match: &rules.RuleMatch{
+						Remote: "warning",
+					},
+					Action: &rules.RuleAction{
+						Type:    rules.ActionWarn,
+						Message: "just a warning",
+						// No reference
+					},
+				},
+			}
+
+			engine, _ = rules.NewRuleEngine(ruleList)
+			adapter = rules.NewRuleValidatorAdapter(
+				engine,
+				rules.ValidatorGitPush,
+				rules.WithGitContextProvider(func() *rules.GitContext {
+					return &rules.GitContext{
+						Remote: "warning",
+					}
+				}),
+			)
+
+			result := adapter.CheckRules(ctx, &hook.Context{})
+			Expect(result).NotTo(BeNil())
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeFalse())
+			Expect(result.Reference).To(BeEmpty())
+		})
+	})
+
+	Describe("AdapterOption functions", func() {
+		It("should apply WithAdapterLogger option", func() {
+			ruleList := []*rules.Rule{
+				{Name: "test", Enabled: true, Action: &rules.RuleAction{Type: rules.ActionAllow}},
+			}
+			engine, _ = rules.NewRuleEngine(ruleList)
+
+			// Should not panic.
+			adapter = rules.NewRuleValidatorAdapter(
+				engine,
+				rules.ValidatorGitPush,
+				rules.WithAdapterLogger(nil), // nil logger should be handled
+			)
+
+			Expect(adapter).NotTo(BeNil())
+		})
+	})
 })

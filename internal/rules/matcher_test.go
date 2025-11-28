@@ -31,6 +31,18 @@ var _ = Describe("Matcher", func() {
 			Expect(matcher.Match(ctx)).To(BeFalse())
 		})
 
+		It("should not match when RepoRoot is empty", func() {
+			matcher, err := rules.NewRepoPatternMatcher("**/myorg/**")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx := &rules.MatchContext{
+				GitContext: &rules.GitContext{
+					RepoRoot: "",
+				},
+			}
+			Expect(matcher.Match(ctx)).To(BeFalse())
+		})
+
 		It("should match with regex pattern", func() {
 			matcher, err := rules.NewRepoPatternMatcher("(?i).*/myorg/.*")
 			Expect(err).NotTo(HaveOccurred())
@@ -41,6 +53,110 @@ var _ = Describe("Matcher", func() {
 				},
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
+		})
+
+		Describe("NewRepoPatternMatcherWithOpts", func() {
+			It("should create matcher with case-insensitive option", func() {
+				opts := rules.PatternOptions{CaseInsensitive: true}
+				matcher, err := rules.NewRepoPatternMatcherWithOpts("**/MyOrg/**", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					GitContext: &rules.GitContext{
+						RepoRoot: "/home/user/myorg/project",
+					},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should create matcher with negate option", func() {
+				opts := rules.PatternOptions{Negate: true}
+				matcher, err := rules.NewRepoPatternMatcherWithOpts("**/vendor/**", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					GitContext: &rules.GitContext{
+						RepoRoot: "/home/user/myproject/src",
+					},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.GitContext.RepoRoot = "/home/user/vendor/lib"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should return error for invalid pattern", func() {
+				opts := rules.PatternOptions{}
+				_, err := rules.NewRepoPatternMatcherWithOpts("[invalid", opts)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Describe("NewRepoMultiPatternMatcher", func() {
+			It("should match any of multiple patterns", func() {
+				patterns := []string{"**/myorg/**", "**/theirorg/**"}
+				matcher, err := rules.NewRepoMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					GitContext: &rules.GitContext{
+						RepoRoot: "/home/user/myorg/project",
+					},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.GitContext.RepoRoot = "/home/user/theirorg/project"
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.GitContext.RepoRoot = "/home/user/other/project"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should require all patterns to match", func() {
+				// Test with regex patterns that work reliably for path matching.
+				patterns := []string{"^.*myorg.*$", "^.*project.*$"}
+				matcher, err := rules.NewRepoMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAll,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should match when both "myorg" and "project" are in the path.
+				ctx := &rules.MatchContext{
+					GitContext: &rules.GitContext{
+						RepoRoot: "/home/user/myorg/project",
+					},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				// Should not match when only one pattern matches.
+				ctx.GitContext.RepoRoot = "/home/user/other/project"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should return nil for empty patterns", func() {
+				matcher, err := rules.NewRepoMultiPatternMatcher(
+					[]string{},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(matcher).To(BeNil())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewRepoMultiPatternMatcher(
+					[]string{"[invalid"},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 
@@ -87,6 +203,7 @@ var _ = Describe("Matcher", func() {
 				},
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
+			Expect(matcher.Name()).To(ContainSubstring("branch_pattern"))
 		})
 
 		It("should match branch with regex pattern", func() {
@@ -103,6 +220,85 @@ var _ = Describe("Matcher", func() {
 			ctx.GitContext.Branch = "release-test"
 			Expect(matcher.Match(ctx)).To(BeFalse())
 		})
+
+		It("should not match when GitContext is nil", func() {
+			matcher, err := rules.NewBranchPatternMatcher("feature/*")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx := &rules.MatchContext{}
+			Expect(matcher.Match(ctx)).To(BeFalse())
+		})
+
+		It("should not match when Branch is empty", func() {
+			matcher, err := rules.NewBranchPatternMatcher("feature/*")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx := &rules.MatchContext{
+				GitContext: &rules.GitContext{
+					Branch: "",
+				},
+			}
+			Expect(matcher.Match(ctx)).To(BeFalse())
+		})
+
+		Describe("NewBranchPatternMatcherWithOpts", func() {
+			It("should create matcher with case-insensitive option", func() {
+				opts := rules.PatternOptions{CaseInsensitive: true}
+				matcher, err := rules.NewBranchPatternMatcherWithOpts("Feature/*", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					GitContext: &rules.GitContext{
+						Branch: "feature/new-feature",
+					},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewBranchPatternMatcherWithOpts("[invalid", rules.PatternOptions{})
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Describe("NewBranchMultiPatternMatcher", func() {
+			It("should match any of multiple patterns", func() {
+				patterns := []string{"main", "master", "develop"}
+				matcher, err := rules.NewBranchMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					GitContext: &rules.GitContext{Branch: "main"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.GitContext.Branch = "feature/test"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should return nil for empty patterns", func() {
+				matcher, err := rules.NewBranchMultiPatternMatcher(
+					[]string{},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(matcher).To(BeNil())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewBranchMultiPatternMatcher(
+					[]string{"[invalid"},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	})
 
 	Describe("FilePatternMatcher", func() {
@@ -116,6 +312,7 @@ var _ = Describe("Matcher", func() {
 				},
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
+			Expect(matcher.Name()).To(ContainSubstring("file_pattern"))
 		})
 
 		It("should fall back to HookContext file path", func() {
@@ -131,6 +328,74 @@ var _ = Describe("Matcher", func() {
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
 		})
+
+		It("should return false when no path available", func() {
+			matcher, err := rules.NewFilePatternMatcher("*.go")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx := &rules.MatchContext{}
+			Expect(matcher.Match(ctx)).To(BeFalse())
+		})
+
+		Describe("NewFilePatternMatcherWithOpts", func() {
+			It("should create matcher with case-insensitive option", func() {
+				opts := rules.PatternOptions{CaseInsensitive: true}
+				matcher, err := rules.NewFilePatternMatcherWithOpts("*.Go", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Path: "main.go"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.FileContext.Path = "main.GO"
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewFilePatternMatcherWithOpts("[invalid", rules.PatternOptions{})
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Describe("NewFileMultiPatternMatcher", func() {
+			It("should match any of multiple patterns", func() {
+				patterns := []string{"*.go", "*.ts", "*.js"}
+				matcher, err := rules.NewFileMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Path: "main.go"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.FileContext.Path = "style.css"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should return nil for empty patterns", func() {
+				matcher, err := rules.NewFileMultiPatternMatcher(
+					[]string{},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(matcher).To(BeNil())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewFileMultiPatternMatcher(
+					[]string{"[invalid"},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	})
 
 	Describe("ContentPatternMatcher", func() {
@@ -144,6 +409,7 @@ var _ = Describe("Matcher", func() {
 				},
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
+			Expect(matcher.Name()).To(ContainSubstring("content_pattern"))
 		})
 
 		It("should fall back to HookContext content", func() {
@@ -159,6 +425,166 @@ var _ = Describe("Matcher", func() {
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
 		})
+
+		It("should return false when no content available", func() {
+			matcher, err := rules.NewContentPatternMatcher("pattern")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx := &rules.MatchContext{}
+			Expect(matcher.Match(ctx)).To(BeFalse())
+		})
+
+		It("should return error for invalid regex", func() {
+			_, err := rules.NewContentPatternMatcher("[invalid")
+			Expect(err).To(HaveOccurred())
+		})
+
+		Describe("NewContentPatternMatcherWithOpts", func() {
+			It("should create matcher with case-insensitive option", func() {
+				opts := rules.PatternOptions{CaseInsensitive: true}
+				matcher, err := rules.NewContentPatternMatcherWithOpts("TODO", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "// todo: fix this"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should create matcher with negated option", func() {
+				opts := rules.PatternOptions{Negate: true}
+				matcher, err := rules.NewContentPatternMatcherWithOpts("password", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "safe content"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.FileContext.Content = "password = secret"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should handle negated pattern with ! prefix", func() {
+				opts := rules.PatternOptions{}
+				matcher, err := rules.NewContentPatternMatcherWithOpts("!secret", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "normal text"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should not duplicate (?i) flag", func() {
+				opts := rules.PatternOptions{CaseInsensitive: true}
+				matcher, err := rules.NewContentPatternMatcherWithOpts("(?i)test", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "TEST"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should return error for invalid regex", func() {
+				_, err := rules.NewContentPatternMatcherWithOpts("[invalid", rules.PatternOptions{})
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Describe("NewContentMultiPatternMatcher", func() {
+			It("should match any of multiple content patterns", func() {
+				patterns := []string{"TODO", "FIXME", "HACK"}
+				matcher, err := rules.NewContentMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "// TODO: fix this"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.FileContext.Content = "// FIXME: broken"
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.FileContext.Content = "// normal comment"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should match all content patterns", func() {
+				patterns := []string{"func", "main"}
+				matcher, err := rules.NewContentMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAll,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "func main() {}"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.FileContext.Content = "func helper() {}"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should return nil for empty patterns", func() {
+				matcher, err := rules.NewContentMultiPatternMatcher(
+					[]string{},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(matcher).To(BeNil())
+			})
+
+			It("should use single pattern path for one pattern", func() {
+				matcher, err := rules.NewContentMultiPatternMatcher(
+					[]string{"TODO"},
+					rules.MultiPatternAny,
+					rules.PatternOptions{CaseInsensitive: true},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "// todo: fix"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should support negated patterns in multi-pattern", func() {
+				patterns := []string{"secret", "!test_"}
+				matcher, err := rules.NewContentMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAll,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Must contain "secret" AND NOT contain "test_"
+				ctx := &rules.MatchContext{
+					FileContext: &rules.FileContext{Content: "secret value"},
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.FileContext.Content = "test_secret"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewContentMultiPatternMatcher(
+					[]string{"valid", "[invalid"},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	})
 
 	Describe("CommandPatternMatcher", func() {
@@ -170,6 +596,7 @@ var _ = Describe("Matcher", func() {
 				Command: "git push origin main",
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
+			Expect(matcher.Name()).To(ContainSubstring("command_pattern"))
 		})
 
 		It("should fall back to HookContext command", func() {
@@ -184,6 +611,71 @@ var _ = Describe("Matcher", func() {
 				},
 			}
 			Expect(matcher.Match(ctx)).To(BeTrue())
+		})
+
+		It("should return false when no command available", func() {
+			matcher, err := rules.NewCommandPatternMatcher("git*")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx := &rules.MatchContext{}
+			Expect(matcher.Match(ctx)).To(BeFalse())
+		})
+
+		Describe("NewCommandPatternMatcherWithOpts", func() {
+			It("should create matcher with case-insensitive option", func() {
+				opts := rules.PatternOptions{CaseInsensitive: true}
+				matcher, err := rules.NewCommandPatternMatcherWithOpts("*GIT*", opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					Command: "git push origin",
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewCommandPatternMatcherWithOpts("[invalid", rules.PatternOptions{})
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Describe("NewCommandMultiPatternMatcher", func() {
+			It("should match any of multiple command patterns", func() {
+				patterns := []string{"git push*", "git commit*", "git merge*"}
+				matcher, err := rules.NewCommandMultiPatternMatcher(
+					patterns,
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				ctx := &rules.MatchContext{
+					Command: "git push origin main",
+				}
+				Expect(matcher.Match(ctx)).To(BeTrue())
+
+				ctx.Command = "git status"
+				Expect(matcher.Match(ctx)).To(BeFalse())
+			})
+
+			It("should return nil for empty patterns", func() {
+				matcher, err := rules.NewCommandMultiPatternMatcher(
+					[]string{},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(matcher).To(BeNil())
+			})
+
+			It("should return error for invalid pattern", func() {
+				_, err := rules.NewCommandMultiPatternMatcher(
+					[]string{"[invalid"},
+					rules.MultiPatternAny,
+					rules.PatternOptions{},
+				)
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 
@@ -516,7 +1008,7 @@ var _ = Describe("Matcher", func() {
 
 			It("should match any of multiple repo patterns", func() {
 				match := &rules.RuleMatch{
-					RepoPatterns: []string{"**/kong/**", "**/kuma/**"},
+					RepoPatterns: []string{"**/myorg/**", "**/theirorg/**"},
 					PatternMode:  "any",
 				}
 
@@ -524,11 +1016,11 @@ var _ = Describe("Matcher", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				ctx := &rules.MatchContext{
-					GitContext: &rules.GitContext{RepoRoot: "/home/user/kong/project"},
+					GitContext: &rules.GitContext{RepoRoot: "/home/user/myorg/project"},
 				}
 				Expect(matcher.Match(ctx)).To(BeTrue())
 
-				ctx.GitContext.RepoRoot = "/home/user/kuma/project"
+				ctx.GitContext.RepoRoot = "/home/user/theirorg/project"
 				Expect(matcher.Match(ctx)).To(BeTrue())
 
 				ctx.GitContext.RepoRoot = "/home/user/other/project"

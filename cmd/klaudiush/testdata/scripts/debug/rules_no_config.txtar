@@ -1,0 +1,7 @@
+# Test: Debug rules without configuration shows appropriate message
+# This tests that the debug rules command works without any config
+
+exec klaudiush debug rules
+stdout 'No rules configured'
+stdout 'config.toml'
+stdout 'RULES_GUIDE.md'

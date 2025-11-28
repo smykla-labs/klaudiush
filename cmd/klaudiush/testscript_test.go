@@ -31,6 +31,7 @@ func mainFunc() {
 	verboseFlag = false
 	fixFlag = false
 	categoryFlag = []string{}
+	validatorFilter = ""
 
 	// Reset git repository cache so each test discovers its own repo
 	gitpkg.ResetRepositoryCache()
@@ -82,6 +83,13 @@ func TestScriptDoctor(t *testing.T) {
 func TestScriptMarkdown(t *testing.T) {
 	testscript.Run(t, testscript.Params{
 		Dir:   "testdata/scripts/markdown",
+		Setup: setupTestEnv,
+	})
+}
+
+func TestScriptDebug(t *testing.T) {
+	testscript.Run(t, testscript.Params{
+		Dir:   "testdata/scripts/debug",
 		Setup: setupTestEnv,
 	})
 }
