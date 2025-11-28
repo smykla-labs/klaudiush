@@ -15,7 +15,7 @@ task = "3.45.5"
 
 # Markdown linter
 # https://github.com/DavidAnson/markdownlint-cli2
-"npm:markdownlint-cli2" = "0.17.1"
+"npm:markdownlint-cli2" = "0.19.1"
 
 # Enum code generator
 # https://github.com/dmarkham/enumer
