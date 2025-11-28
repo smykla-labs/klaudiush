@@ -5,6 +5,21 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0](https://github.com/smykla-labs/klaudiush/compare/v1.2.0...v1.3.0) (2025-11-28)
+
+### Features
+
+* **plugin:** add security improvements ([#72](https://github.com/smykla-labs/klaudiush/issues/72)) ([2a5aa8c](https://github.com/smykla-labs/klaudiush/commit/2a5aa8cb73032c07aabed2717243611bce240f60))
+* **rules:** add dynamic validation rules engine ([#55](https://github.com/smykla-labs/klaudiush/issues/55)) ([541e573](https://github.com/smykla-labs/klaudiush/commit/541e5730c739c02728dc7c2c3ac194f1d0a9bd52))
+* **validators:** add GitHub issue validator ([#57](https://github.com/smykla-labs/klaudiush/issues/57)) ([0bd2b65](https://github.com/smykla-labs/klaudiush/commit/0bd2b65e1ff6b6bdf1e7871c691030f3689a4d16))
+
+### Bug Fixes
+
+* **linters:** disable MD013 for markdown fragments ([#59](https://github.com/smykla-labs/klaudiush/issues/59)) ([d78f978](https://github.com/smykla-labs/klaudiush/commit/d78f9786a886405429e0ef6d1a20cebf4fb3824c))
+* **linters:** enhance markdown fragment errors ([#54](https://github.com/smykla-labs/klaudiush/issues/54)) ([793980b](https://github.com/smykla-labs/klaudiush/commit/793980b370fe6ef80a164caa1e3b16862697b769))
+* **linters:** handle MD047 for line-0 fragments ([#58](https://github.com/smykla-labs/klaudiush/issues/58)) ([c402a1d](https://github.com/smykla-labs/klaudiush/commit/c402a1d4371fe75b04e13effe6d3168310d84e30))
+* **validators:** align PR errors with policy ([#56](https://github.com/smykla-labs/klaudiush/issues/56)) ([8ea3140](https://github.com/smykla-labs/klaudiush/commit/8ea314050a93c1a863d8629199f11f5be2fe382a))
+
 ## [1.2.0](https://github.com/smykla-labs/klaudiush/compare/v1.1.1...v1.2.0) (2025-11-28)
 
 ### Features
