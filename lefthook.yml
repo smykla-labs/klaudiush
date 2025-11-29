@@ -13,9 +13,9 @@ pre-commit:
 
     test:
       glob: "*.go"
-      run: go test -v -race -cover -short ./...
+      run: go test -race -cover -short ./...
 
-# Pre-push hook - runs full validation
+# Pre-push hook - runs full validation (concise output)
 pre-push:
   parallel: true
   commands:
@@ -23,5 +23,5 @@ pre-push:
       run: golangci-lint run
 
     test:
-      run: go test -v -race -cover ./...
+      run: go test -race -cover ./...
 

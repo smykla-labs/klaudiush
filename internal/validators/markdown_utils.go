@@ -165,7 +165,7 @@ func GeneratePreamble(state *MarkdownState) (string, int) {
 }
 
 // generatePreambleWithContext creates a preamble for fragments that start mid-file.
-// It establishes heading hierarchy and list context.
+// It establishes heading hierarchy, list context, and code block context.
 func generatePreambleWithContext(state *MarkdownState) (string, int) {
 	var builder strings.Builder
 
@@ -196,6 +196,14 @@ func generatePreambleWithContext(state *MarkdownState) (string, int) {
 	// or list context, as that would create consecutive blank lines (MD012)
 	if state.HadBlankLineBeforeFragment && headingLines == 0 && !state.InList {
 		builder.WriteString("\n")
+
+		lineCount++
+	}
+
+	// If fragment starts inside a code block, add opening fence
+	// This pairs with the closing fence that may be in the fragment
+	if state.InCodeBlock {
+		builder.WriteString("```text\n")
 
 		lineCount++
 	}

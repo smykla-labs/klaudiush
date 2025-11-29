@@ -13,9 +13,9 @@ import (
 	"github.com/smykla-labs/klaudiush/pkg/logger"
 )
 
-var _ = Describe("PushValidator", func() {
+var _ = Describe("FetchValidator", func() {
 	var (
-		validator *git.PushValidator
+		validator *git.FetchValidator
 		fakeGit   *gitpkg.FakeRunner
 		log       logger.Logger
 	)
@@ -25,7 +25,7 @@ var _ = Describe("PushValidator", func() {
 		fakeGit = gitpkg.NewFakeRunner()
 		fakeGit.InRepo = true
 		fakeGit.RepoRoot = "/home/user/projects/github.com/user/my-project"
-		validator = git.NewPushValidator(log, fakeGit, nil, nil)
+		validator = git.NewFetchValidator(log, fakeGit, nil, nil)
 	})
 
 	// Helper function to create context with command
@@ -41,7 +41,7 @@ var _ = Describe("PushValidator", func() {
 
 	Describe("Name", func() {
 		It("returns the validator name", func() {
-			Expect(validator.Name()).To(Equal("validate-git-push"))
+			Expect(validator.Name()).To(Equal("validate-git-fetch"))
 		})
 	})
 
@@ -63,7 +63,7 @@ var _ = Describe("PushValidator", func() {
 		Context("when not in a git repository", func() {
 			It("passes when not in repo", func() {
 				fakeGit.InRepo = false
-				ctx := createContext("git push upstream main")
+				ctx := createContext("git fetch upstream")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
@@ -71,52 +71,73 @@ var _ = Describe("PushValidator", func() {
 
 		Context("remote existence validation", func() {
 			It("passes when remote exists", func() {
-				ctx := createContext("git push origin main")
+				ctx := createContext("git fetch origin")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("passes when fetching upstream remote", func() {
+				ctx := createContext("git fetch upstream")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
 
 			It("fails when remote does not exist", func() {
-				ctx := createContext("git push nonexistent main")
+				ctx := createContext("git fetch nonexistent")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeFalse())
-				Expect(result.Message).To(ContainSubstring("Git push validation failed"))
+				Expect(result.Message).To(ContainSubstring("Git fetch validation failed"))
 				Expect(result.Message).To(ContainSubstring("Remote 'nonexistent' does not exist"))
 				Expect(result.Message).To(ContainSubstring("Available remotes:"))
 				Expect(result.Message).To(ContainSubstring("origin"))
 				Expect(result.Message).To(ContainSubstring("upstream"))
 			})
 
-			It("extracts remote from various push formats", func() {
+			It("extracts remote from various fetch formats", func() {
 				testCases := []struct {
 					command     string
 					shouldPass  bool
 					description string
 				}{
 					{
-						command:     "git push origin main",
+						command:     "git fetch origin",
 						shouldPass:  true,
-						description: "explicit remote and branch",
+						description: "explicit remote",
 					},
 					{
-						command:     "git push upstream feature-branch",
+						command:     "git fetch upstream",
 						shouldPass:  true,
 						description: "upstream remote",
 					},
 					{
-						command:     "git push badremote main",
+						command:     "git fetch --prune origin",
+						shouldPass:  true,
+						description: "with --prune flag",
+					},
+					{
+						command:     "git fetch -p origin",
+						shouldPass:  true,
+						description: "with -p flag",
+					},
+					{
+						command:     "git fetch --prune badremote",
 						shouldPass:  false,
-						description: "nonexistent remote",
+						description: "prune with nonexistent remote",
 					},
 					{
-						command:     "git push --force-with-lease upstream main",
-						shouldPass:  true,
-						description: "with flags before remote",
+						command:     "git fetch -p badremote",
+						shouldPass:  false,
+						description: "-p with nonexistent remote",
 					},
 					{
-						command:     "git push origin main --force",
+						command:     "git fetch --all",
 						shouldPass:  true,
-						description: "with flags after branch",
+						description: "fetch all (no remote specified)",
+					},
+					{
+						command:     "git fetch",
+						shouldPass:  true,
+						description: "no remote specified (uses default)",
 					},
 				}
 
@@ -128,33 +149,6 @@ var _ = Describe("PushValidator", func() {
 			})
 		})
 
-		Context("default remote handling", func() {
-			It("uses tracking remote when no remote specified", func() {
-				fakeGit.CurrentBranch = "feature-branch"
-				fakeGit.BranchRemotes = map[string]string{
-					"feature-branch": "upstream",
-				}
-				ctx := createContext("git push")
-				result := validator.Validate(context.Background(), ctx)
-				Expect(result.Passed).To(BeTrue())
-			})
-
-			It("falls back to origin when no tracking remote", func() {
-				fakeGit.CurrentBranch = "feature-branch"
-				fakeGit.BranchRemotes = map[string]string{}
-				ctx := createContext("git push")
-				result := validator.Validate(context.Background(), ctx)
-				Expect(result.Passed).To(BeTrue())
-			})
-
-			It("falls back to origin when getting branch fails", func() {
-				fakeGit.Err = &gitpkg.FakeRunnerError{Msg: "not a git repository"}
-				ctx := createContext("git push")
-				result := validator.Validate(context.Background(), ctx)
-				Expect(result.Passed).To(BeFalse())
-			})
-		})
-
 		Context("edge cases", func() {
 			It("passes for empty command", func() {
 				ctx := createContext("")
@@ -162,60 +156,57 @@ var _ = Describe("PushValidator", func() {
 				Expect(result.Passed).To(BeTrue())
 			})
 
-			It("passes for git commands other than push", func() {
+			It("passes for git commands other than fetch", func() {
 				ctx := createContext("git pull upstream main")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
 
 			It("passes when command has syntax that parser cannot handle", func() {
-				// Use truly invalid syntax that the parser will reject
-				ctx := createContext("git push $((")
+				ctx := createContext("git fetch $((")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
 
 			It("handles missing remote gracefully", func() {
 				fakeGit.Remotes = map[string]string{}
-				ctx := createContext("git push origin main")
+				ctx := createContext("git fetch origin")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeFalse())
 			})
 		})
 
-		Context("other project types", func() {
-			It("passes for non-Kong, non-kuma projects", func() {
-				fakeGit.RepoRoot = "/home/user/projects/github.com/user/my-project"
-				ctx := createContext("git push origin main")
-				result := validator.Validate(context.Background(), ctx)
-				Expect(result.Passed).To(BeTrue())
-			})
-
-			It("allows any valid remote for other projects", func() {
-				fakeGit.RepoRoot = "/home/user/projects/github.com/user/my-project"
-				ctx := createContext("git push upstream main")
-				result := validator.Validate(context.Background(), ctx)
-				Expect(result.Passed).To(BeTrue())
-			})
-		})
-
 		Context("with -C flag for different directory", func() {
-			It("passes for git push with -C flag to valid repo", func() {
-				ctx := createContext("git -C /path/to/worktree push origin main")
+			It("passes for git fetch with -C flag to valid repo", func() {
+				ctx := createContext("git -C /path/to/worktree fetch origin")
 				result := validator.Validate(context.Background(), ctx)
 				// This creates a new runner for the path, which won't find the repo
 				// but should handle gracefully
 				Expect(result.Passed).To(BeTrue())
 			})
 
-			It("handles -C flag before push subcommand", func() {
-				ctx := createContext("git -C /some/path push upstream feature")
+			It("handles -C flag before fetch subcommand", func() {
+				ctx := createContext("git -C /some/path fetch upstream")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+		})
+
+		Context("combined flags", func() {
+			It("handles multiple flags before remote", func() {
+				ctx := createContext("git fetch --prune --tags origin")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
 
-			It("handles --git-dir style paths", func() {
-				ctx := createContext("git push origin main")
+			It("handles verbose flag", func() {
+				ctx := createContext("git fetch -v origin")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("handles dry-run flag", func() {
+				ctx := createContext("git fetch --dry-run origin")
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})

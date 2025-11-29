@@ -86,24 +86,39 @@ tasks:
       - task: build
 
   test:
-    desc: Run all tests (including testscript integration tests)
+    desc: Run all tests with concise output (one line per package)
+    deps:
+      - build
+    cmds:
+      # Fast, concise output - shows full failure details when tests fail
+      - mise exec -- go test -race -cover ./...
+
+  test:verbose:
+    desc: Run all tests with verbose output (shows each test)
     deps:
       - build
     cmds:
       - mise exec -- go test -v -race -cover ./...
 
-  test:unit:
-    desc: Run unit tests only
+  test:ginkgo:
+    desc: Run ginkgo tests with ginkgo CLI (slower but prettier output)
+    deps:
+      - build
     cmds:
-      - mise exec -- go test -v -race -cover -short ./...
+      - mise exec -- ginkgo -r -p --succinct --no-color --race --cover ./...
+
+  test:unit:
+    desc: Run unit tests only (short mode)
+    cmds:
+      - mise exec -- go test -race -cover -short ./...
 
   test:integration:
     desc: Run integration tests only
     cmds:
-      - mise exec -- go test -v -race -cover -run Integration ./...
+      - mise exec -- go test -race -cover -run Integration ./...
 
   test:testscript:
-    desc: Run testscript integration tests
+    desc: Run testscript integration tests (verbose)
     deps:
       - build
     cmds:

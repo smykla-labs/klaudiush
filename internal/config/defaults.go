@@ -63,6 +63,7 @@ func DefaultGitConfig() *config.GitConfig {
 	return &config.GitConfig{
 		Commit:   DefaultCommitValidatorConfig(),
 		Push:     DefaultPushValidatorConfig(),
+		Fetch:    DefaultFetchValidatorConfig(),
 		Add:      DefaultAddValidatorConfig(),
 		PR:       DefaultPRValidatorConfig(),
 		Branch:   DefaultBranchValidatorConfig(),
@@ -185,6 +186,18 @@ func DefaultPushValidatorConfig() *config.PushValidatorConfig {
 	}
 }
 
+// DefaultFetchValidatorConfig returns the default fetch validator configuration.
+func DefaultFetchValidatorConfig() *config.FetchValidatorConfig {
+	enabled := true
+
+	return &config.FetchValidatorConfig{
+		ValidatorConfig: config.ValidatorConfig{
+			Enabled:  &enabled,
+			Severity: config.SeverityError,
+		},
+	}
+}
+
 // DefaultAddValidatorConfig returns the default add validator configuration.
 func DefaultAddValidatorConfig() *config.AddValidatorConfig {
 	enabled := true
@@ -295,6 +308,10 @@ func DefaultMarkdownValidatorConfig() *config.MarkdownValidatorConfig {
 		CodeBlockFormatting: &codeBlockFormatting,
 		ListFormatting:      &listFormatting,
 		UseMarkdownlint:     &useMarkdownlint,
+		MarkdownlintRules: map[string]bool{
+			"MD013": false, // line-length disabled by default
+			"MD034": false, // bare URLs disabled by default (common in code blocks)
+		},
 	}
 }
 

@@ -31,6 +31,7 @@ type ValidatorType string
 // Common validator type constants.
 const (
 	ValidatorGitPush       ValidatorType = "git.push"
+	ValidatorGitFetch      ValidatorType = "git.fetch"
 	ValidatorGitCommit     ValidatorType = "git.commit"
 	ValidatorGitAdd        ValidatorType = "git.add"
 	ValidatorGitPR         ValidatorType = "git.pr"

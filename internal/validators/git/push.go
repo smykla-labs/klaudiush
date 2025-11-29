@@ -2,11 +2,9 @@ package git
 
 import (
 	"context"
-	"sort"
 	"strings"
 
 	"github.com/smykla-labs/klaudiush/internal/rules"
-	"github.com/smykla-labs/klaudiush/internal/templates"
 	"github.com/smykla-labs/klaudiush/internal/validator"
 	"github.com/smykla-labs/klaudiush/pkg/config"
 	"github.com/smykla-labs/klaudiush/pkg/hook"
@@ -52,79 +50,61 @@ func (*PushValidator) Name() string {
 
 // Validate validates git push commands
 func (v *PushValidator) Validate(ctx context.Context, hookCtx *hook.Context) *validator.Result {
-	log := v.Logger()
-
-	// Check rules first if rule adapter is configured
-	if v.ruleAdapter != nil {
-		if result := v.ruleAdapter.CheckRules(ctx, hookCtx); result != nil {
-			return result
-		}
-	}
-
-	command := hookCtx.GetCommand()
-	if command == "" {
-		return validator.Pass()
-	}
-
-	bashParser := parser.NewBashParser()
-
-	parseResult, err := bashParser.Parse(command)
-	if err != nil {
-		log.Debug("failed to parse command", "error", err)
-		return validator.Pass()
-	}
-
-	for _, cmd := range parseResult.Commands {
-		if cmd.Name != "git" || len(cmd.Args) == 0 {
-			continue
-		}
-
-		gitCmd, parseErr := parser.ParseGitCommand(cmd)
-		if parseErr != nil {
-			log.Debug("failed to parse git command", "error", parseErr)
-			continue
-		}
-
-		if gitCmd.Subcommand != "push" {
-			continue
-		}
-
-		result := v.validatePushCommand(gitCmd)
-		if !result.Passed {
-			return result
-		}
-	}
-
-	return validator.Pass()
+	return ValidateGitSubcommand(
+		ctx,
+		hookCtx,
+		v.ruleAdapter,
+		v.Logger(),
+		"push",
+		v.validatePushCommand,
+	)
 }
 
 // validatePushCommand validates a single git push command
 func (v *PushValidator) validatePushCommand(gitCmd *parser.GitCommand) *validator.Result {
 	log := v.Logger()
 
-	if !v.gitRunner.IsInRepo() {
+	// Use path-specific runner if -C flag is present
+	runner := v.getRunnerForCommand(gitCmd)
+
+	if !runner.IsInRepo() {
 		log.Debug("not in a git repository, skipping validation")
 		return validator.Pass()
 	}
 
-	remote := v.extractRemote(gitCmd)
+	remote := v.extractRemote(gitCmd, runner)
 	if remote == "" {
 		log.Debug("no remote specified, skipping validation")
 		return validator.Pass()
 	}
 
-	return v.validateRemoteExists(remote)
+	return v.validateRemoteExists(remote, runner)
+}
+
+// getRunnerForCommand returns the appropriate git runner for the command.
+// If the command specifies a working directory with -C, creates a runner for that path.
+// Otherwise, returns the default cached runner.
+//
+//nolint:ireturn // Returns interface for flexibility between cached and path-specific runners
+func (v *PushValidator) getRunnerForCommand(gitCmd *parser.GitCommand) GitRunner {
+	workDir := gitCmd.GetWorkingDirectory()
+	if workDir != "" {
+		v.Logger().Debug("using path-specific runner", "path", workDir)
+		return NewGitRunnerForPath(workDir)
+	}
+
+	return v.gitRunner
 }
 
 // extractRemote extracts the remote name from a git push command
-func (v *PushValidator) extractRemote(gitCmd *parser.GitCommand) string {
+func (*PushValidator) extractRemote(gitCmd *parser.GitCommand, runner GitRunner) string {
 	if len(gitCmd.Args) == 0 {
-		branch, err := v.gitRunner.GetCurrentBranch()
+		branch, err := runner.GetCurrentBranch()
 		if err != nil {
 			return defaultRemote
 		}
 
-		remote, err := v.gitRunner.GetBranchRemote(branch)
+		remote, err := runner.GetBranchRemote(branch)
 		if err != nil {
 			return defaultRemote
 		}
@@ -142,49 +122,14 @@ func (v *PushValidator) extractRemote(gitCmd *parser.GitCommand) string {
 }
 
 // validateRemoteExists checks if the remote exists
-func (v *PushValidator) validateRemoteExists(remote string) *validator.Result {
-	_, err := v.gitRunner.GetRemoteURL(remote)
-	if err != nil {
-		remotes, remoteErr := v.gitRunner.GetRemotes()
-		if remoteErr != nil {
-			return validator.FailWithRef(
-				validator.RefGitNoRemote,
-				"🚫 Git push validation failed:\n\n❌ Remote '"+remote+"' does not exist",
-			)
-		}
+func (*PushValidator) validateRemoteExists(remote string, runner GitRunner) *validator.Result {
+	helper := NewRemoteHelper()
 
-		return validator.FailWithRef(
-			validator.RefGitNoRemote,
-			"🚫 Git push validation failed:\n\n"+v.formatRemoteNotFoundError(remote, remotes),
-		)
-	}
-
-	return validator.Pass()
-}
-
-// formatRemoteNotFoundError formats the error message for a missing remote
-func (*PushValidator) formatRemoteNotFoundError(remote string, remotes map[string]string) string {
-	names := make([]string, 0, len(remotes))
-	for name := range remotes {
-		names = append(names, name)
-	}
-
-	sort.Strings(names)
-
-	remoteInfos := make([]templates.RemoteInfo, len(names))
-	for i, name := range names {
-		remoteInfos[i] = templates.RemoteInfo{
-			Name: name,
-			URL:  remotes[name],
-		}
-	}
-
-	return templates.MustExecute(
-		templates.PushRemoteNotFoundTemplate,
-		templates.PushRemoteNotFoundData{
-			Remote:  remote,
-			Remotes: remoteInfos,
-		},
+	return helper.ValidateRemoteExists(
+		remote,
+		runner,
+		validator.RefGitNoRemote,
+		"🚫 Git push validation failed:",
 	)
 }
 

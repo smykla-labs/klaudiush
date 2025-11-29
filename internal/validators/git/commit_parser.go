@@ -3,14 +3,44 @@ package git
 import (
 	"regexp"
 	"strings"
-
-	conventionalcommits "github.com/leodido/go-conventionalcommits"
-	ccp "github.com/leodido/go-conventionalcommits/parser"
 )
 
 // footerPattern matches git trailer format: "Token: value"
+// Supports "BREAKING CHANGE" (with space) per conventional commits spec.
+// Pattern ensures no trailing spaces/hyphens in token names.
 // Compiled once at package initialization for efficiency.
-var footerPattern = regexp.MustCompile(`^([A-Za-z0-9-]+):\s*(.*)$`)
+var footerPattern = regexp.MustCompile(`^([A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*):\s*(.*)$`)
+
+// titleRegex matches conventional commit title format: type(scope)!: description
+// Capture groups: 1=type, 2=(scope) with parens, 3=scope only, 4=!, 5=description
+var titleRegex = regexp.MustCompile(
+	`^(\w+)(\(([a-zA-Z0-9_]+(?:[/-][a-zA-Z0-9_]+)*)\))?(!)?:\s+(.+)$`,
+)
+
+// titleParseResult holds the parsed components of a conventional commit title.
+type titleParseResult struct {
+	Type        string
+	Scope       string
+	Exclamation bool
+	Description string
+	Valid       bool
+}
+
+// parseTitle parses a conventional commit title into its components.
+func parseTitle(title string) titleParseResult {
+	matches := titleRegex.FindStringSubmatch(title)
+	if matches == nil {
+		return titleParseResult{Valid: false}
+	}
+
+	return titleParseResult{
+		Type:        matches[1],
+		Scope:       matches[3], // Group 3 is inside the optional group 2
+		Exclamation: matches[4] == "!",
+		Description: matches[5],
+		Valid:       true,
+	}
+}
 
 // ParsedCommit represents a parsed conventional commit message.
 type ParsedCommit struct {
@@ -47,7 +77,6 @@ type ParsedCommit struct {
 
 // CommitParser parses conventional commit messages.
 type CommitParser struct {
-	machine    conventionalcommits.Machine
 	validTypes map[string]bool
 }
 
@@ -67,10 +96,6 @@ func WithValidTypes(types []string) CommitParserOption {
 // NewCommitParser creates a new CommitParser with the given options.
 func NewCommitParser(opts ...CommitParserOption) *CommitParser {
 	p := &CommitParser{
-		machine: ccp.NewMachine(
-			ccp.WithTypes(conventionalcommits.TypesFreeForm),
-			ccp.WithBestEffort(),
-		),
 		validTypes: make(map[string]bool),
 	}
 
@@ -108,41 +133,22 @@ func (p *CommitParser) Parse(message string) *ParsedCommit {
 		return result
 	}
 
-	// Try parsing the full message first
-	msg, err := p.machine.Parse([]byte(message))
-	usedFallback := false
-
-	// Handle parse errors with fallback for trailer validation issues
-	if err != nil {
-		msg, usedFallback, err = p.handleParseError(err, title, message, result)
-		if err != nil {
-			result.ParseError = err.Error()
-			return result
-		}
-	}
-
-	// Type assertion to access the conventional commit
-	cc, ok := msg.(*conventionalcommits.ConventionalCommit)
-	if !ok || cc == nil {
+	// Parse the title line
+	titleResult := parseTitle(title)
+	if !titleResult.Valid {
 		result.ParseError = "failed to parse as conventional commit"
 
 		return result
 	}
 
 	// Extract parsed fields
-	result.Type = cc.Type
-	result.Description = cc.Description
-	result.IsBreakingChange = cc.Exclamation
+	result.Type = titleResult.Type
+	result.Scope = titleResult.Scope
+	result.Description = titleResult.Description
+	result.IsBreakingChange = titleResult.Exclamation
 
-	if cc.Scope != nil {
-		result.Scope = *cc.Scope
-	}
-
-	// Only extract body/footers from the library if we didn't use fallback mode.
-	// In fallback mode, we already manually extracted these via extractBodyAndFooters().
-	if !usedFallback {
-		p.extractLibraryBodyAndFooters(cc, result)
-	}
+	// Extract body and footers (also sets IsBreakingChange if footer found)
+	p.extractBodyAndFooters(message, result)
 
 	// Validate type against allowed types
 	if len(p.validTypes) > 0 && !p.validTypes[result.Type] {
@@ -157,66 +163,8 @@ func (p *CommitParser) Parse(message string) *ParsedCommit {
 	return result
 }
 
-// handleParseError handles parsing errors with fallback for trailer validation issues.
-//
-// NOTE: This depends on the error message format from go-conventionalcommits.
-// The library returns errors like "illegal ',' character in trailer: col=533" when
-// it encounters invalid trailer syntax. We detect this by checking for "trailer" in
-// the error message. If the library changes its error messages, this may break.
-//
-//nolint:ireturn // Returns interface type from go-conventionalcommits library
-func (p *CommitParser) handleParseError(
-	err error,
-	title string,
-	message string,
-	result *ParsedCommit,
-) (conventionalcommits.Message, bool, error) {
-	// Only use fallback for trailer validation errors
-	if !strings.Contains(err.Error(), "trailer") {
-		return nil, false, err
-	}
-
-	// Parse just the title line to get type, scope, description
-	msg, titleErr := p.machine.Parse([]byte(title))
-	if titleErr != nil {
-		return nil, false, titleErr
-	}
-
-	// Manually extract body and footers since the library rejected the full message
-	p.extractBodyAndFooters(message, result)
-
-	return msg, true, nil
-}
-
-// extractLibraryBodyAndFooters extracts body and footers from the library's parsed result.
-func (*CommitParser) extractLibraryBodyAndFooters(
-	cc *conventionalcommits.ConventionalCommit,
-	result *ParsedCommit,
-) {
-	if cc.Body != nil {
-		result.Body = *cc.Body
-	}
-
-	if cc.Footers != nil {
-		result.Footers = cc.Footers
-
-		// Check for BREAKING CHANGE footer
-		if _, hasBreaking := cc.Footers["BREAKING CHANGE"]; hasBreaking {
-			result.IsBreakingChange = true
-		}
-
-		if _, hasBreaking := cc.Footers["BREAKING-CHANGE"]; hasBreaking {
-			result.IsBreakingChange = true
-		}
-	}
-}
-
-// extractBodyAndFooters manually extracts body and footers from the full message
-// when the library's parser fails due to strict trailer validation.
-//
-// This function maintains consistency with the full parser by populating the Footers
-// map and detecting BREAKING CHANGE footers, ensuring the same behavior regardless
-// of which parsing path was taken.
+// extractBodyAndFooters extracts body and footers from the full message.
+// It populates the Footers map and detects BREAKING CHANGE footers.
 func (*CommitParser) extractBodyAndFooters(message string, result *ParsedCommit) {
 	lines := strings.Split(message, "\n")
 	if len(lines) <= 1 {

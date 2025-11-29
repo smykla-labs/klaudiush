@@ -3,7 +3,7 @@ package tui
 import (
 	"os"
 
-	"github.com/mattn/go-isatty"
+	"golang.org/x/term"
 )
 
 // New creates a new UI instance based on terminal capabilities.
@@ -33,5 +33,5 @@ func NewWithFallback(noTUI bool) UI {
 
 // IsTerminal checks if stdin and stdout are connected to a terminal.
 func IsTerminal() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }

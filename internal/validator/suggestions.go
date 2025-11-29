@@ -27,6 +27,7 @@ var DefaultSuggestions = map[Reference]string{
 	RefGitNoVerify:           "Remove --no-verify flag and fix any pre-commit hook issues",
 	RefGitKongOrgPush:        "Push to 'upstream' remote instead: git push upstream <branch>",
 	RefGitPRValidation:       "Fix PR title, body, markdown formatting, or labels per validation errors",
+	RefGitFetchNoRemote:      "Specify valid remote: git fetch <remote> (use 'git remote -v' to list remotes)",
 
 	// File suggestions
 	RefShellcheck:   "Run 'shellcheck <file>' to see detailed errors",

@@ -211,6 +211,8 @@ var _ = Describe("Defaults", func() {
 			Expect(*cfg.CodeBlockFormatting).To(BeTrue())
 			Expect(*cfg.ListFormatting).To(BeTrue())
 			Expect(*cfg.UseMarkdownlint).To(BeTrue())
+			Expect(cfg.MarkdownlintRules).To(HaveKeyWithValue("MD013", false))
+			Expect(cfg.MarkdownlintRules).To(HaveKeyWithValue("MD034", false))
 		})
 	})
 

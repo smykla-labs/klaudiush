@@ -67,8 +67,6 @@ jobs:
         with:
           path: ~/.cache/golangci-lint
           key: golangci-lint-${{ runner.os }}-${{ hashFiles('**/*.go', '.golangci.yml', 'go.mod', 'go.sum') }}
-          restore-keys: |
-            golangci-lint-${{ runner.os }}-
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@e7fa5ac41e1cf5b7d48e45e42232ce7ada589601 # v9.1.0

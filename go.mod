@@ -4,20 +4,18 @@ go 1.25.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/charmbracelet/huh v0.8.0
 	github.com/cockroachdb/errors v1.12.0
 	github.com/dmarkham/enumer v1.6.1
 	github.com/go-git/go-git/v6 v6.0.0-20251125231338-2d242db0996d
 	github.com/go-viper/mapstructure/v2 v2.4.0
-	github.com/gobwas/glob v0.2.3
 	github.com/google/go-github/v79 v79.0.0
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/confmap v1.0.0
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/v2 v2.3.0
-	github.com/leodido/go-conventionalcommits v0.12.0
-	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
@@ -26,6 +24,7 @@ require (
 	github.com/spf13/cobra v1.10.1
 	go.uber.org/mock v0.6.0
 	golang.org/x/sync v0.18.0
+	golang.org/x/term v0.37.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.10
 	mvdan.cc/sh/v3 v3.12.0
@@ -73,6 +72,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
@@ -85,7 +85,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

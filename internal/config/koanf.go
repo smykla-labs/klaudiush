@@ -474,6 +474,7 @@ func defaultGitValidatorsMap() map[string]any {
 	return map[string]any{
 		"commit":    defaultCommitMap(),
 		"push":      defaultPushMap(),
+		"fetch":     defaultFetchMap(),
 		"add":       defaultAddMap(),
 		"pr":        defaultPRMap(),
 		"branch":    defaultBranchMap(),
@@ -509,6 +510,13 @@ func defaultPushMap() map[string]any {
 		"severity":         "error",
 		"blocked_remotes":  []string{},
 		"require_tracking": true,
+	}
+}
+
+func defaultFetchMap() map[string]any {
+	return map[string]any{
+		"enabled":  true,
+		"severity": "error",
 	}
 }
 
