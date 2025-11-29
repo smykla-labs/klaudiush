@@ -9,6 +9,9 @@ type GitConfig struct {
 	// Push validator configuration
 	Push *PushValidatorConfig `json:"push,omitempty" koanf:"push" toml:"push"`
 
+	// Fetch validator configuration
+	Fetch *FetchValidatorConfig `json:"fetch,omitempty" koanf:"fetch" toml:"fetch"`
+
 	// Add validator configuration
 	Add *AddValidatorConfig `json:"add,omitempty" koanf:"add" toml:"add"`
 
@@ -273,4 +276,12 @@ type NoVerifyValidatorConfig struct {
 
 	// No additional configuration beyond base ValidatorConfig
 	// This validator blocks --no-verify flag on git commit commands
+}
+
+// FetchValidatorConfig configures the git fetch validator.
+type FetchValidatorConfig struct {
+	ValidatorConfig
+
+	// No additional configuration beyond base ValidatorConfig
+	// This validator checks that the remote exists before fetch
 }

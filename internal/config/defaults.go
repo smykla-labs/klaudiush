@@ -63,6 +63,7 @@ func DefaultGitConfig() *config.GitConfig {
 	return &config.GitConfig{
 		Commit:   DefaultCommitValidatorConfig(),
 		Push:     DefaultPushValidatorConfig(),
+		Fetch:    DefaultFetchValidatorConfig(),
 		Add:      DefaultAddValidatorConfig(),
 		PR:       DefaultPRValidatorConfig(),
 		Branch:   DefaultBranchValidatorConfig(),
@@ -182,6 +183,18 @@ func DefaultPushValidatorConfig() *config.PushValidatorConfig {
 		},
 		BlockedRemotes:  []string{},
 		RequireTracking: &requireTracking,
+	}
+}
+
+// DefaultFetchValidatorConfig returns the default fetch validator configuration.
+func DefaultFetchValidatorConfig() *config.FetchValidatorConfig {
+	enabled := true
+
+	return &config.FetchValidatorConfig{
+		ValidatorConfig: config.ValidatorConfig{
+			Enabled:  &enabled,
+			Severity: config.SeverityError,
+		},
 	}
 }
 

@@ -64,6 +64,10 @@ func (f *GitValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorWi
 		validators = append(validators, f.createPushValidator(cfg.Validators.Git.Push))
 	}
 
+	if cfg.Validators.Git.Fetch != nil && cfg.Validators.Git.Fetch.IsEnabled() {
+		validators = append(validators, f.createFetchValidator(cfg.Validators.Git.Fetch))
+	}
+
 	if cfg.Validators.Git.PR != nil && cfg.Validators.Git.PR.IsEnabled() {
 		validators = append(validators, f.createPRValidator(cfg.Validators.Git.PR))
 	}
@@ -159,6 +163,27 @@ func (f *GitValidatorFactory) createPushValidator(
 		Predicate: validator.And(
 			validator.EventTypeIs(hook.EventTypePreToolUse),
 			validator.GitSubcommandIs("push"),
+		),
+	}
+}
+
+func (f *GitValidatorFactory) createFetchValidator(
+	cfg *config.FetchValidatorConfig,
+) ValidatorWithPredicate {
+	var ruleAdapter *rules.RuleValidatorAdapter
+	if f.ruleEngine != nil {
+		ruleAdapter = rules.NewRuleValidatorAdapter(
+			f.ruleEngine,
+			rules.ValidatorGitFetch,
+			rules.WithAdapterLogger(f.log),
+		)
+	}
+
+	return ValidatorWithPredicate{
+		Validator: gitvalidators.NewFetchValidator(f.log, f.getGitRunner(), cfg, ruleAdapter),
+		Predicate: validator.And(
+			validator.EventTypeIs(hook.EventTypePreToolUse),
+			validator.GitSubcommandIs("fetch"),
 		),
 	}
 }

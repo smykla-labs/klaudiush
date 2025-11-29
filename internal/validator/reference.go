@@ -79,6 +79,9 @@ const (
 
 	// RefGitPRValidation indicates PR validation failure (title, body, markdown, or labels).
 	RefGitPRValidation Reference = ReferenceBaseURL + "/GIT023"
+
+	// RefGitFetchNoRemote indicates remote does not exist for git fetch.
+	RefGitFetchNoRemote Reference = ReferenceBaseURL + "/GIT024"
 )
 
 // File-related references (FILE001-FILE005).
