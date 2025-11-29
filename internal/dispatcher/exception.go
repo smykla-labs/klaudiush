@@ -2,6 +2,8 @@
 package dispatcher
 
 import (
+	"strings"
+
 	"github.com/smykla-labs/klaudiush/internal/exceptions"
 	"github.com/smykla-labs/klaudiush/internal/validator"
 	"github.com/smykla-labs/klaudiush/pkg/hook"
@@ -137,15 +139,11 @@ func extractErrorCode(ref validator.Reference) string {
 
 	const prefix = "https://klaudiu.sh/"
 
-	if len(refStr) <= len(prefix) {
+	if !strings.HasPrefix(refStr, prefix) {
 		return ""
 	}
 
-	if refStr[:len(prefix)] != prefix {
-		return ""
-	}
-
-	return refStr[len(prefix):]
+	return strings.TrimSuffix(refStr[len(prefix):], "/")
 }
 
 // formatBypassedMessage formats the message to indicate it was bypassed.

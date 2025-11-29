@@ -191,6 +191,26 @@ var _ = Describe("ExceptionChecker", func() {
 				Expect(result.FixHint).To(Equal("use a feature branch"))
 				Expect(result.Reference).To(Equal(validator.Reference("https://klaudiu.sh/GIT022")))
 			})
+
+			It("handles reference URL with trailing slash", func() {
+				verr := &dispatcher.ValidationError{
+					Validator:   "git.push",
+					Message:     "cannot push to protected branch",
+					ShouldBlock: true,
+					Reference:   "https://klaudiu.sh/GIT022/", // Trailing slash
+				}
+				hookCtx := &hook.Context{
+					ToolInput: hook.ToolInput{
+						Command: "git push origin main # EXC:GIT022:Emergency+hotfix",
+					},
+				}
+
+				result, bypassed := checker.CheckException(hookCtx, verr)
+				Expect(bypassed).To(BeTrue())
+				Expect(result).NotTo(BeNil())
+				Expect(result.ShouldBlock).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("BYPASSED"))
+			})
 		})
 
 		Context("with error code mismatch", func() {

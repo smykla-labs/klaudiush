@@ -3,13 +3,11 @@ package exceptions
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/smykla-labs/klaudiush/pkg/config"
 )
-
-// maxDigitBufferSize is the maximum digits for int to string conversion.
-const maxDigitBufferSize = 20
 
 // DefaultPolicy provides default policy settings when no explicit policy exists.
 var DefaultPolicy = &config.ExceptionPolicyConfig{}
@@ -114,7 +112,7 @@ func (m *PolicyMatcher) validateReason(
 	if len(reason) < minLength {
 		return &PolicyDecision{
 			Allowed:        false,
-			Reason:         "reason too short (minimum " + intToString(minLength) + " characters)",
+			Reason:         "reason too short (minimum " + strconv.Itoa(minLength) + " characters)",
 			RequiredReason: true,
 			ProvidedReason: reason,
 		}
@@ -176,35 +174,4 @@ func (m *PolicyMatcher) HasExplicitPolicy(errorCode string) bool {
 	}
 
 	return m.config.GetPolicy(errorCode) != nil
-}
-
-// intToString converts an int to a string without importing strconv.
-func intToString(n int) string {
-	if n == 0 {
-		return "0"
-	}
-
-	negative := n < 0
-	if negative {
-		n = -n
-	}
-
-	// Build digits in reverse
-	digits := make([]byte, 0, maxDigitBufferSize)
-
-	for n > 0 {
-		digits = append(digits, byte('0'+n%10))
-		n /= 10
-	}
-
-	// Reverse
-	for i, j := 0, len(digits)-1; i < j; i, j = i+1, j-1 {
-		digits[i], digits[j] = digits[j], digits[i]
-	}
-
-	if negative {
-		return "-" + string(digits)
-	}
-
-	return string(digits)
 }
