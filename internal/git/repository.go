@@ -61,7 +61,8 @@ func ResetRepositoryCache() {
 func DiscoverRepository() (*SDKRepository, error) {
 	repoOnce.Do(func() {
 		repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{
-			DetectDotGit: true,
+			DetectDotGit:          true,
+			EnableDotGitCommonDir: true,
 		})
 		if err != nil {
 			if errors.Is(err, git.ErrRepositoryNotExists) {

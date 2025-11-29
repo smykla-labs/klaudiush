@@ -2,6 +2,7 @@ package git_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/go-git/go-git/v6"
@@ -547,5 +548,156 @@ var _ = Describe("SDKRepository", func() {
 				Expect(remotes["upstream"]).To(Equal("https://github.com/upstream/repo.git"))
 			})
 		})
+	})
+})
+
+var _ = Describe("DiscoverRepository with linked worktrees", func() {
+	var (
+		mainRepoDir string
+		worktreeDir string
+		origDir     string
+		repo        *git.Repository
+		err         error
+		testAuthor  = &object.Signature{
+			Name:  "Test User",
+			Email: "test@klaudiu.sh",
+		}
+	)
+
+	BeforeEach(func() {
+		// Reset repository cache
+		internalgit.ResetRepositoryCache()
+
+		// Save current directory
+		origDir, err = os.Getwd()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create main repo directory
+		mainRepoDir, err = os.MkdirTemp("", "main-repo-*")
+		Expect(err).NotTo(HaveOccurred())
+		mainRepoDir, err = filepath.EvalSymlinks(mainRepoDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create worktree directory
+		worktreeDir, err = os.MkdirTemp("", "worktree-*")
+		Expect(err).NotTo(HaveOccurred())
+		worktreeDir, err = filepath.EvalSymlinks(worktreeDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Remove worktree dir (git worktree add expects it to not exist)
+		err = os.RemoveAll(worktreeDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Initialize main git repository
+		repo, err = git.PlainInit(mainRepoDir, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Configure repository
+		cfg, cfgErr := repo.Config()
+		Expect(cfgErr).NotTo(HaveOccurred())
+		cfg.User.Name = testAuthor.Name
+		cfg.User.Email = testAuthor.Email
+		err = repo.SetConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create initial commit to establish HEAD
+		testFile := filepath.Join(mainRepoDir, "initial.txt")
+		err = os.WriteFile(testFile, []byte("initial"), 0o644)
+		Expect(err).NotTo(HaveOccurred())
+
+		worktree, wtErr := repo.Worktree()
+		Expect(wtErr).NotTo(HaveOccurred())
+
+		_, err = worktree.Add("initial.txt")
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = worktree.Commit("Initial commit", &git.CommitOptions{
+			Author: testAuthor,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Add remotes to main repo
+		_, err = repo.CreateRemote(&config.RemoteConfig{
+			Name: "origin",
+			URLs: []string{"https://github.com/fork/repo.git"},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = repo.CreateRemote(&config.RemoteConfig{
+			Name: "upstream",
+			URLs: []string{"https://github.com/upstream/repo.git"},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create worktree using git CLI (go-git doesn't support worktree add)
+		// First, create a branch for the worktree
+		headRef, headErr := repo.Head()
+		Expect(headErr).NotTo(HaveOccurred())
+
+		err = repo.Storer.SetReference(plumbing.NewHashReference(
+			plumbing.NewBranchReferenceName("feature-branch"),
+			headRef.Hash(),
+		))
+		Expect(err).NotTo(HaveOccurred())
+
+		// Use git CLI to create worktree
+		gitDir := filepath.Join(mainRepoDir, ".git")
+		args := []string{"--git-dir=" + gitDir, "worktree", "add", worktreeDir, "feature-branch"}
+		gitCmd := exec.Command("git", args...)
+		output, cmdErr := gitCmd.CombinedOutput()
+		if cmdErr != nil {
+			// If git worktree command fails, skip test
+			Skip("git worktree command not available: " + string(output))
+		}
+	})
+
+	AfterEach(func() {
+		// Restore original directory
+		if origDir != "" {
+			_ = os.Chdir(origDir)
+		}
+
+		// Clean up worktree first (must be done before removing main repo)
+		if worktreeDir != "" {
+			_ = os.RemoveAll(worktreeDir)
+		}
+
+		// Clean up main repo directory
+		if mainRepoDir != "" {
+			_ = os.RemoveAll(mainRepoDir)
+		}
+	})
+
+	It("should discover remotes from linked worktree", func() {
+		// Change to worktree directory
+		err = os.Chdir(worktreeDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Discover repository from worktree
+		sdkRepo, discoverErr := internalgit.DiscoverRepository()
+		Expect(discoverErr).NotTo(HaveOccurred())
+		Expect(sdkRepo).NotTo(BeNil())
+
+		// Verify we can find remotes
+		remotes, remotesErr := sdkRepo.GetRemotes()
+		Expect(remotesErr).NotTo(HaveOccurred())
+		Expect(remotes).To(HaveLen(2))
+		Expect(remotes["origin"]).To(Equal("https://github.com/fork/repo.git"))
+		Expect(remotes["upstream"]).To(Equal("https://github.com/upstream/repo.git"))
+	})
+
+	It("should find specific remote URL from linked worktree", func() {
+		// Change to worktree directory
+		err = os.Chdir(worktreeDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Discover repository from worktree
+		sdkRepo, discoverErr := internalgit.DiscoverRepository()
+		Expect(discoverErr).NotTo(HaveOccurred())
+
+		// Verify we can find the upstream remote
+		url, urlErr := sdkRepo.GetRemoteURL("upstream")
+		Expect(urlErr).NotTo(HaveOccurred())
+		Expect(url).To(Equal("https://github.com/upstream/repo.git"))
 	})
 })
