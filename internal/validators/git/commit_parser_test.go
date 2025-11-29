@@ -135,6 +135,24 @@ var _ = Describe("parseTitle", func() {
 
 			Expect(result.Valid).To(BeFalse())
 		})
+
+		It("returns invalid for scope starting with slash", func() {
+			result := parseTitle("feat(/api): add endpoint")
+
+			Expect(result.Valid).To(BeFalse())
+		})
+
+		It("returns invalid for scope ending with slash", func() {
+			result := parseTitle("feat(api/): add endpoint")
+
+			Expect(result.Valid).To(BeFalse())
+		})
+
+		It("returns invalid for scope with only special character", func() {
+			result := parseTitle("feat(-): add endpoint")
+
+			Expect(result.Valid).To(BeFalse())
+		})
 	})
 
 	Describe("edge cases", func() {
@@ -146,10 +164,10 @@ var _ = Describe("parseTitle", func() {
 		})
 
 		It("handles description with emojis", func() {
-			result := parseTitle("feat(ui): add dark mode toggle")
+			result := parseTitle("feat(ui): add dark mode toggle ✨")
 
 			Expect(result.Valid).To(BeTrue())
-			Expect(result.Description).To(Equal("add dark mode toggle"))
+			Expect(result.Description).To(Equal("add dark mode toggle ✨"))
 		})
 
 		It("handles multi-word type (custom types)", func() {

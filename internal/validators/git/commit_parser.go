@@ -12,8 +12,8 @@ import (
 var footerPattern = regexp.MustCompile(`^([A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*):\s*(.*)$`)
 
 // titleRegex matches conventional commit title format: type(scope)!: description
-// Capture groups: 1=type, 3=scope (optional inside group 2), 4=! (optional), 5=description
-var titleRegex = regexp.MustCompile(`^(\w+)(\(([a-zA-Z0-9_\/-]+)\))?(!)?:\s+(.+)$`)
+// Capture groups: 1=type, 2=(scope) with parens, 3=scope only, 4=!, 5=description
+var titleRegex = regexp.MustCompile(`^(\w+)(\(([a-zA-Z0-9_]+(?:[/-][a-zA-Z0-9_]+)*)\))?(!)?:\s+(.+)$`)
 
 // titleParseResult holds the parsed components of a conventional commit title.
 type titleParseResult struct {
@@ -145,17 +145,8 @@ func (p *CommitParser) Parse(message string) *ParsedCommit {
 	result.Description = titleResult.Description
 	result.IsBreakingChange = titleResult.Exclamation
 
-	// Extract body and footers
+	// Extract body and footers (also sets IsBreakingChange if footer found)
 	p.extractBodyAndFooters(message, result)
-
-	// Check for BREAKING CHANGE footer
-	if _, hasBreaking := result.Footers["BREAKING CHANGE"]; hasBreaking {
-		result.IsBreakingChange = true
-	}
-
-	if _, hasBreaking := result.Footers["BREAKING-CHANGE"]; hasBreaking {
-		result.IsBreakingChange = true
-	}
 
 	// Validate type against allowed types
 	if len(p.validTypes) > 0 && !p.validTypes[result.Type] {
