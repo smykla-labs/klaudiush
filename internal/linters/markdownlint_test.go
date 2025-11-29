@@ -106,41 +106,54 @@ code
 			Entry("empty path", "", false),
 		)
 
-		DescribeTable("GenerateFragmentConfigContent",
-			func(isCli2, disableMD047 bool, expectedContent string) {
-				result := linters.GenerateFragmentConfigContent(isCli2, disableMD047)
+		DescribeTable("GenerateRuntimeConfigContent",
+			func(isCli2, disableMD013, disableMD047 bool, expectedContent string) {
+				result := linters.GenerateRuntimeConfigContent(isCli2, disableMD013, disableMD047)
 				Expect(result).To(Equal(expectedContent))
 			},
-			Entry("markdownlint-cli2 with MD047 disabled", true, true, `{
+			Entry("markdownlint-cli2 with MD013 and MD047 disabled", true, true, true, `{
   "config": {
     "MD013": false,
     "MD047": false
   }
 }`),
-			Entry("markdownlint-cli2 with MD047 enabled", true, false, `{
+			Entry("markdownlint-cli2 with only MD013 disabled", true, true, false, `{
   "config": {
     "MD013": false
   }
 }`),
-			Entry("markdownlint-cli with MD047 disabled", false, true, `{
+			Entry("markdownlint-cli2 with only MD047 disabled", true, false, true, `{
+  "config": {
+    "MD047": false
+  }
+}`),
+			Entry("markdownlint-cli2 with nothing disabled", true, false, false, `{}`),
+			Entry("markdownlint-cli with MD013 and MD047 disabled", false, true, true, `{
   "MD013": false,
   "MD047": false
 }`),
-			Entry("markdownlint-cli with MD047 enabled", false, false, `{
+			Entry("markdownlint-cli with only MD013 disabled", false, true, false, `{
   "MD013": false
 }`),
+			Entry("markdownlint-cli with only MD047 disabled", false, false, true, `{
+  "MD047": false
+}`),
+			Entry("markdownlint-cli with nothing disabled", false, false, false, `{}`),
 		)
 
-		DescribeTable("GetFragmentConfigPattern",
+		DescribeTable("GetRuntimeConfigPattern",
 			func(isCli2 bool, expectedPattern string) {
-				result := linters.GetFragmentConfigPattern(isCli2)
+				result := linters.GetRuntimeConfigPattern(isCli2)
 				Expect(result).To(Equal(expectedPattern))
 			},
 			Entry("markdownlint-cli2 pattern",
-				true, "fragment-*.markdownlint-cli2.jsonc"),
+				true, "runtime-*.markdownlint-cli2.jsonc"),
 			Entry("markdownlint-cli pattern",
-				false, "markdownlint-fragment-*.json"),
+				false, "markdownlint-runtime-*.json"),
 		)
+
+		// IsMarkdownFile is tested indirectly through LintWithPath tests
+		// in the "MD013 disabled for markdown files" context below
 	})
 
 	Describe("Internal Helper Methods", func() {
@@ -767,9 +780,9 @@ Summary: 1 error(s)
 			})
 		})
 
-		Describe("createFragmentConfig", func() {
+		Describe("createRuntimeConfig", func() {
 			Context("with fragment linting (initialState with StartLine > 0)", func() {
-				It("should create fragment config for markdownlint-cli", func() {
+				It("should create runtime config for markdownlint-cli", func() {
 					useMarkdownlint := true
 					cfg := &config.MarkdownValidatorConfig{
 						UseMarkdownlint: &useMarkdownlint,
@@ -790,14 +803,14 @@ Summary: 1 error(s)
 						Create("markdownlint-*.md", gomock.Any()).
 						Return("/tmp/test.md", func() {}, nil)
 
-					// Fragment config creation
+					// Runtime config creation
 					mockTempMgr.EXPECT().
-						Create("markdownlint-fragment-*.json", gomock.Any()).
+						Create("markdownlint-runtime-*.json", gomock.Any()).
 						DoAndReturn(func(_, content string) (string, func(), error) {
 							// Fragment not at EOF should disable MD047
 							Expect(content).To(ContainSubstring(`"MD047": false`))
 
-							return "/tmp/fragment-config.json", func() {}, nil
+							return "/tmp/runtime-config.json", func() {}, nil
 						})
 
 					mockRunner.EXPECT().
@@ -813,7 +826,7 @@ Summary: 1 error(s)
 					Expect(result.Success).To(BeTrue())
 				})
 
-				It("should create fragment config for markdownlint-cli2", func() {
+				It("should create runtime config for markdownlint-cli2", func() {
 					useMarkdownlint := true
 					cfg := &config.MarkdownValidatorConfig{
 						UseMarkdownlint: &useMarkdownlint,
@@ -834,15 +847,15 @@ Summary: 1 error(s)
 						Create("markdownlint-*.md", gomock.Any()).
 						Return("/tmp/test.md", func() {}, nil)
 
-					// Fragment config creation for cli2
+					// Runtime config creation for cli2
 					mockTempMgr.EXPECT().
-						Create("fragment-*.markdownlint-cli2.jsonc", gomock.Any()).
+						Create("runtime-*.markdownlint-cli2.jsonc", gomock.Any()).
 						DoAndReturn(func(_, content string) (string, func(), error) {
 							// cli2 format wraps rules in "config" object
 							Expect(content).To(ContainSubstring(`"config": {`))
 							Expect(content).To(ContainSubstring(`"MD047": false`))
 
-							return "/tmp/fragment-config.jsonc", func() {}, nil
+							return "/tmp/runtime-config.jsonc", func() {}, nil
 						})
 
 					mockRunner.EXPECT().
@@ -858,52 +871,47 @@ Summary: 1 error(s)
 					Expect(result.Success).To(BeTrue())
 				})
 
-				It("should not disable MD047 when fragment ends at EOF", func() {
-					useMarkdownlint := true
-					cfg := &config.MarkdownValidatorConfig{
-						UseMarkdownlint: &useMarkdownlint,
-					}
-					linter := linters.NewMarkdownLinterWithDeps(
-						mockRunner,
-						mockToolChecker,
-						mockTempMgr,
-						cfg,
-					)
+				It(
+					"should not create runtime config when fragment ends at EOF and no path",
+					func() {
+						// When fragment ends at EOF and no original path is provided,
+						// no runtime config is needed (MD041 is handled by preamble)
+						useMarkdownlint := true
+						cfg := &config.MarkdownValidatorConfig{
+							UseMarkdownlint: &useMarkdownlint,
+						}
+						linter := linters.NewMarkdownLinterWithDeps(
+							mockRunner,
+							mockToolChecker,
+							mockTempMgr,
+							cfg,
+						)
 
-					mockToolChecker.EXPECT().
-						FindTool("markdownlint-cli2", "markdownlint").
-						Return("/usr/bin/markdownlint")
+						mockToolChecker.EXPECT().
+							FindTool("markdownlint-cli2", "markdownlint").
+							Return("/usr/bin/markdownlint")
 
-					// Markdown file creation first
-					mockTempMgr.EXPECT().
-						Create("markdownlint-*.md", gomock.Any()).
-						Return("/tmp/test.md", func() {}, nil)
+						// Markdown file creation first
+						mockTempMgr.EXPECT().
+							Create("markdownlint-*.md", gomock.Any()).
+							Return("/tmp/test.md", func() {}, nil)
 
-					// Fragment config for fragment that ends at EOF
-					// MD013 is always disabled for fragments (context lines may be long)
-					mockTempMgr.EXPECT().
-						Create("markdownlint-fragment-*.json", gomock.Any()).
-						DoAndReturn(func(_, content string) (string, func(), error) {
-							// MD013 disabled, MD047 not disabled (ends at EOF)
-							Expect(content).To(Equal(`{
-  "MD013": false
-}`))
+						// No runtime config needed - fragment ends at EOF and no path
+						// (MD041 handled by preamble, MD013 only disabled for .md/.mdx files)
 
-							return "/tmp/fragment-config.json", func() {}, nil
-						})
+						mockRunner.EXPECT().
+							Run(gomock.Any(), "/usr/bin/markdownlint", "/tmp/test.md").
+							Return(execpkg.CommandResult{ExitCode: 0})
 
-					mockRunner.EXPECT().
-						Run(gomock.Any(), gomock.Any(), gomock.Any()).
-						Return(execpkg.CommandResult{ExitCode: 0})
+						initialState := &validators.MarkdownState{
+							StartLine: 10,
+							EndsAtEOF: true,
+						}
+						result := linter.Lint(ctx, "# Test\n", initialState)
 
-					initialState := &validators.MarkdownState{
-						StartLine: 10,
-						EndsAtEOF: true,
-					}
-					result := linter.Lint(ctx, "# Test\n", initialState)
-
-					Expect(result.Success).To(BeTrue())
-				})
+						Expect(result.Success).To(BeTrue())
+					},
+				)
 
 				It(
 					"should disable MD047 when StartLine is 0 but fragment doesn't reach EOF",
@@ -931,15 +939,15 @@ Summary: 1 error(s)
 							Create("markdownlint-*.md", gomock.Any()).
 							Return("/tmp/test.md", func() {}, nil)
 
-						// Fragment config should be created with MD047 disabled,
+						// Runtime config should be created with MD047 disabled,
 						// even though StartLine is 0
 						mockTempMgr.EXPECT().
-							Create("markdownlint-fragment-*.json", gomock.Any()).
+							Create("markdownlint-runtime-*.json", gomock.Any()).
 							DoAndReturn(func(_, content string) (string, func(), error) {
 								// Should disable MD047 because fragment doesn't reach EOF
 								Expect(content).To(ContainSubstring(`"MD047": false`))
 
-								return "/tmp/fragment-config.json", func() {}, nil
+								return "/tmp/runtime-config.json", func() {}, nil
 							})
 
 						mockRunner.EXPECT().
@@ -978,9 +986,9 @@ Summary: 1 error(s)
 						Create("markdownlint-*.md", gomock.Any()).
 						Return("/tmp/test.md", func() {}, nil)
 
-					// Fragment config creation fails
+					// Runtime config creation fails
 					mockTempMgr.EXPECT().
-						Create("markdownlint-fragment-*.json", gomock.Any()).
+						Create("markdownlint-runtime-*.json", gomock.Any()).
 						Return("", nil, errMockTempFile)
 
 					initialState := &validators.MarkdownState{
@@ -994,6 +1002,119 @@ Summary: 1 error(s)
 						result.RawOut,
 					).To(ContainSubstring("Failed to create markdownlint config"))
 				})
+			})
+		})
+
+		Describe("MD013 disabled for markdown files", func() {
+			It("should disable MD013 when LintWithPath is called with .md file", func() {
+				useMarkdownlint := true
+				cfg := &config.MarkdownValidatorConfig{
+					UseMarkdownlint: &useMarkdownlint,
+				}
+				linter := linters.NewMarkdownLinterWithDeps(
+					mockRunner,
+					mockToolChecker,
+					mockTempMgr,
+					cfg,
+				)
+
+				mockToolChecker.EXPECT().
+					FindTool("markdownlint-cli2", "markdownlint").
+					Return("/usr/bin/markdownlint")
+
+				// Markdown file creation first
+				mockTempMgr.EXPECT().
+					Create("markdownlint-*.md", gomock.Any()).
+					Return("/tmp/test.md", func() {}, nil)
+
+				// Runtime config should disable MD013 for .md files
+				mockTempMgr.EXPECT().
+					Create("markdownlint-runtime-*.json", gomock.Any()).
+					DoAndReturn(func(_, content string) (string, func(), error) {
+						Expect(content).To(ContainSubstring(`"MD013": false`))
+
+						return "/tmp/runtime-config.json", func() {}, nil
+					})
+
+				mockRunner.EXPECT().
+					Run(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(execpkg.CommandResult{ExitCode: 0})
+
+				// nil initialState = full file Write operation (not fragment)
+				result := linter.LintWithPath(ctx, "# Test\n", nil, "/path/to/file.md")
+
+				Expect(result.Success).To(BeTrue())
+			})
+
+			It("should disable MD013 when LintWithPath is called with .mdx file", func() {
+				useMarkdownlint := true
+				cfg := &config.MarkdownValidatorConfig{
+					UseMarkdownlint: &useMarkdownlint,
+				}
+				linter := linters.NewMarkdownLinterWithDeps(
+					mockRunner,
+					mockToolChecker,
+					mockTempMgr,
+					cfg,
+				)
+
+				mockToolChecker.EXPECT().
+					FindTool("markdownlint-cli2", "markdownlint").
+					Return("/usr/bin/markdownlint")
+
+				// Markdown file creation first
+				mockTempMgr.EXPECT().
+					Create("markdownlint-*.md", gomock.Any()).
+					Return("/tmp/test.md", func() {}, nil)
+
+				// Runtime config should disable MD013 for .mdx files
+				mockTempMgr.EXPECT().
+					Create("markdownlint-runtime-*.json", gomock.Any()).
+					DoAndReturn(func(_, content string) (string, func(), error) {
+						Expect(content).To(ContainSubstring(`"MD013": false`))
+
+						return "/tmp/runtime-config.json", func() {}, nil
+					})
+
+				mockRunner.EXPECT().
+					Run(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(execpkg.CommandResult{ExitCode: 0})
+
+				result := linter.LintWithPath(ctx, "# Test\n", nil, "/path/to/file.mdx")
+
+				Expect(result.Success).To(BeTrue())
+			})
+
+			It("should not disable MD013 for non-markdown files", func() {
+				useMarkdownlint := true
+				cfg := &config.MarkdownValidatorConfig{
+					UseMarkdownlint: &useMarkdownlint,
+				}
+				linter := linters.NewMarkdownLinterWithDeps(
+					mockRunner,
+					mockToolChecker,
+					mockTempMgr,
+					cfg,
+				)
+
+				mockToolChecker.EXPECT().
+					FindTool("markdownlint-cli2", "markdownlint").
+					Return("/usr/bin/markdownlint")
+
+				// Markdown file creation first
+				mockTempMgr.EXPECT().
+					Create("markdownlint-*.md", gomock.Any()).
+					Return("/tmp/test.md", func() {}, nil)
+
+				// No runtime config needed for non-markdown file (no rules to disable)
+
+				mockRunner.EXPECT().
+					Run(gomock.Any(), "/usr/bin/markdownlint", "/tmp/test.md").
+					Return(execpkg.CommandResult{ExitCode: 0})
+
+				result := linter.LintWithPath(ctx, "# Test\n", nil, "/path/to/file.txt")
+
+				Expect(result.Success).To(BeTrue())
 			})
 		})
 

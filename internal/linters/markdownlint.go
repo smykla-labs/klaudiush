@@ -220,11 +220,12 @@ func (l *RealMarkdownLinter) findMarkdownlintTool() string {
 }
 
 // buildConfigArgs creates the config arguments for markdownlint command.
+// disableMD013: disable line-length rule (for markdown files where strict limits are impractical)
 // disableMD041: disable first-line-heading rule (fragment doesn't start at line 0)
 // disableMD047: disable single-trailing-newline rule (fragment doesn't reach EOF)
 func (l *RealMarkdownLinter) buildConfigArgs(
 	markdownlintPath string,
-	disableMD041, disableMD047 bool,
+	disableMD013, disableMD041, disableMD047 bool,
 ) ([]string, func(), error) {
 	args := []string{}
 	noopCleanup := func() {}
@@ -232,8 +233,9 @@ func (l *RealMarkdownLinter) buildConfigArgs(
 	hasCustomConfig := l.config != nil && l.config.MarkdownlintConfig != ""
 	hasCustomRules := l.config != nil && len(l.config.MarkdownlintRules) > 0
 
-	// Need fragment config if any fragment-specific rule needs disabling
-	needsFragmentConfig := disableMD041 || disableMD047
+	// Need runtime config if MD013 or MD047 needs disabling
+	// Note: MD041 is handled by the preamble (which includes a heading), not by config
+	needsRuntimeConfig := disableMD013 || disableMD047
 
 	switch {
 	case hasCustomConfig:
@@ -241,6 +243,7 @@ func (l *RealMarkdownLinter) buildConfigArgs(
 	case hasCustomRules:
 		configPath, cleanup, err := l.createTempConfig(
 			markdownlintPath,
+			disableMD013,
 			disableMD041,
 			disableMD047,
 		)
@@ -249,8 +252,12 @@ func (l *RealMarkdownLinter) buildConfigArgs(
 		}
 
 		return append(args, "--config", configPath), cleanup, nil
-	case needsFragmentConfig:
-		configPath, cleanup, err := l.createFragmentConfig(markdownlintPath, disableMD047)
+	case needsRuntimeConfig:
+		configPath, cleanup, err := l.createRuntimeConfig(
+			markdownlintPath,
+			disableMD013,
+			disableMD047,
+		)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -318,6 +325,17 @@ func ProcessMarkdownlintOutput(
 	}
 }
 
+// isMarkdownFile checks if the path is a markdown file (.md or .mdx)
+func isMarkdownFile(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+
+	return ext == ".md" || ext == ".mdx"
+}
+
 // runMarkdownlint runs markdownlint-cli2 (or markdownlint-cli) on the content
 func (l *RealMarkdownLinter) runMarkdownlint(
 	ctx context.Context,
@@ -350,6 +368,10 @@ func (l *RealMarkdownLinter) runMarkdownlint(
 	// initialState is only set for Edit operations
 	isFragment := initialState != nil
 
+	// MD013 (line-length) should be disabled for markdown files because strict 80-char limits
+	// are impractical for generated content (plans, docs, etc.)
+	disableMD013 := isMarkdownFile(originalPath)
+
 	// MD041 (first-line-heading) should only be disabled if fragment doesn't start at line 0
 	// because if it starts at line 0, the fragment DOES include the first line
 	disableMD041 := isFragment && initialState.StartLine > 0
@@ -359,6 +381,7 @@ func (l *RealMarkdownLinter) runMarkdownlint(
 
 	configArgs, cleanupConfig, err := l.buildConfigArgs(
 		markdownlintPath,
+		disableMD013,
 		disableMD041,
 		disableMD047,
 	)
@@ -567,13 +590,13 @@ func adjustLineNumbers(output string, preambleLines, fragmentStartLine int) stri
 // createTempConfig creates a temporary markdownlint config file from the rules map
 func (l *RealMarkdownLinter) createTempConfig(
 	toolPath string,
-	disableMD041, disableMD047 bool,
+	disableMD013, disableMD041, disableMD047 bool,
 ) (string, func(), error) {
 	if l.config == nil || len(l.config.MarkdownlintRules) == 0 {
 		return "", nil, ErrNoRulesConfigured
 	}
 
-	rules := l.prepareRules(disableMD041, disableMD047)
+	rules := l.prepareRules(disableMD013, disableMD041, disableMD047)
 	isCli2 := IsMarkdownlintCli2(toolPath)
 	configContent := l.generateConfigContent(rules, isCli2)
 	pattern := l.getConfigPattern(isCli2)
@@ -581,12 +604,20 @@ func (l *RealMarkdownLinter) createTempConfig(
 	return l.tempMgr.Create(pattern, configContent)
 }
 
-// prepareRules creates a copy of rules and applies fragment-specific overrides
-func (l *RealMarkdownLinter) prepareRules(disableMD041, disableMD047 bool) map[string]bool {
+// prepareRules creates a copy of rules and applies runtime overrides
+func (l *RealMarkdownLinter) prepareRules(
+	disableMD013, disableMD041, disableMD047 bool,
+) map[string]bool {
 	rules := make(map[string]bool, len(l.config.MarkdownlintRules))
 	maps.Copy(rules, l.config.MarkdownlintRules)
 
-	// Disable fragment-incompatible rules (unless explicitly enabled in config)
+	// Disable rules at runtime (unless explicitly enabled in config)
+	if disableMD013 {
+		if _, exists := rules["MD013"]; !exists {
+			rules["MD013"] = false // line-length
+		}
+	}
+
 	if disableMD041 {
 		if _, exists := rules["MD041"]; !exists {
 			rules["MD041"] = false // first-line-heading
@@ -668,59 +699,53 @@ func (*RealMarkdownLinter) getConfigPattern(isMarkdownlintCli2 bool) string {
 	return "markdownlint-config-*.json"
 }
 
-// GenerateFragmentConfigContent creates config content for fragment linting.
-// MD013 (line-length) is always disabled for fragments because context lines
-// around edits may legitimately exceed 80 characters.
-func GenerateFragmentConfigContent(isCli2, disableMD047 bool) string {
-	if isCli2 {
-		if disableMD047 {
-			return `{
-  "config": {
-    "MD013": false,
-    "MD047": false
-  }
-}`
-		}
+// GenerateRuntimeConfigContent creates config content for runtime rule overrides.
+// disableMD013: line-length (for markdown files where strict limits are impractical)
+// disableMD047: single-trailing-newline (for fragments that don't reach EOF)
+func GenerateRuntimeConfigContent(isCli2, disableMD013, disableMD047 bool) string {
+	var rules []string
 
-		return `{
-  "config": {
-    "MD013": false
-  }
-}`
+	if disableMD013 {
+		rules = append(rules, `"MD013": false`)
 	}
 
 	if disableMD047 {
-		return `{
-  "MD013": false,
-  "MD047": false
-}`
+		rules = append(rules, `"MD047": false`)
 	}
 
-	return `{
-  "MD013": false
-}`
-}
+	if len(rules) == 0 {
+		return "{}"
+	}
 
-// GetFragmentConfigPattern returns the config file pattern for fragments.
-func GetFragmentConfigPattern(isCli2 bool) string {
+	rulesStr := strings.Join(rules, ",\n    ")
+
 	if isCli2 {
-		return "fragment-*.markdownlint-cli2.jsonc"
+		return fmt.Sprintf("{\n  \"config\": {\n    %s\n  }\n}", rulesStr)
 	}
 
-	return "markdownlint-fragment-*.json"
+	return fmt.Sprintf("{\n  %s\n}", strings.Join(rules, ",\n  "))
 }
 
-// createFragmentConfig creates a minimal config that disables fragment-incompatible rules
-// Note: MD041 (first-line-heading) is no longer disabled because we use a preamble with a header.
-// List-related rules (MD007, MD029, MD032) are also no longer disabled because the preamble
+// GetRuntimeConfigPattern returns the config file pattern for runtime configs.
+func GetRuntimeConfigPattern(isCli2 bool) string {
+	if isCli2 {
+		return "runtime-*.markdownlint-cli2.jsonc"
+	}
+
+	return "markdownlint-runtime-*.json"
+}
+
+// createRuntimeConfig creates a minimal config that disables rules at runtime.
+// Note: MD041 (first-line-heading) is not handled here because we use a preamble with a header.
+// List-related rules (MD007, MD029, MD032) are also not handled because the preamble
 // establishes the correct list context.
-func (l *RealMarkdownLinter) createFragmentConfig(
+func (l *RealMarkdownLinter) createRuntimeConfig(
 	toolPath string,
-	disableMD047 bool,
+	disableMD013, disableMD047 bool,
 ) (string, func(), error) {
 	isCli2 := IsMarkdownlintCli2(toolPath)
-	configContent := GenerateFragmentConfigContent(isCli2, disableMD047)
-	pattern := GetFragmentConfigPattern(isCli2)
+	configContent := GenerateRuntimeConfigContent(isCli2, disableMD013, disableMD047)
+	pattern := GetRuntimeConfigPattern(isCli2)
 
 	return l.tempMgr.Create(pattern, configContent)
 }
