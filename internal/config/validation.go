@@ -4,11 +4,11 @@ package config
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 
 	"github.com/smykla-labs/klaudiush/pkg/config"
+	"github.com/smykla-labs/klaudiush/pkg/stringutil"
 )
 
 var (
@@ -26,6 +26,12 @@ var (
 
 	// ErrInvalidOption is returned when an option value is invalid.
 	ErrInvalidOption = errors.New("invalid option value")
+
+	// ErrInvalidRule is returned when a rule configuration is invalid.
+	ErrInvalidRule = errors.New("invalid rule configuration")
+
+	// ErrEmptyMatchConditions is returned when a rule has no match conditions.
+	ErrEmptyMatchConditions = errors.New("rule has no match conditions")
 )
 
 // Validator validates configuration semantics.
@@ -40,7 +46,7 @@ func NewValidator() *Validator {
 // Returns an error describing all validation failures.
 func (v *Validator) Validate(cfg *config.Config) error {
 	if cfg == nil {
-		return fmt.Errorf("%w: config is nil", ErrInvalidConfig)
+		return errors.WithMessage(ErrInvalidConfig, "config is nil")
 	}
 
 	var validationErrors []error
@@ -59,11 +65,20 @@ func (v *Validator) Validate(cfg *config.Config) error {
 		}
 	}
 
+	// Validate rules config
+	if cfg.Rules != nil {
+		if err := v.validateRulesConfig(cfg.Rules); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+	}
+
 	if len(validationErrors) > 0 {
-		return fmt.Errorf(
-			"%w: validation failed with %d error(s): %w",
-			ErrInvalidConfig,
-			len(validationErrors),
+		return errors.WithSecondaryError(
+			errors.Wrapf(
+				ErrInvalidConfig,
+				"validation failed with %d error(s)",
+				len(validationErrors),
+			),
 			combineErrors(validationErrors),
 		)
 	}
@@ -114,26 +129,26 @@ func (v *Validator) validateGitConfig(cfg *config.GitConfig) error {
 		if err := v.validateCommitConfig(cfg.Commit); err != nil {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("validators.git.commit: %w", err),
+				errors.Wrap(err, "validators.git.commit"),
 			)
 		}
 	}
 
 	if cfg.Push != nil {
 		if err := v.validatePushConfig(cfg.Push); err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("validators.git.push: %w", err))
+			validationErrors = append(validationErrors, errors.Wrap(err, "validators.git.push"))
 		}
 	}
 
 	if cfg.Add != nil {
 		if err := v.validateAddConfig(cfg.Add); err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("validators.git.add: %w", err))
+			validationErrors = append(validationErrors, errors.Wrap(err, "validators.git.add"))
 		}
 	}
 
 	if cfg.PR != nil {
 		if err := v.validatePRConfig(cfg.PR); err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("validators.git.pr: %w", err))
+			validationErrors = append(validationErrors, errors.Wrap(err, "validators.git.pr"))
 		}
 	}
 
@@ -141,7 +156,7 @@ func (v *Validator) validateGitConfig(cfg *config.GitConfig) error {
 		if err := v.validateBranchConfig(cfg.Branch); err != nil {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("validators.git.branch: %w", err),
+				errors.Wrap(err, "validators.git.branch"),
 			)
 		}
 	}
@@ -150,7 +165,7 @@ func (v *Validator) validateGitConfig(cfg *config.GitConfig) error {
 		if err := v.validateBaseConfig(&cfg.NoVerify.ValidatorConfig); err != nil {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("validators.git.no_verify: %w", err),
+				errors.Wrap(err, "validators.git.no_verify"),
 			)
 		}
 	}
@@ -170,7 +185,7 @@ func (v *Validator) validateFileConfig(cfg *config.FileConfig) error {
 		if err := v.validateMarkdownConfig(cfg.Markdown); err != nil {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("validators.file.markdown: %w", err),
+				errors.Wrap(err, "validators.file.markdown"),
 			)
 		}
 	}
@@ -179,7 +194,7 @@ func (v *Validator) validateFileConfig(cfg *config.FileConfig) error {
 		if err := v.validateShellScriptConfig(cfg.ShellScript); err != nil {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("validators.file.shellscript: %w", err),
+				errors.Wrap(err, "validators.file.shellscript"),
 			)
 		}
 	}
@@ -188,7 +203,7 @@ func (v *Validator) validateFileConfig(cfg *config.FileConfig) error {
 		if err := v.validateTerraformConfig(cfg.Terraform); err != nil {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("validators.file.terraform: %w", err),
+				errors.Wrap(err, "validators.file.terraform"),
 			)
 		}
 	}
@@ -197,7 +212,7 @@ func (v *Validator) validateFileConfig(cfg *config.FileConfig) error {
 		if err := v.validateWorkflowConfig(cfg.Workflow); err != nil {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("validators.file.workflow: %w", err),
+				errors.Wrap(err, "validators.file.workflow"),
 			)
 		}
 	}
@@ -213,7 +228,7 @@ func (v *Validator) validateFileConfig(cfg *config.FileConfig) error {
 func (v *Validator) validateNotificationConfig(cfg *config.NotificationConfig) error {
 	if cfg.Bell != nil {
 		if err := v.validateBaseConfig(&cfg.Bell.ValidatorConfig); err != nil {
-			return fmt.Errorf("validators.notification.bell: %w", err)
+			return errors.Wrap(err, "validators.notification.bell")
 		}
 	}
 
@@ -228,7 +243,7 @@ func (v *Validator) validateCommitConfig(cfg *config.CommitValidatorConfig) erro
 
 	if cfg.Message != nil {
 		if err := v.validateCommitMessageConfig(cfg.Message); err != nil {
-			return fmt.Errorf("message: %w", err)
+			return errors.Wrap(err, "message")
 		}
 	}
 
@@ -242,9 +257,9 @@ func (*Validator) validateCommitMessageConfig(cfg *config.CommitMessageConfig) e
 	if cfg.TitleMaxLength != nil && *cfg.TitleMaxLength <= 0 {
 		validationErrors = append(
 			validationErrors,
-			fmt.Errorf(
-				"%w: title_max_length must be positive, got %d",
+			errors.Wrapf(
 				ErrInvalidLength,
+				"title_max_length must be positive, got %d",
 				*cfg.TitleMaxLength,
 			),
 		)
@@ -253,9 +268,9 @@ func (*Validator) validateCommitMessageConfig(cfg *config.CommitMessageConfig) e
 	if cfg.BodyMaxLineLength != nil && *cfg.BodyMaxLineLength <= 0 {
 		validationErrors = append(
 			validationErrors,
-			fmt.Errorf(
-				"%w: body_max_line_length must be positive, got %d",
+			errors.Wrapf(
 				ErrInvalidLength,
+				"body_max_line_length must be positive, got %d",
 				*cfg.BodyMaxLineLength,
 			),
 		)
@@ -264,9 +279,9 @@ func (*Validator) validateCommitMessageConfig(cfg *config.CommitMessageConfig) e
 	if cfg.BodyLineTolerance != nil && *cfg.BodyLineTolerance < 0 {
 		validationErrors = append(
 			validationErrors,
-			fmt.Errorf(
-				"%w: body_line_tolerance must be non-negative, got %d",
+			errors.Wrapf(
 				ErrInvalidLength,
+				"body_line_tolerance must be non-negative, got %d",
 				*cfg.BodyLineTolerance,
 			),
 		)
@@ -276,7 +291,7 @@ func (*Validator) validateCommitMessageConfig(cfg *config.CommitMessageConfig) e
 		if slices.Contains(cfg.ValidTypes, "") {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("%w: valid_types", ErrEmptyValue),
+				errors.WithMessage(ErrEmptyValue, "valid_types"),
 			)
 		}
 	}
@@ -309,9 +324,9 @@ func (v *Validator) validatePRConfig(cfg *config.PRValidatorConfig) error {
 	if cfg.TitleMaxLength != nil && *cfg.TitleMaxLength <= 0 {
 		validationErrors = append(
 			validationErrors,
-			fmt.Errorf(
-				"%w: title_max_length must be positive, got %d",
+			errors.Wrapf(
 				ErrInvalidLength,
+				"title_max_length must be positive, got %d",
 				*cfg.TitleMaxLength,
 			),
 		)
@@ -321,7 +336,7 @@ func (v *Validator) validatePRConfig(cfg *config.PRValidatorConfig) error {
 		if slices.Contains(cfg.ValidTypes, "") {
 			validationErrors = append(
 				validationErrors,
-				fmt.Errorf("%w: valid_types", ErrEmptyValue),
+				errors.WithMessage(ErrEmptyValue, "valid_types"),
 			)
 		}
 	}
@@ -341,7 +356,7 @@ func (v *Validator) validateBranchConfig(cfg *config.BranchValidatorConfig) erro
 
 	if len(cfg.ValidTypes) > 0 {
 		if slices.Contains(cfg.ValidTypes, "") {
-			return fmt.Errorf("%w: valid_types", ErrEmptyValue)
+			return errors.WithMessage(ErrEmptyValue, "valid_types")
 		}
 	}
 
@@ -355,9 +370,9 @@ func (v *Validator) validateMarkdownConfig(cfg *config.MarkdownValidatorConfig) 
 	}
 
 	if cfg.ContextLines != nil && *cfg.ContextLines < 0 {
-		return fmt.Errorf(
-			"%w: context_lines must be non-negative, got %d",
+		return errors.Wrapf(
 			ErrInvalidLength,
+			"context_lines must be non-negative, got %d",
 			*cfg.ContextLines,
 		)
 	}
@@ -372,9 +387,9 @@ func (v *Validator) validateShellScriptConfig(cfg *config.ShellScriptValidatorCo
 	}
 
 	if cfg.ContextLines != nil && *cfg.ContextLines < 0 {
-		return fmt.Errorf(
-			"%w: context_lines must be non-negative, got %d",
+		return errors.Wrapf(
 			ErrInvalidLength,
+			"context_lines must be non-negative, got %d",
 			*cfg.ContextLines,
 		)
 	}
@@ -386,9 +401,9 @@ func (v *Validator) validateShellScriptConfig(cfg *config.ShellScriptValidatorCo
 		valid := slices.Contains(validSeverities, cfg.ShellcheckSeverity)
 
 		if !valid {
-			return fmt.Errorf(
-				"%w: shellcheck_severity must be one of %v, got %q",
+			return errors.Wrapf(
 				ErrInvalidOption,
+				"shellcheck_severity must be one of %v, got %q",
 				validSeverities,
 				cfg.ShellcheckSeverity,
 			)
@@ -405,9 +420,9 @@ func (v *Validator) validateTerraformConfig(cfg *config.TerraformValidatorConfig
 	}
 
 	if cfg.ContextLines != nil && *cfg.ContextLines < 0 {
-		return fmt.Errorf(
-			"%w: context_lines must be non-negative, got %d",
+		return errors.Wrapf(
 			ErrInvalidLength,
+			"context_lines must be non-negative, got %d",
 			*cfg.ContextLines,
 		)
 	}
@@ -419,9 +434,9 @@ func (v *Validator) validateTerraformConfig(cfg *config.TerraformValidatorConfig
 		valid := slices.Contains(validPreferences, cfg.ToolPreference)
 
 		if !valid {
-			return fmt.Errorf(
-				"%w: tool_preference must be one of %v, got %q",
+			return errors.Wrapf(
 				ErrInvalidOption,
+				"tool_preference must be one of %v, got %q",
 				validPreferences,
 				cfg.ToolPreference,
 			)
@@ -439,12 +454,159 @@ func (v *Validator) validateWorkflowConfig(cfg *config.WorkflowValidatorConfig) 
 // validateBaseConfig validates the base validator configuration.
 func (*Validator) validateBaseConfig(cfg *config.ValidatorConfig) error {
 	if cfg.Severity != config.SeverityUnknown && !cfg.Severity.IsASeverity() {
-		return fmt.Errorf(
-			"%w: must be %q or %q, got %q",
+		return errors.Wrapf(
 			ErrInvalidSeverity,
+			"must be %q or %q, got %q",
 			config.SeverityError.String(),
 			config.SeverityWarning.String(),
 			cfg.Severity.String(),
+		)
+	}
+
+	return nil
+}
+
+// validateRulesConfig validates the rules configuration.
+func (v *Validator) validateRulesConfig(cfg *config.RulesConfig) error {
+	if cfg == nil || len(cfg.Rules) == 0 {
+		return nil
+	}
+
+	var validationErrors []error
+
+	for i := range cfg.Rules {
+		// Skip validation for disabled rules
+		if !cfg.Rules[i].IsRuleEnabled() {
+			continue
+		}
+
+		ruleID := v.getRuleIdentifier(cfg.Rules[i], i)
+
+		if err := v.validateRule(&cfg.Rules[i], ruleID); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return errors.Wrap(combineErrors(validationErrors), "rules")
+	}
+
+	return nil
+}
+
+// getRuleIdentifier returns a human-readable identifier for a rule.
+func (*Validator) getRuleIdentifier(rule config.RuleConfig, index int) string {
+	if rule.Name != "" {
+		return fmt.Sprintf("rule[%q]", rule.Name)
+	}
+
+	return fmt.Sprintf("rule[%d]", index)
+}
+
+// validateRule validates a single rule configuration.
+func (v *Validator) validateRule(rule *config.RuleConfig, ruleID string) error {
+	var validationErrors []error
+
+	// Validate match conditions exist
+	if err := v.validateRuleMatchConditions(rule.Match, ruleID); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	// Validate match field values
+	if rule.Match != nil {
+		if err := v.validateRuleMatchFields(rule.Match, ruleID); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+	}
+
+	// Validate action
+	if err := v.validateRuleAction(rule.Action, ruleID); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	if len(validationErrors) > 0 {
+		return combineErrors(validationErrors)
+	}
+
+	return nil
+}
+
+// validateRuleMatchConditions validates that a rule has at least one match condition.
+func (*Validator) validateRuleMatchConditions(match *config.RuleMatchConfig, ruleID string) error {
+	if match == nil {
+		return errors.Wrapf(ErrEmptyMatchConditions, "%s has no match section", ruleID)
+	}
+
+	// Use centralized method on RuleMatchConfig
+	if !match.HasMatchConditions() {
+		return errors.Wrapf(
+			ErrEmptyMatchConditions,
+			"%s has empty match section (rule will never match)",
+			ruleID,
+		)
+	}
+
+	return nil
+}
+
+// validateRuleMatchFields validates the field values in a rule's match section.
+func (*Validator) validateRuleMatchFields(match *config.RuleMatchConfig, ruleID string) error {
+	var validationErrors []error
+
+	// Validate event_type if specified
+	if match.EventType != "" {
+		if !stringutil.ContainsCaseInsensitive(config.ValidEventTypes, match.EventType) {
+			validationErrors = append(
+				validationErrors,
+				errors.Wrapf(
+					ErrInvalidRule,
+					"%s has invalid event_type %q (valid: %v)",
+					ruleID,
+					match.EventType,
+					config.ValidEventTypes,
+				),
+			)
+		}
+	}
+
+	// Validate tool_type if specified
+	if match.ToolType != "" {
+		if !stringutil.ContainsCaseInsensitive(config.ValidToolTypes, match.ToolType) {
+			validationErrors = append(
+				validationErrors,
+				errors.Wrapf(
+					ErrInvalidRule,
+					"%s has invalid tool_type %q (valid: %v)",
+					ruleID,
+					match.ToolType,
+					config.ValidToolTypes,
+				),
+			)
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return combineErrors(validationErrors)
+	}
+
+	return nil
+}
+
+// validateRuleAction validates a rule's action configuration.
+func (*Validator) validateRuleAction(action *config.RuleActionConfig, ruleID string) error {
+	if action == nil {
+		// No action is valid - defaults to "block"
+		return nil
+	}
+
+	// Validate action type if specified
+	if action.Type != "" && !slices.Contains(config.ValidActionTypes, action.Type) {
+		return errors.Wrapf(
+			ErrInvalidRule,
+			"%s has invalid action type %q (valid: %v)",
+			ruleID,
+			action.Type,
+			config.ValidActionTypes,
 		)
 	}
 
@@ -461,13 +623,5 @@ func combineErrors(errs []error) error {
 		return errs[0]
 	}
 
-	var sb strings.Builder
-	sb.WriteString(errs[0].Error())
-
-	for _, err := range errs[1:] {
-		sb.WriteString("; ")
-		sb.WriteString(err.Error())
-	}
-
-	return fmt.Errorf("%w: %s", ErrInvalidConfig, sb.String())
+	return errors.Join(errs...)
 }

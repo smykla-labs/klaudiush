@@ -203,6 +203,8 @@ message = "Don't push to origin"
 [[rules.rules]]
 name = "project-rule"
 priority = 200
+[rules.rules.match]
+validator_type = "git.commit"
 [rules.rules.action]
 type = "warn"
 message = "Project warning"
@@ -230,6 +232,8 @@ message = "Project warning"
 [[rules.rules]]
 name = "global-rule"
 priority = 100
+[rules.rules.match]
+validator_type = "git.push"
 [rules.rules.action]
 type = "block"
 
@@ -237,6 +241,8 @@ type = "block"
 name = "shared-rule"
 priority = 50
 description = "global version"
+[rules.rules.match]
+validator_type = "git.commit"
 [rules.rules.action]
 type = "block"
 message = "global message"
@@ -256,6 +262,8 @@ message = "global message"
 [[rules.rules]]
 name = "project-rule"
 priority = 200
+[rules.rules.match]
+validator_type = "file.markdown"
 [rules.rules.action]
 type = "warn"
 
@@ -263,6 +271,8 @@ type = "warn"
 name = "shared-rule"
 priority = 150
 description = "project version"
+[rules.rules.match]
+validator_type = "git.commit"
 [rules.rules.action]
 type = "allow"
 message = "project message"
@@ -308,6 +318,8 @@ enabled = false
 
 [[rules.rules]]
 name = "should-not-run"
+[rules.rules.match]
+validator_type = "git.push"
 [rules.rules.action]
 type = "block"
 `

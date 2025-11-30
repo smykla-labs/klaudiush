@@ -1,5 +1,6 @@
 # Codex Code Review workflow
 # Runs Codex on pull requests when explicitly requested
+# Posts inline review comments on specific lines in the diff
 
 name: Codex Code Review
 
@@ -42,7 +43,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           should_run="false"
-              pr_number=""
+          pr_number=""
 
           case "$EVENT_NAME" in
             workflow_dispatch)
@@ -72,76 +73,184 @@ jobs:
       id-token: write
 
     steps:
-      - name: Mint identity token
-        id: mint_identity_token
-        if: vars.SMYKLOT_APP_ID
-        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
-        with:
-          app-id: ${{ vars.SMYKLOT_APP_ID }}
-          private-key: ${{ secrets.SMYKLOT_PRIVATE_KEY }}
-          permission-contents: read
-          permission-issues: write
-          permission-pull-requests: write
-
       - name: Checkout PR merge commit
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
-          token: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
           ref: refs/pull/${{ needs.check-trigger.outputs.pr_number }}/merge
           fetch-depth: 0
 
-      - name: Pre-fetch base and head refs for the PR
+      - name: Get PR head SHA
+        id: pr_info
         env:
-          GH_TOKEN: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.check-trigger.outputs.pr_number }}
         run: |
-          gh pr view "$PR_NUMBER" --json baseRefName,headRefName --template '{{.baseRefName}} {{.headRefName}}' | read base head
-          git fetch --no-tags origin "$base" "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pull/${PR_NUMBER}/head"
+          pr_info=$(gh pr view "$PR_NUMBER" --json headRefOid,baseRefName,headRefName)
+          head_sha=$(echo "$pr_info" | jq -r '.headRefOid')
+          base_ref=$(echo "$pr_info" | jq -r '.baseRefName')
+          head_ref=$(echo "$pr_info" | jq -r '.headRefName')
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          git fetch --no-tags origin "$base_ref" "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pull/${PR_NUMBER}/head"
 
-      - name: Run Codex review
+      - name: Run Codex review with structured output
         id: run_codex
         uses: openai/codex-action@086169432f1d2ab2f4057540b1754d550f6a1189 # v1.4
         env:
           PR_NUMBER: ${{ needs.check-trigger.outputs.pr_number }}
           REPOSITORY: ${{ github.repository }}
-          PR_TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
-          PR_BODY: ${{ github.event.pull_request.body || github.event.issue.body }}
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           sandbox: read-only
+          output-file: codex-review-output.json
+          output-schema: |
+            {
+              "type": "object",
+              "properties": {
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {"type": "string", "maxLength": 80},
+                      "body": {"type": "string", "minLength": 1},
+                      "priority": {"type": "integer", "minimum": 0, "maximum": 3},
+                      "confidence_score": {"type": "number", "minimum": 0, "maximum": 1},
+                      "code_location": {
+                        "type": "object",
+                        "properties": {
+                          "file_path": {"type": "string"},
+                          "line_range": {
+                            "type": "object",
+                            "properties": {
+                              "start": {"type": "integer", "minimum": 1},
+                              "end": {"type": "integer", "minimum": 1}
+                            },
+                            "required": ["start", "end"]
+                          }
+                        },
+                        "required": ["file_path", "line_range"]
+                      }
+                    },
+                    "required": ["title", "body", "priority", "code_location"]
+                  }
+                },
+                "overall_correctness": {"type": "string", "enum": ["patch is correct", "patch is incorrect", "patch needs minor fixes"]},
+                "overall_explanation": {"type": "string"}
+              },
+              "required": ["findings", "overall_correctness", "overall_explanation"]
+            }
           prompt: |
-            You are Codex performing a concise code review for PR #${{ env.PR_NUMBER }} in ${{ env.REPOSITORY }}.
+            You are Codex performing a code review for PR #${{ env.PR_NUMBER }} in ${{ env.REPOSITORY }}.
 
-            Focus only on significant issues: correctness, security, performance, data races, and maintainability. Skip minor style nitpicks.
-            When you reference code, cite file paths and line numbers from the diff when possible.
+            Use `gh pr view` and `gh pr diff` to read the PR details and changes.
 
-            Pull request title: ${{ env.PR_TITLE }}
-            Pull request body:
-            ---
-            ${{ env.PR_BODY }}
+            Focus only on significant issues: correctness, security, performance, data races, and maintainability.
+            Skip minor style nitpicks. Only report issues you are confident about.
 
-            Output a short review suitable for posting as a single PR comment. Use markdown bullets.
+            For each finding, provide:
+            - A concise title (max 80 chars)
+            - A detailed body explaining the issue and how to fix it
+            - Priority: 0 (critical/blocking), 1 (high), 2 (medium), 3 (low)
+            - The exact file path and line range where the issue occurs
 
-      - name: Post Codex review comment
-        if: steps.run_codex.outputs.final-message != ''
+      - name: Post inline review comments
+        if: always() && steps.run_codex.outcome == 'success'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs['final-message'] }}
           PR_NUMBER: ${{ needs.check-trigger.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.pr_info.outputs.head_sha }}
         with:
-          github-token: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
           script: |
+            const fs = require('fs');
             const prNumber = Number(process.env.PR_NUMBER);
-            const body = process.env.CODEX_FINAL_MESSAGE;
+            const commitId = process.env.HEAD_SHA;
 
-            if (!body || !prNumber) {
-              core.warning('No final message or PR number; skipping comment.');
+            // Read Codex output
+            let output;
+            try {
+              const rawOutput = fs.readFileSync('codex-review-output.json', 'utf8');
+              output = JSON.parse(rawOutput);
+            } catch (err) {
+              core.warning(`Failed to parse Codex output: ${err.message}`);
               return;
             }
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body,
-            });
+            if (!output || !output.findings) {
+              core.info('No findings in Codex output');
+              // Post summary comment if there's an overall explanation
+              if (output?.overall_explanation) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: `## Codex Code Review\n\n✅ ${output.overall_explanation}`
+                });
+              }
+              return;
+            }
+
+            // Build inline comments array
+            const comments = output.findings
+              .filter(f => f.code_location?.file_path && f.code_location?.line_range)
+              .map(f => {
+                const priorityLabels = ['🔴 P0 Critical', '🟠 P1 High', '🟡 P2 Medium', '🟢 P3 Low'];
+                const priorityLabel = priorityLabels[f.priority] || `P${f.priority}`;
+                return {
+                  path: f.code_location.file_path.replace(/^\//, ''),
+                  line: f.code_location.line_range.end,
+                  start_line: f.code_location.line_range.start !== f.code_location.line_range.end
+                    ? f.code_location.line_range.start
+                    : undefined,
+                  side: 'RIGHT',
+                  body: `**${f.title}** (${priorityLabel})\n\n${f.body}`
+                };
+              })
+              .filter(c => c.path && c.line);
+
+            // Determine review event based on findings
+            const hasCritical = output.findings.some(f => f.priority === 0);
+            let event = 'COMMENT';
+            if (hasCritical) {
+              event = 'REQUEST_CHANGES';
+            }
+
+            // Create review with inline comments
+            if (comments.length > 0) {
+              try {
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                  commit_id: commitId,
+                  event: event,
+                  body: `## Codex Code Review\n\n${output.overall_explanation}\n\n_Found ${comments.length} issue(s) - see inline comments below._`,
+                  comments: comments
+                });
+                core.info(`Created review with ${comments.length} inline comments`);
+              } catch (err) {
+                // If inline comments fail (e.g., line not in diff), fall back to regular comment
+                core.warning(`Failed to create review with inline comments: ${err.message}`);
+                const findingsText = output.findings.map(f => {
+                  const priorityLabels = ['🔴 P0', '🟠 P1', '🟡 P2', '🟢 P3'];
+                  const loc = f.code_location;
+                  return `### ${priorityLabels[f.priority] || 'P?'} ${f.title}\n\n📍 \`${loc.file_path}:${loc.line_range.start}-${loc.line_range.end}\`\n\n${f.body}`;
+                }).join('\n\n---\n\n');
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: `## Codex Code Review\n\n${output.overall_explanation}\n\n---\n\n${findingsText}`
+                });
+              }
+            } else if (output.overall_explanation) {
+              // No inline findings - post summary comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `## Codex Code Review\n\n${output.overall_explanation}`
+              });
+            }

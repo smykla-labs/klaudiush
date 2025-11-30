@@ -19,12 +19,18 @@ name = "disabled-rule"
 enabled = false
 priority = 100
 
+[rules.rules.match]
+validator_type = "git.push"
+
 [rules.rules.action]
 type = "block"
 
 [[rules.rules]]
 name = "enabled-rule"
 priority = 90
+
+[rules.rules.match]
+validator_type = "git.commit"
 
 [rules.rules.action]
 type = "warn"

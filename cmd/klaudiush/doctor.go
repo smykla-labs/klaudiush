@@ -14,6 +14,7 @@ import (
 	"github.com/smykla-labs/klaudiush/internal/doctor/checkers/binary"
 	configchecker "github.com/smykla-labs/klaudiush/internal/doctor/checkers/config"
 	"github.com/smykla-labs/klaudiush/internal/doctor/checkers/hook"
+	ruleschecker "github.com/smykla-labs/klaudiush/internal/doctor/checkers/rules"
 	"github.com/smykla-labs/klaudiush/internal/doctor/checkers/tools"
 	"github.com/smykla-labs/klaudiush/internal/doctor/fixers"
 	"github.com/smykla-labs/klaudiush/internal/doctor/reporters"
@@ -157,6 +158,9 @@ func buildDoctorRegistry() *doctor.Registry {
 	registry.RegisterChecker(configchecker.NewProjectChecker())
 	registry.RegisterChecker(configchecker.NewPermissionsChecker())
 
+	// Register rules checkers
+	registry.RegisterChecker(ruleschecker.NewRulesChecker())
+
 	// Register tools checkers
 	registry.RegisterChecker(tools.NewShellcheckChecker())
 	registry.RegisterChecker(tools.NewTerraformChecker())
@@ -173,6 +177,7 @@ func registerFixers(registry *doctor.Registry, prompter prompt.Prompter) {
 	registry.RegisterFixer(fixers.NewPermissionsFixer(prompter))
 	registry.RegisterFixer(fixers.NewConfigFixer(prompter))
 	registry.RegisterFixer(fixers.NewInstallBinaryFixer(prompter))
+	registry.RegisterFixer(fixers.NewRulesFixer(prompter))
 }
 
 // parseCategories converts string category names to Category types.

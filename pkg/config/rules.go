@@ -1,6 +1,19 @@
 // Package config provides configuration schema types for klaudiush validators.
 package config
 
+// Valid values for rules configuration.
+// These are exported for use by validation and doctor packages.
+var (
+	// ValidActionTypes are the valid action types for rules.
+	ValidActionTypes = []string{"allow", "block", "warn"}
+
+	// ValidEventTypes are the valid event types for rules (case-insensitive matching supported).
+	ValidEventTypes = []string{"PreToolUse", "PostToolUse", "Notification"}
+
+	// ValidToolTypes are the valid tool types for rules (case-insensitive matching supported).
+	ValidToolTypes = []string{"Bash", "Write", "Edit", "MultiEdit", "Grep", "Read", "Glob"}
+)
+
 // RulesConfig contains the dynamic rule configuration.
 type RulesConfig struct {
 	// Enabled controls whether the rule engine is active.
@@ -117,6 +130,29 @@ func (m *RuleMatchConfig) GetPatternMode() string {
 	}
 
 	return m.PatternMode
+}
+
+// HasMatchConditions returns true if the match config has at least one condition defined.
+// This is used to validate that a rule will actually match something.
+func (m *RuleMatchConfig) HasMatchConditions() bool {
+	if m == nil {
+		return false
+	}
+
+	return m.ValidatorType != "" ||
+		m.RepoPattern != "" ||
+		len(m.RepoPatterns) > 0 ||
+		m.Remote != "" ||
+		m.BranchPattern != "" ||
+		len(m.BranchPatterns) > 0 ||
+		m.FilePattern != "" ||
+		len(m.FilePatterns) > 0 ||
+		m.ContentPattern != "" ||
+		len(m.ContentPatterns) > 0 ||
+		m.CommandPattern != "" ||
+		len(m.CommandPatterns) > 0 ||
+		m.ToolType != "" ||
+		m.EventType != ""
 }
 
 // RuleActionConfig specifies what happens when a rule matches.
