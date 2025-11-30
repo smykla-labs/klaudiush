@@ -326,6 +326,14 @@ jobs:
               event = 'REQUEST_CHANGES';
             }
 
+            // Build short summary - details are in inline comments (which are resolvable)
+            const buildSummaryBody = (count, inline) => {
+              if (inline) {
+                return `Found **${count}** issue${count !== 1 ? 's' : ''}. See inline comments below.`;
+              }
+              return `Found **${count}** issue${count !== 1 ? 's' : ''}. Details in comments below.`;
+            };
+
             // Create review with inline comments
             if (comments.length > 0) {
               try {
@@ -335,7 +343,7 @@ jobs:
                   pull_number: prNumber,
                   commit_id: commitId,
                   event: event,
-                  body: `## Codex Code Review\n\n${output.overall_explanation}\n\n_Found ${comments.length} issue(s) - see inline comments below._`,
+                  body: buildSummaryBody(output.findings.length, true),
                   comments: comments
                 });
                 core.info(`Created review with ${comments.length} inline comments`);
@@ -352,7 +360,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: prNumber,
-                  body: `## Codex Code Review\n\n${output.overall_explanation}\n\n---\n\n${findingsText}`
+                  body: `${buildSummaryBody(output.findings.length, false)}\n\n---\n\n${findingsText}`
                 });
               }
             } else if (output.overall_explanation) {
@@ -361,7 +369,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `## Codex Code Review\n\n${output.overall_explanation}`
+                body: `✅ No issues found.\n\n${output.overall_explanation}`
               });
             }
             await cleanupWorkingComment();
