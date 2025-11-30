@@ -1,5 +1,6 @@
 # Codex assistant workflow
 # Responds to @codex mentions in comments and reviews using the Codex CLI
+# Supports inline review comments when performing code reviews
 
 name: Codex
 
@@ -41,6 +42,12 @@ jobs:
       issues: write
       id-token: write
 
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+      REPOSITORY: ${{ github.repository }}
+      ACTOR: ${{ github.actor }}
+      EVENT_NAME: ${{ github.event_name }}
+
     steps:
       - name: Mint identity token
         id: mint_identity_token
@@ -59,6 +66,19 @@ jobs:
           token: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
           fetch-depth: 0
 
+      - name: Get PR info
+        id: pr_info
+        env:
+          GH_TOKEN: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
+        run: |
+          if gh pr view "$ISSUE_NUMBER" --json headRefOid --jq '.headRefOid' > /dev/null 2>&1; then
+            head_sha=$(gh pr view "$ISSUE_NUMBER" --json headRefOid --jq '.headRefOid')
+            echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Capture request text
         id: capture_request
         env:
@@ -66,7 +86,6 @@ jobs:
           REVIEW_BODY: ${{ github.event.review.body }}
         run: |
           request="$COMMENT_BODY$REVIEW_BODY"
-          # Use random delimiter to avoid collision with user content
           delim=$(openssl rand -hex 16)
           {
             echo "request<<$delim"
@@ -78,43 +97,145 @@ jobs:
         id: run_codex
         uses: openai/codex-action@086169432f1d2ab2f4057540b1754d550f6a1189 # v1.4
         env:
-          ACTOR: ${{ github.actor }}
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
           REQUEST: ${{ steps.capture_request.outputs.request }}
-          REPOSITORY: ${{ github.repository }}
+          IS_PR: ${{ steps.pr_info.outputs.is_pr }}
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           sandbox: read-only
+          output-file: codex-output.json
+          output-schema: |
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "response": {"type": "string"},
+                "is_code_review": {"type": "boolean"},
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "title": {"type": "string"},
+                      "body": {"type": "string"},
+                      "priority": {"type": "integer"},
+                      "code_location": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "file_path": {"type": "string"},
+                          "line_range": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "start": {"type": "integer"},
+                              "end": {"type": "integer"}
+                            },
+                            "required": ["start", "end"]
+                          }
+                        },
+                        "required": ["file_path", "line_range"]
+                      }
+                    },
+                    "required": ["title", "body", "priority", "code_location"]
+                  }
+                }
+              },
+              "required": ["response", "is_code_review", "findings"]
+            }
           prompt: |
             You are Codex acting as a GitHub assistant for repository ${{ env.REPOSITORY }}.
-            A user (@${{ env.ACTOR }}) requested help via ${EVENT_NAME}:
-            ---
-            ${{ env.REQUEST }}
-            ---
+            A user (@${{ env.ACTOR }}) requested help via ${{ env.EVENT_NAME }}.
 
-            Respond concisely in Markdown. Prefer bullet lists when sharing multiple points. Include file paths and line numbers when referencing code. Avoid making irreversible changes; suggest patches instead.
+            Use `gh issue view ${{ env.ISSUE_NUMBER }}` or `gh pr view ${{ env.ISSUE_NUMBER }}` to get context.
 
-      - name: Post Codex reply
-        if: steps.run_codex.outputs.final-message != ''
+            If this is a code review request (user asks to review code/PR/changes):
+            - Set is_code_review to true
+            - Use `gh pr diff` to see the changes
+            - For each issue found, add to the findings array with file_path and line_range
+            - Focus on significant issues: bugs, security, performance. Skip style nitpicks.
+            - Put a summary in the response field
+
+            If this is NOT a code review (question, help request, etc.):
+            - Set is_code_review to false
+            - Put your full response in the response field
+            - Leave findings as an empty array
+
+            Always respond concisely. Use Markdown.
+
+      - name: Post response
+        if: always() && steps.run_codex.outcome == 'success'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs['final-message'] }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          HEAD_SHA: ${{ steps.pr_info.outputs.head_sha }}
+          IS_PR: ${{ steps.pr_info.outputs.is_pr }}
         with:
           github-token: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
           script: |
+            const fs = require('fs');
             const issueNumber = Number(process.env.ISSUE_NUMBER);
-            const body = process.env.CODEX_FINAL_MESSAGE;
+            const headSha = process.env.HEAD_SHA;
+            const isPR = process.env.IS_PR === 'true';
 
-            if (!body || !issueNumber) {
-              core.warning('No final message or issue number; skipping reply.');
+            // Read Codex output
+            let output;
+            try {
+              const rawOutput = fs.readFileSync('codex-output.json', 'utf8');
+              output = JSON.parse(rawOutput);
+            } catch (err) {
+              core.warning(`Failed to parse Codex output: ${err.message}`);
               return;
             }
 
+            if (!output || !output.response) {
+              core.warning('No response in Codex output');
+              return;
+            }
+
+            // If it's a code review with findings on a PR, post inline comments
+            if (output.is_code_review && isPR && output.findings?.length > 0 && headSha) {
+              const comments = output.findings
+                .filter(f => f.code_location?.file_path && f.code_location?.line_range)
+                .map(f => {
+                  const priorityLabels = ['🔴 P0 Critical', '🟠 P1 High', '🟡 P2 Medium', '🟢 P3 Low'];
+                  const priorityLabel = priorityLabels[f.priority] || `P${f.priority}`;
+                  return {
+                    path: f.code_location.file_path.replace(/^\//, ''),
+                    line: f.code_location.line_range.end,
+                    start_line: f.code_location.line_range.start !== f.code_location.line_range.end
+                      ? f.code_location.line_range.start
+                      : undefined,
+                    side: 'RIGHT',
+                    body: `**${f.title}** (${priorityLabel})\n\n${f.body}`
+                  };
+                })
+                .filter(c => c.path && c.line);
+
+              if (comments.length > 0) {
+                try {
+                  const hasCritical = output.findings.some(f => f.priority === 0);
+                  await github.rest.pulls.createReview({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: issueNumber,
+                    commit_id: headSha,
+                    event: hasCritical ? 'REQUEST_CHANGES' : 'COMMENT',
+                    body: output.response,
+                    comments: comments
+                  });
+                  core.info(`Posted review with ${comments.length} inline comments`);
+                  return;
+                } catch (err) {
+                  core.warning(`Failed to post inline comments: ${err.message}`);
+                  // Fall through to regular comment
+                }
+              }
+            }
+
+            // Post as regular comment
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body,
+              body: output.response
             });

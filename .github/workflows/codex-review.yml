@@ -107,25 +107,28 @@ jobs:
           output-schema: |
             {
               "type": "object",
+              "additionalProperties": false,
               "properties": {
                 "findings": {
                   "type": "array",
                   "items": {
                     "type": "object",
+                    "additionalProperties": false,
                     "properties": {
-                      "title": {"type": "string", "maxLength": 80},
-                      "body": {"type": "string", "minLength": 1},
-                      "priority": {"type": "integer", "minimum": 0, "maximum": 3},
-                      "confidence_score": {"type": "number", "minimum": 0, "maximum": 1},
+                      "title": {"type": "string"},
+                      "body": {"type": "string"},
+                      "priority": {"type": "integer"},
                       "code_location": {
                         "type": "object",
+                        "additionalProperties": false,
                         "properties": {
                           "file_path": {"type": "string"},
                           "line_range": {
                             "type": "object",
+                            "additionalProperties": false,
                             "properties": {
-                              "start": {"type": "integer", "minimum": 1},
-                              "end": {"type": "integer", "minimum": 1}
+                              "start": {"type": "integer"},
+                              "end": {"type": "integer"}
                             },
                             "required": ["start", "end"]
                           }
@@ -136,7 +139,7 @@ jobs:
                     "required": ["title", "body", "priority", "code_location"]
                   }
                 },
-                "overall_correctness": {"type": "string", "enum": ["patch is correct", "patch is incorrect", "patch needs minor fixes"]},
+                "overall_correctness": {"type": "string"},
                 "overall_explanation": {"type": "string"}
               },
               "required": ["findings", "overall_correctness", "overall_explanation"]
