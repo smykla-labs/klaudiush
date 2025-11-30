@@ -93,6 +93,40 @@ jobs:
             echo "$delim"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Add eyes reaction and post working comment
+        id: working_comment
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          ISSUE_NUM: ${{ env.ISSUE_NUMBER }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          REVIEW_ID: ${{ github.event.review.id }}
+        with:
+          github-token: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUM);
+            const commentId = process.env.COMMENT_ID;
+            const reviewId = process.env.REVIEW_ID;
+
+            // Add eyes reaction to the triggering comment/review
+            if (commentId) {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: Number(commentId),
+                content: 'eyes'
+              });
+            }
+
+            // Post working comment
+            const { data: comment } = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: '> 🤖 **Codex** is working on this...\n\n<img src="https://github.githubassets.com/images/mona-loading-default.gif" width="32" alt="Loading" />'
+            });
+            return comment.id;
+          result-encoding: string
+
       - name: Run Codex
         id: run_codex
         uses: openai/codex-action@086169432f1d2ab2f4057540b1754d550f6a1189 # v1.4
@@ -169,6 +203,8 @@ jobs:
         env:
           HEAD_SHA: ${{ steps.pr_info.outputs.head_sha }}
           IS_PR: ${{ steps.pr_info.outputs.is_pr }}
+          WORKING_COMMENT_ID: ${{ steps.working_comment.outputs.result }}
+          TRIGGER_COMMENT_ID: ${{ github.event.comment.id }}
         with:
           github-token: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
           script: |
@@ -176,6 +212,44 @@ jobs:
             const issueNumber = Number(process.env.ISSUE_NUMBER);
             const headSha = process.env.HEAD_SHA;
             const isPR = process.env.IS_PR === 'true';
+            const workingCommentId = process.env.WORKING_COMMENT_ID;
+            const triggerCommentId = process.env.TRIGGER_COMMENT_ID;
+
+            // Helper to clean up working comment
+            async function cleanupWorkingComment() {
+              if (workingCommentId) {
+                try {
+                  await github.rest.issues.deleteComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: Number(workingCommentId)
+                  });
+                } catch (err) {
+                  core.warning(`Failed to delete working comment: ${err.message}`);
+                }
+              }
+              // Remove eyes reaction from trigger comment
+              if (triggerCommentId) {
+                try {
+                  const reactions = await github.rest.reactions.listForIssueComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: Number(triggerCommentId)
+                  });
+                  const eyesReaction = reactions.data.find(r => r.content === 'eyes' && r.user?.login?.includes('[bot]'));
+                  if (eyesReaction) {
+                    await github.rest.reactions.deleteForIssueComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      comment_id: Number(triggerCommentId),
+                      reaction_id: eyesReaction.id
+                    });
+                  }
+                } catch (err) {
+                  core.warning(`Failed to remove reaction: ${err.message}`);
+                }
+              }
+            }
 
             // Read Codex output
             let output;
@@ -184,11 +258,13 @@ jobs:
               output = JSON.parse(rawOutput);
             } catch (err) {
               core.warning(`Failed to parse Codex output: ${err.message}`);
+              await cleanupWorkingComment();
               return;
             }
 
             if (!output || !output.response) {
               core.warning('No response in Codex output');
+              await cleanupWorkingComment();
               return;
             }
 
@@ -224,6 +300,7 @@ jobs:
                     comments: comments
                   });
                   core.info(`Posted review with ${comments.length} inline comments`);
+                  await cleanupWorkingComment();
                   return;
                 } catch (err) {
                   core.warning(`Failed to post inline comments: ${err.message}`);
@@ -239,3 +316,52 @@ jobs:
               issue_number: issueNumber,
               body: output.response
             });
+            await cleanupWorkingComment();
+
+      - name: Cleanup on failure
+        if: always() && steps.run_codex.outcome != 'success'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          WORKING_COMMENT_ID: ${{ steps.working_comment.outputs.result }}
+          TRIGGER_COMMENT_ID: ${{ github.event.comment.id }}
+        with:
+          github-token: ${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}
+          script: |
+            const workingCommentId = process.env.WORKING_COMMENT_ID;
+            const triggerCommentId = process.env.TRIGGER_COMMENT_ID;
+
+            // Update working comment to show failure
+            if (workingCommentId) {
+              try {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: Number(workingCommentId),
+                  body: '❌ Codex encountered an error while processing your request.'
+                });
+              } catch (err) {
+                core.warning(`Failed to update working comment: ${err.message}`);
+              }
+            }
+
+            // Remove eyes reaction
+            if (triggerCommentId) {
+              try {
+                const reactions = await github.rest.reactions.listForIssueComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: Number(triggerCommentId)
+                });
+                const eyesReaction = reactions.data.find(r => r.content === 'eyes' && r.user?.login?.includes('[bot]'));
+                if (eyesReaction) {
+                  await github.rest.reactions.deleteForIssueComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: Number(triggerCommentId),
+                    reaction_id: eyesReaction.id
+                  });
+                }
+              } catch (err) {
+                core.warning(`Failed to remove reaction: ${err.message}`);
+              }
+            }
