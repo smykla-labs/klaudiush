@@ -4,7 +4,6 @@ package config
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 
@@ -461,13 +460,5 @@ func combineErrors(errs []error) error {
 		return errs[0]
 	}
 
-	var sb strings.Builder
-	sb.WriteString(errs[0].Error())
-
-	for _, err := range errs[1:] {
-		sb.WriteString("; ")
-		sb.WriteString(err.Error())
-	}
-
-	return fmt.Errorf("%w: %s", ErrInvalidConfig, sb.String())
+	return errors.Join(errs...)
 }
