@@ -535,23 +535,8 @@ func (*Validator) validateRuleMatchConditions(match *config.RuleMatchConfig, rul
 		return fmt.Errorf("%w: %s has no match section", ErrEmptyMatchConditions, ruleID)
 	}
 
-	// Check if any match condition is specified
-	hasCondition := match.ValidatorType != "" ||
-		match.RepoPattern != "" ||
-		len(match.RepoPatterns) > 0 ||
-		match.Remote != "" ||
-		match.BranchPattern != "" ||
-		len(match.BranchPatterns) > 0 ||
-		match.FilePattern != "" ||
-		len(match.FilePatterns) > 0 ||
-		match.ContentPattern != "" ||
-		len(match.ContentPatterns) > 0 ||
-		match.CommandPattern != "" ||
-		len(match.CommandPatterns) > 0 ||
-		match.ToolType != "" ||
-		match.EventType != ""
-
-	if !hasCondition {
+	// Use centralized method on RuleMatchConfig
+	if !match.HasMatchConditions() {
 		return fmt.Errorf(
 			"%w: %s has empty match section (rule will never match)",
 			ErrEmptyMatchConditions,

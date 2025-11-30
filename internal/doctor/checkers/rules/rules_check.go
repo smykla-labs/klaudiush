@@ -167,8 +167,8 @@ func (c *RulesChecker) validateRule(index int, rule *config.RuleConfig) {
 		return // No point checking other fields if match is missing
 	}
 
-	// Check for empty match conditions
-	if !hasMatchConditions(rule.Match) {
+	// Check for empty match conditions (using centralized method)
+	if !rule.Match.HasMatchConditions() {
 		c.issues = append(c.issues, RuleIssue{
 			RuleIndex: index,
 			RuleName:  ruleName,
@@ -219,28 +219,6 @@ func (c *RulesChecker) validateRule(index int, rule *config.RuleConfig) {
 			})
 		}
 	}
-}
-
-// hasMatchConditions checks if a rule has at least one match condition.
-func hasMatchConditions(match *config.RuleMatchConfig) bool {
-	if match == nil {
-		return false
-	}
-
-	return match.ValidatorType != "" ||
-		match.RepoPattern != "" ||
-		len(match.RepoPatterns) > 0 ||
-		match.Remote != "" ||
-		match.BranchPattern != "" ||
-		len(match.BranchPatterns) > 0 ||
-		match.FilePattern != "" ||
-		len(match.FilePatterns) > 0 ||
-		match.ContentPattern != "" ||
-		len(match.ContentPatterns) > 0 ||
-		match.CommandPattern != "" ||
-		len(match.CommandPatterns) > 0 ||
-		match.ToolType != "" ||
-		match.EventType != ""
 }
 
 // containsCaseInsensitive checks if a string exists in a slice (case-insensitive).

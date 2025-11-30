@@ -177,37 +177,35 @@ func (c *ProjectChecker) Check(_ context.Context) doctor.CheckResult {
 }
 
 // isRulesValidationError checks if the error is related to rules validation.
+// Uses errors.Is for specific error types first, then falls back to generic string
+// matching for any future error types that might not have sentinel errors defined.
 func isRulesValidationError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	errStr := err.Error()
+	// Primary detection: use errors.Is for specific error types
+	if errors.Is(err, internalconfig.ErrEmptyMatchConditions) ||
+		errors.Is(err, internalconfig.ErrInvalidRule) {
+		return true
+	}
 
-	return errors.Is(err, internalconfig.ErrEmptyMatchConditions) ||
-		errors.Is(err, internalconfig.ErrInvalidRule) ||
-		containsRulesError(errStr)
+	// Fallback: generic string matching for rule-related errors without specific types.
+	// This catches any future validation errors that contain "rule" in the message
+	// but don't have a dedicated sentinel error defined yet.
+	return containsRulesError(err.Error())
 }
 
-// containsRulesError checks if error message contains rules-related keywords.
+// containsRulesError checks if error message indicates a rules-related error.
+// This is a defensive fallback for generic errors that don't have specific sentinel types.
 func containsRulesError(errStr string) bool {
-	rulesKeywords := []string{
-		"rule has no match",
-		"invalid tool_type",
-		"invalid event_type",
-		"invalid action type",
-		"empty match section",
-	}
-
 	errLower := strings.ToLower(errStr)
 
-	for _, keyword := range rulesKeywords {
-		if strings.Contains(errLower, strings.ToLower(keyword)) {
-			return true
-		}
-	}
-
-	return false
+	// Check for generic "rule" keyword combined with error indicators
+	return strings.Contains(errLower, "rule") &&
+		(strings.Contains(errLower, "invalid") ||
+			strings.Contains(errLower, "empty") ||
+			strings.Contains(errLower, "match"))
 }
 
 // PermissionsChecker checks if config files have secure permissions

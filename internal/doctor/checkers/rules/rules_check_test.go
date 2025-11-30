@@ -324,43 +324,40 @@ var _ = Describe("RulesChecker", func() {
 	})
 })
 
-var _ = Describe("hasMatchConditions", func() {
+var _ = Describe("RuleMatchConfig.HasMatchConditions", func() {
 	It("should return false for nil match", func() {
-		Expect(hasMatchConditions(nil)).To(BeFalse())
+		var match *config.RuleMatchConfig
+		Expect(match.HasMatchConditions()).To(BeFalse())
 	})
 
 	It("should return false for empty match", func() {
-		Expect(hasMatchConditions(&config.RuleMatchConfig{})).To(BeFalse())
+		match := &config.RuleMatchConfig{}
+		Expect(match.HasMatchConditions()).To(BeFalse())
 	})
 
 	It("should return true when ValidatorType is set", func() {
-		Expect(hasMatchConditions(&config.RuleMatchConfig{
-			ValidatorType: "git.push",
-		})).To(BeTrue())
+		match := &config.RuleMatchConfig{ValidatorType: "git.push"}
+		Expect(match.HasMatchConditions()).To(BeTrue())
 	})
 
 	It("should return true when ToolType is set", func() {
-		Expect(hasMatchConditions(&config.RuleMatchConfig{
-			ToolType: "Bash",
-		})).To(BeTrue())
+		match := &config.RuleMatchConfig{ToolType: "Bash"}
+		Expect(match.HasMatchConditions()).To(BeTrue())
 	})
 
 	It("should return true when EventType is set", func() {
-		Expect(hasMatchConditions(&config.RuleMatchConfig{
-			EventType: "PreToolUse",
-		})).To(BeTrue())
+		match := &config.RuleMatchConfig{EventType: "PreToolUse"}
+		Expect(match.HasMatchConditions()).To(BeTrue())
 	})
 
 	It("should return true when FilePattern is set", func() {
-		Expect(hasMatchConditions(&config.RuleMatchConfig{
-			FilePattern: "*.go",
-		})).To(BeTrue())
+		match := &config.RuleMatchConfig{FilePattern: "*.go"}
+		Expect(match.HasMatchConditions()).To(BeTrue())
 	})
 
 	It("should return true when CommandPattern is set", func() {
-		Expect(hasMatchConditions(&config.RuleMatchConfig{
-			CommandPattern: "git push*",
-		})).To(BeTrue())
+		match := &config.RuleMatchConfig{CommandPattern: "git push*"}
+		Expect(match.HasMatchConditions()).To(BeTrue())
 	})
 })
 

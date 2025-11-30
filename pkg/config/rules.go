@@ -132,6 +132,29 @@ func (m *RuleMatchConfig) GetPatternMode() string {
 	return m.PatternMode
 }
 
+// HasMatchConditions returns true if the match config has at least one condition defined.
+// This is used to validate that a rule will actually match something.
+func (m *RuleMatchConfig) HasMatchConditions() bool {
+	if m == nil {
+		return false
+	}
+
+	return m.ValidatorType != "" ||
+		m.RepoPattern != "" ||
+		len(m.RepoPatterns) > 0 ||
+		m.Remote != "" ||
+		m.BranchPattern != "" ||
+		len(m.BranchPatterns) > 0 ||
+		m.FilePattern != "" ||
+		len(m.FilePatterns) > 0 ||
+		m.ContentPattern != "" ||
+		len(m.ContentPatterns) > 0 ||
+		m.CommandPattern != "" ||
+		len(m.CommandPatterns) > 0 ||
+		m.ToolType != "" ||
+		m.EventType != ""
+}
+
 // RuleActionConfig specifies what happens when a rule matches.
 type RuleActionConfig struct {
 	// Type is the action to take (block, warn, allow).
