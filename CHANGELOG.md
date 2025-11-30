@@ -5,6 +5,18 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0](https://github.com/smykla-labs/klaudiush/compare/v1.5.0...v1.6.0) (2025-11-30)
+
+### Features
+
+* **rules:** add validation and doctor fix ([#108](https://github.com/smykla-labs/klaudiush/issues/108)) ([7ed5b08](https://github.com/smykla-labs/klaudiush/commit/7ed5b08d5ee61524a9c47db4ceacfa9507c23642))
+
+### Bug Fixes
+
+* **branch:** skip validation for query ops ([#106](https://github.com/smykla-labs/klaudiush/issues/106)) ([784ec78](https://github.com/smykla-labs/klaudiush/commit/784ec78d08758a3e53021226dca470bfd31e7ab3))
+* **git:** clear GIT_INDEX_FILE for worktrees ([#109](https://github.com/smykla-labs/klaudiush/issues/109)) ([d3e2a8d](https://github.com/smykla-labs/klaudiush/commit/d3e2a8d722353cdfaa7ab7681e1be5b7103cea48))
+* **markdown:** fix MD047 false positive ([#120](https://github.com/smykla-labs/klaudiush/issues/120)) ([3f77fa4](https://github.com/smykla-labs/klaudiush/commit/3f77fa42b7dccac4bde5fbe84d280ec031bf112d))
+
 ## [1.5.0](https://github.com/smykla-labs/klaudiush/compare/v1.4.0...v1.5.0) (2025-11-29)
 
 ### Features
