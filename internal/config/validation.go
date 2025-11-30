@@ -481,15 +481,15 @@ func (v *Validator) validateRulesConfig(cfg *config.RulesConfig) error {
 
 	var validationErrors []error
 
-	for i, rule := range cfg.Rules {
+	for i := range cfg.Rules {
 		// Skip validation for disabled rules
-		if !rule.IsRuleEnabled() {
+		if !cfg.Rules[i].IsRuleEnabled() {
 			continue
 		}
 
-		ruleID := v.getRuleIdentifier(rule, i)
+		ruleID := v.getRuleIdentifier(cfg.Rules[i], i)
 
-		if err := v.validateRule(&rule, ruleID); err != nil {
+		if err := v.validateRule(&cfg.Rules[i], ruleID); err != nil {
 			validationErrors = append(validationErrors, err)
 		}
 	}

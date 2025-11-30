@@ -94,15 +94,15 @@ func (c *RulesChecker) Check(_ context.Context) doctor.CheckResult {
 	// Validate each enabled rule
 	enabledCount := 0
 
-	for i, rule := range cfg.Rules.Rules {
+	for i := range cfg.Rules.Rules {
 		// Skip validation for disabled rules
-		if !rule.IsRuleEnabled() {
+		if !cfg.Rules.Rules[i].IsRuleEnabled() {
 			continue
 		}
 
 		enabledCount++
 
-		c.validateRule(i, &rule)
+		c.validateRule(i, &cfg.Rules.Rules[i])
 	}
 
 	if len(c.issues) == 0 {
