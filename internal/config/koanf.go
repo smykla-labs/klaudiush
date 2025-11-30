@@ -2,7 +2,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,6 +126,23 @@ func NewKoanfLoaderWithDirs(homeDir, workDir string) (*KoanfLoader, error) {
 // - Rules with the same name: project overrides global
 // - Rules with different names: combined (both included)
 func (l *KoanfLoader) Load(flags map[string]any) (*config.Config, error) {
+	cfg, err := l.LoadWithoutValidation(flags)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate
+	validator := NewValidator()
+	if err := validator.Validate(cfg); err != nil {
+		return nil, errors.Wrap(err, "invalid config")
+	}
+
+	return cfg, nil
+}
+
+// LoadWithoutValidation loads configuration without running validation.
+// This is useful for tools that need to fix invalid configurations.
+func (l *KoanfLoader) LoadWithoutValidation(flags map[string]any) (*config.Config, error) {
 	// Reset koanf instance for fresh load
 	l.k = koanf.New(".")
 
@@ -191,12 +207,6 @@ func (l *KoanfLoader) Load(flags map[string]any) (*config.Config, error) {
 	}
 
 	cfg.Rules.Rules = mergedRules
-
-	// Validate
-	validator := NewValidator()
-	if err := validator.Validate(&cfg); err != nil {
-		return nil, errors.Wrap(err, "invalid config")
-	}
 
 	return &cfg, nil
 }
@@ -367,6 +377,46 @@ func (l *KoanfLoader) HasGlobalConfig() bool {
 // HasProjectConfig checks if a project configuration file exists.
 func (l *KoanfLoader) HasProjectConfig() bool {
 	return l.findProjectConfig() != ""
+}
+
+// FindProjectConfigPath returns the path to the project config file if one exists.
+// Returns empty string if no project config file is found.
+func (l *KoanfLoader) FindProjectConfigPath() string {
+	return l.findProjectConfig()
+}
+
+// LoadProjectConfigOnly loads only the project configuration file without merging
+// with defaults, global config, or environment variables.
+// This is useful for tools that need to edit and write back the project config
+// without contaminating it with values from other sources.
+// Returns nil if no project config file exists.
+func (l *KoanfLoader) LoadProjectConfigOnly() (*config.Config, string, error) {
+	projectPath := l.findProjectConfig()
+	if projectPath == "" {
+		return nil, "", nil
+	}
+
+	// Create a fresh koanf instance for isolated loading
+	k := koanf.New(".")
+
+	// Load only the project config file
+	if err := k.Load(file.Provider(projectPath), tomlparser.Parser()); err != nil {
+		return nil, projectPath, errors.Wrap(err, "failed to load project config")
+	}
+
+	// Unmarshal into config struct
+	var cfg config.Config
+
+	tomlOpts := koanf.UnmarshalConf{
+		Tag:       "koanf",
+		FlatPaths: false,
+	}
+
+	if err := k.UnmarshalWithConf("", &cfg, tomlOpts); err != nil {
+		return nil, projectPath, errors.Wrap(err, "failed to unmarshal project config")
+	}
+
+	return &cfg, projectPath, nil
 }
 
 // flagsToConfig converts CLI flags to a configuration map.
@@ -673,7 +723,7 @@ func fileExists(path string) bool {
 func mustGetwd() string {
 	wd, err := os.Getwd()
 	if err != nil {
-		panic(fmt.Sprintf("failed to get working directory: %s", err))
+		panic("failed to get working directory: " + err.Error())
 	}
 
 	return wd

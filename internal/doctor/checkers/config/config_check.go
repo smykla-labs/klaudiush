@@ -4,6 +4,7 @@ package configchecker
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 
@@ -155,6 +156,13 @@ func (c *ProjectChecker) Check(_ context.Context) doctor.CheckResult {
 				WithFixID("fix_config_permissions")
 		}
 
+		// Check if this is a rules validation error
+		if isRulesValidationError(err) {
+			return doctor.FailError("Project config", "Invalid rules configuration").
+				WithDetails(fmt.Sprintf("Error: %v", err)).
+				WithFixID("fix_invalid_rules")
+		}
+
 		return doctor.FailError("Project config", fmt.Sprintf("Failed to load: %v", err))
 	}
 
@@ -166,6 +174,38 @@ func (c *ProjectChecker) Check(_ context.Context) doctor.CheckResult {
 	}
 
 	return doctor.Pass("Project config", "Loaded and validated")
+}
+
+// isRulesValidationError checks if the error is related to rules validation.
+// Uses errors.Is for specific error types first, then falls back to generic string
+// matching for any future error types that might not have sentinel errors defined.
+func isRulesValidationError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Primary detection: use errors.Is for specific error types
+	if errors.Is(err, internalconfig.ErrEmptyMatchConditions) ||
+		errors.Is(err, internalconfig.ErrInvalidRule) {
+		return true
+	}
+
+	// Fallback: generic string matching for rule-related errors without specific types.
+	// This catches any future validation errors that contain "rule" in the message
+	// but don't have a dedicated sentinel error defined yet.
+	return containsRulesError(err.Error())
+}
+
+// containsRulesError checks if error message indicates a rules-related error.
+// This is a defensive fallback for generic errors that don't have specific sentinel types.
+func containsRulesError(errStr string) bool {
+	errLower := strings.ToLower(errStr)
+
+	// Check for generic "rule" keyword combined with error indicators
+	return strings.Contains(errLower, "rule") &&
+		(strings.Contains(errLower, "invalid") ||
+			strings.Contains(errLower, "empty") ||
+			strings.Contains(errLower, "match"))
 }
 
 // PermissionsChecker checks if config files have secure permissions

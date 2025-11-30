@@ -2,11 +2,13 @@
 package config
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/cockroachdb/errors"
 
 	"github.com/smykla-labs/klaudiush/pkg/config"
+	"github.com/smykla-labs/klaudiush/pkg/stringutil"
 )
 
 var (
@@ -24,6 +26,12 @@ var (
 
 	// ErrInvalidOption is returned when an option value is invalid.
 	ErrInvalidOption = errors.New("invalid option value")
+
+	// ErrInvalidRule is returned when a rule configuration is invalid.
+	ErrInvalidRule = errors.New("invalid rule configuration")
+
+	// ErrEmptyMatchConditions is returned when a rule has no match conditions.
+	ErrEmptyMatchConditions = errors.New("rule has no match conditions")
 )
 
 // Validator validates configuration semantics.
@@ -53,6 +61,13 @@ func (v *Validator) Validate(cfg *config.Config) error {
 	// Validate validators config
 	if cfg.Validators != nil {
 		if err := v.validateValidatorsConfig(cfg.Validators); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+	}
+
+	// Validate rules config
+	if cfg.Rules != nil {
+		if err := v.validateRulesConfig(cfg.Rules); err != nil {
 			validationErrors = append(validationErrors, err)
 		}
 	}
@@ -445,6 +460,153 @@ func (*Validator) validateBaseConfig(cfg *config.ValidatorConfig) error {
 			config.SeverityError.String(),
 			config.SeverityWarning.String(),
 			cfg.Severity.String(),
+		)
+	}
+
+	return nil
+}
+
+// validateRulesConfig validates the rules configuration.
+func (v *Validator) validateRulesConfig(cfg *config.RulesConfig) error {
+	if cfg == nil || len(cfg.Rules) == 0 {
+		return nil
+	}
+
+	var validationErrors []error
+
+	for i := range cfg.Rules {
+		// Skip validation for disabled rules
+		if !cfg.Rules[i].IsRuleEnabled() {
+			continue
+		}
+
+		ruleID := v.getRuleIdentifier(cfg.Rules[i], i)
+
+		if err := v.validateRule(&cfg.Rules[i], ruleID); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return errors.Wrap(combineErrors(validationErrors), "rules")
+	}
+
+	return nil
+}
+
+// getRuleIdentifier returns a human-readable identifier for a rule.
+func (*Validator) getRuleIdentifier(rule config.RuleConfig, index int) string {
+	if rule.Name != "" {
+		return fmt.Sprintf("rule[%q]", rule.Name)
+	}
+
+	return fmt.Sprintf("rule[%d]", index)
+}
+
+// validateRule validates a single rule configuration.
+func (v *Validator) validateRule(rule *config.RuleConfig, ruleID string) error {
+	var validationErrors []error
+
+	// Validate match conditions exist
+	if err := v.validateRuleMatchConditions(rule.Match, ruleID); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	// Validate match field values
+	if rule.Match != nil {
+		if err := v.validateRuleMatchFields(rule.Match, ruleID); err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+	}
+
+	// Validate action
+	if err := v.validateRuleAction(rule.Action, ruleID); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	if len(validationErrors) > 0 {
+		return combineErrors(validationErrors)
+	}
+
+	return nil
+}
+
+// validateRuleMatchConditions validates that a rule has at least one match condition.
+func (*Validator) validateRuleMatchConditions(match *config.RuleMatchConfig, ruleID string) error {
+	if match == nil {
+		return errors.Wrapf(ErrEmptyMatchConditions, "%s has no match section", ruleID)
+	}
+
+	// Use centralized method on RuleMatchConfig
+	if !match.HasMatchConditions() {
+		return errors.Wrapf(
+			ErrEmptyMatchConditions,
+			"%s has empty match section (rule will never match)",
+			ruleID,
+		)
+	}
+
+	return nil
+}
+
+// validateRuleMatchFields validates the field values in a rule's match section.
+func (*Validator) validateRuleMatchFields(match *config.RuleMatchConfig, ruleID string) error {
+	var validationErrors []error
+
+	// Validate event_type if specified
+	if match.EventType != "" {
+		if !stringutil.ContainsCaseInsensitive(config.ValidEventTypes, match.EventType) {
+			validationErrors = append(
+				validationErrors,
+				errors.Wrapf(
+					ErrInvalidRule,
+					"%s has invalid event_type %q (valid: %v)",
+					ruleID,
+					match.EventType,
+					config.ValidEventTypes,
+				),
+			)
+		}
+	}
+
+	// Validate tool_type if specified
+	if match.ToolType != "" {
+		if !stringutil.ContainsCaseInsensitive(config.ValidToolTypes, match.ToolType) {
+			validationErrors = append(
+				validationErrors,
+				errors.Wrapf(
+					ErrInvalidRule,
+					"%s has invalid tool_type %q (valid: %v)",
+					ruleID,
+					match.ToolType,
+					config.ValidToolTypes,
+				),
+			)
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return combineErrors(validationErrors)
+	}
+
+	return nil
+}
+
+// validateRuleAction validates a rule's action configuration.
+func (*Validator) validateRuleAction(action *config.RuleActionConfig, ruleID string) error {
+	if action == nil {
+		// No action is valid - defaults to "block"
+		return nil
+	}
+
+	// Validate action type if specified
+	if action.Type != "" && !slices.Contains(config.ValidActionTypes, action.Type) {
+		return errors.Wrapf(
+			ErrInvalidRule,
+			"%s has invalid action type %q (valid: %v)",
+			ruleID,
+			action.Type,
+			config.ValidActionTypes,
 		)
 	}
 
