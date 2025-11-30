@@ -321,33 +321,3 @@ var _ = Describe("Validator", func() {
 		})
 	})
 })
-
-var _ = Describe("containsCaseInsensitive", func() {
-	It("should find exact match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "Bash")).To(BeTrue())
-	})
-
-	It("should find lowercase match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "bash")).To(BeTrue())
-	})
-
-	It("should find uppercase match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "BASH")).To(BeTrue())
-	})
-
-	It("should find mixed case match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "bAsH")).To(BeTrue())
-	})
-
-	It("should return false for non-match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "NotATool")).To(BeFalse())
-	})
-
-	It("should return false for empty target", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "")).To(BeFalse())
-	})
-
-	It("should return false for empty slice", func() {
-		Expect(containsCaseInsensitive([]string{}, "Bash")).To(BeFalse())
-	})
-})

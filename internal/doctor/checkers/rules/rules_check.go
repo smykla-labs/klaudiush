@@ -10,6 +10,7 @@ import (
 	internalconfig "github.com/smykla-labs/klaudiush/internal/config"
 	"github.com/smykla-labs/klaudiush/internal/doctor"
 	"github.com/smykla-labs/klaudiush/pkg/config"
+	"github.com/smykla-labs/klaudiush/pkg/stringutil"
 )
 
 // RuleIssue represents an issue found in a rule configuration.
@@ -180,7 +181,7 @@ func (c *RulesChecker) validateRule(index int, rule *config.RuleConfig) {
 
 	// Check for invalid event_type
 	if rule.Match.EventType != "" {
-		if !containsCaseInsensitive(config.ValidEventTypes, rule.Match.EventType) {
+		if !stringutil.ContainsCaseInsensitive(config.ValidEventTypes, rule.Match.EventType) {
 			c.issues = append(c.issues, RuleIssue{
 				RuleIndex: index,
 				RuleName:  ruleName,
@@ -194,7 +195,7 @@ func (c *RulesChecker) validateRule(index int, rule *config.RuleConfig) {
 
 	// Check for invalid tool_type
 	if rule.Match.ToolType != "" {
-		if !containsCaseInsensitive(config.ValidToolTypes, rule.Match.ToolType) {
+		if !stringutil.ContainsCaseInsensitive(config.ValidToolTypes, rule.Match.ToolType) {
 			c.issues = append(c.issues, RuleIssue{
 				RuleIndex: index,
 				RuleName:  ruleName,
@@ -219,17 +220,4 @@ func (c *RulesChecker) validateRule(index int, rule *config.RuleConfig) {
 			})
 		}
 	}
-}
-
-// containsCaseInsensitive checks if a string exists in a slice (case-insensitive).
-func containsCaseInsensitive(slice []string, target string) bool {
-	targetLower := strings.ToLower(target)
-
-	for _, s := range slice {
-		if strings.ToLower(s) == targetLower {
-			return true
-		}
-	}
-
-	return false
 }

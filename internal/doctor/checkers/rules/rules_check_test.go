@@ -360,18 +360,3 @@ var _ = Describe("RuleMatchConfig.HasMatchConditions", func() {
 		Expect(match.HasMatchConditions()).To(BeTrue())
 	})
 })
-
-var _ = Describe("containsCaseInsensitive", func() {
-	It("should find exact match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "Bash")).To(BeTrue())
-	})
-
-	It("should find case-insensitive match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "bash")).To(BeTrue())
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "BASH")).To(BeTrue())
-	})
-
-	It("should return false for non-match", func() {
-		Expect(containsCaseInsensitive(config.ValidToolTypes, "NotATool")).To(BeFalse())
-	})
-})

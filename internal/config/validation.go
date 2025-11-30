@@ -7,6 +7,7 @@ import (
 	"github.com/cockroachdb/errors"
 
 	"github.com/smykla-labs/klaudiush/pkg/config"
+	"github.com/smykla-labs/klaudiush/pkg/stringutil"
 )
 
 var (
@@ -553,7 +554,7 @@ func (*Validator) validateRuleMatchFields(match *config.RuleMatchConfig, ruleID 
 
 	// Validate event_type if specified
 	if match.EventType != "" {
-		if !containsCaseInsensitive(config.ValidEventTypes, match.EventType) {
+		if !stringutil.ContainsCaseInsensitive(config.ValidEventTypes, match.EventType) {
 			validationErrors = append(
 				validationErrors,
 				fmt.Errorf(
@@ -569,7 +570,7 @@ func (*Validator) validateRuleMatchFields(match *config.RuleMatchConfig, ruleID 
 
 	// Validate tool_type if specified
 	if match.ToolType != "" {
-		if !containsCaseInsensitive(config.ValidToolTypes, match.ToolType) {
+		if !stringutil.ContainsCaseInsensitive(config.ValidToolTypes, match.ToolType) {
 			validationErrors = append(
 				validationErrors,
 				fmt.Errorf(
@@ -609,19 +610,6 @@ func (*Validator) validateRuleAction(action *config.RuleActionConfig, ruleID str
 	}
 
 	return nil
-}
-
-// containsCaseInsensitive checks if a string exists in a slice (case-insensitive).
-func containsCaseInsensitive(slice []string, target string) bool {
-	targetLower := strings.ToLower(target)
-
-	for _, s := range slice {
-		if strings.ToLower(s) == targetLower {
-			return true
-		}
-	}
-
-	return false
 }
 
 // combineErrors combines multiple errors into a single error.
