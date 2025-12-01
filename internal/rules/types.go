@@ -48,6 +48,7 @@ const (
 	ValidatorFileGofumpt    ValidatorType = "file.gofumpt"
 	ValidatorFilePython     ValidatorType = "file.python"
 	ValidatorFileJavaScript ValidatorType = "file.javascript"
+	ValidatorFileRust       ValidatorType = "file.rust"
 	ValidatorFileAll        ValidatorType = "file.*"
 	ValidatorSecrets        ValidatorType = "secrets.secrets"
 	ValidatorShellBacktick  ValidatorType = "shell.backtick"

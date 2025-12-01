@@ -1,0 +1,28 @@
+# Rust Validator Configuration Example
+#
+# This configuration demonstrates how to configure the Rust file validator
+# which uses rustfmt to check code formatting.
+
+[validators.file.rust]
+enabled = true
+severity = "error"
+
+[validators.file.rust.config]
+# Timeout for rustfmt operations (default: "10s")
+timeout = "10s"
+
+# Number of context lines before/after edit for validation (default: 2)
+context_lines = 2
+
+# Enable rustfmt integration (default: true)
+use_rustfmt = true
+
+# Rust edition: "2015", "2018", "2021", "2024"
+# If not specified, auto-detected from Cargo.toml (default: "2021")
+edition = "2021"
+
+# Custom rustfmt binary path (default: "" = use PATH)
+rustfmt_path = ""
+
+# Path to rustfmt.toml configuration file (default: "" = auto-discover)
+rustfmt_config = ""

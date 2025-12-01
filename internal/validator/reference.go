@@ -84,7 +84,7 @@ const (
 	RefGitFetchNoRemote Reference = ReferenceBaseURL + "/GIT024"
 )
 
-// File-related references (FILE001-FILE008).
+// File-related references (FILE001-FILE009).
 const (
 	// RefShellcheck indicates shellcheck validation failure.
 	RefShellcheck Reference = ReferenceBaseURL + "/FILE001"
@@ -109,6 +109,9 @@ const (
 
 	// RefOxlintCheck indicates oxlint JavaScript/TypeScript validation failure.
 	RefOxlintCheck Reference = ReferenceBaseURL + "/FILE008"
+
+	// RefRustfmtCheck indicates rustfmt Rust code formatting failure.
+	RefRustfmtCheck Reference = ReferenceBaseURL + "/FILE009"
 )
 
 // Security-related references (SEC001-SEC005).

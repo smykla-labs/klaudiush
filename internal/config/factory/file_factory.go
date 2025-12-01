@@ -54,6 +54,7 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 	gofumptChecker := linters.NewGofumptChecker(runner)
 	ruffChecker := linters.NewRuffChecker(runner)
 	oxlintChecker := linters.NewOxlintChecker(runner)
+	rustfmtChecker := linters.NewRustfmtChecker(runner)
 	githubClient := githubpkg.NewClient()
 
 	if cfg.Validators.File.Markdown != nil && cfg.Validators.File.Markdown.IsEnabled() {
@@ -101,6 +102,13 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 		validators = append(
 			validators,
 			f.createJavaScriptValidator(cfg.Validators.File.JavaScript, oxlintChecker),
+		)
+	}
+
+	if cfg.Validators.File.Rust != nil && cfg.Validators.File.Rust.IsEnabled() {
+		validators = append(
+			validators,
+			f.createRustValidator(cfg.Validators.File.Rust, rustfmtChecker),
 		)
 	}
 
@@ -236,6 +244,7 @@ func (f *FileValidatorFactory) createGofumptValidator(
 	}
 }
 
+//nolint:dupl // Similar pattern to createRustValidator, acceptable duplication
 func (f *FileValidatorFactory) createPythonValidator(
 	cfg *config.PythonValidatorConfig,
 	checker linters.RuffChecker,
@@ -283,6 +292,30 @@ func (f *FileValidatorFactory) createJavaScriptValidator(
 				validator.FileExtensionIs(".jsx"),
 				validator.FileExtensionIs(".tsx"),
 			),
+		),
+	}
+}
+
+//nolint:dupl // Similar pattern to createPythonValidator, acceptable duplication
+func (f *FileValidatorFactory) createRustValidator(
+	cfg *config.RustValidatorConfig,
+	checker linters.RustfmtChecker,
+) ValidatorWithPredicate {
+	var ruleAdapter *rules.RuleValidatorAdapter
+	if f.ruleEngine != nil {
+		ruleAdapter = rules.NewRuleValidatorAdapter(
+			f.ruleEngine,
+			rules.ValidatorFileRust,
+			rules.WithAdapterLogger(f.log),
+		)
+	}
+
+	return ValidatorWithPredicate{
+		Validator: filevalidators.NewRustValidator(f.log, checker, cfg, ruleAdapter),
+		Predicate: validator.And(
+			validator.EventTypeIs(hook.EventTypePreToolUse),
+			validator.ToolTypeIn(hook.ToolTypeWrite, hook.ToolTypeEdit, hook.ToolTypeMultiEdit),
+			validator.FileExtensionIs(".rs"),
 		),
 	}
 }

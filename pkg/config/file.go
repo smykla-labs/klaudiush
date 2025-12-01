@@ -23,6 +23,9 @@ type FileConfig struct {
 
 	// JavaScript validator configuration
 	JavaScript *JavaScriptValidatorConfig `json:"javascript,omitempty" koanf:"javascript" toml:"javascript"`
+
+	// Rust validator configuration
+	Rust *RustValidatorConfig `json:"rust,omitempty" koanf:"rust" toml:"rust"`
 }
 
 // MarkdownValidatorConfig configures the Markdown file validator.
@@ -270,4 +273,34 @@ type JavaScriptValidatorConfig struct {
 	// OxlintConfig is the path to an oxlint configuration file (.oxlintrc.json).
 	// Default: "" (use oxlint defaults)
 	OxlintConfig string `json:"oxlint_config,omitempty" koanf:"oxlint_config" toml:"oxlint_config"`
+}
+
+// RustValidatorConfig configures the Rust file validator.
+type RustValidatorConfig struct {
+	ValidatorConfig
+
+	// Timeout is the maximum time allowed for rustfmt operations.
+	// Default: "10s"
+	Timeout Duration `json:"timeout,omitempty" koanf:"timeout" toml:"timeout"`
+
+	// ContextLines is the number of lines before/after an edit to include for validation.
+	// Default: 2
+	ContextLines *int `json:"context_lines,omitempty" koanf:"context_lines" toml:"context_lines"`
+
+	// UseRustfmt enables rustfmt integration if available.
+	// Default: true
+	UseRustfmt *bool `json:"use_rustfmt,omitempty" koanf:"use_rustfmt" toml:"use_rustfmt"`
+
+	// Edition is the Rust edition (2015, 2018, 2021, 2024).
+	// If not specified, auto-detected from Cargo.toml if available.
+	// Default: "2021"
+	Edition string `json:"edition,omitempty" koanf:"edition" toml:"edition"`
+
+	// RustfmtPath is the path to the rustfmt binary.
+	// Default: "" (use PATH)
+	RustfmtPath string `json:"rustfmt_path,omitempty" koanf:"rustfmt_path" toml:"rustfmt_path"`
+
+	// RustfmtConfig is the path to a rustfmt configuration file (rustfmt.toml).
+	// Default: "" (use rustfmt defaults)
+	RustfmtConfig string `json:"rustfmt_config,omitempty" koanf:"rustfmt_config" toml:"rustfmt_config"`
 }
