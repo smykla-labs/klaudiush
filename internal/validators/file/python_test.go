@@ -8,8 +8,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 
-	execpkg "github.com/smykla-labs/klaudiush/internal/exec"
 	"github.com/smykla-labs/klaudiush/internal/linters"
 	"github.com/smykla-labs/klaudiush/internal/validator"
 	"github.com/smykla-labs/klaudiush/internal/validators/file"
@@ -20,20 +20,25 @@ import (
 
 var _ = Describe("PythonValidator", func() {
 	var (
-		v   *file.PythonValidator
-		ctx *hook.Context
+		v           *file.PythonValidator
+		ctx         *hook.Context
+		mockCtrl    *gomock.Controller
+		mockChecker *linters.MockRuffChecker
 	)
 
 	BeforeEach(func() {
-		// Create a real RuffChecker for integration tests
-		runner := execpkg.NewCommandRunner(10 * time.Second)
-		checker := linters.NewRuffChecker(runner)
-		v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, nil, nil)
+		mockCtrl = gomock.NewController(GinkgoT())
+		mockChecker = linters.NewMockRuffChecker(mockCtrl)
+		v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, nil, nil)
 		ctx = &hook.Context{
 			EventType: hook.EventTypePreToolUse,
 			ToolName:  hook.ToolTypeWrite,
 			ToolInput: hook.ToolInput{},
 		}
+	})
+
+	AfterEach(func() {
+		mockCtrl.Finish()
 	})
 
 	Describe("valid Python scripts", func() {
@@ -45,6 +50,10 @@ var _ = Describe("PythonValidator", func() {
 if __name__ == "__main__":
     greet("World")
 `
+			mockChecker.EXPECT().
+				CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&linters.LintResult{Success: true})
+
 			result := v.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeTrue())
 		})
@@ -53,6 +62,10 @@ if __name__ == "__main__":
 			ctx.ToolInput.FilePath = "test.py"
 			ctx.ToolInput.Content = `print("Hello, World!")
 `
+			mockChecker.EXPECT().
+				CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&linters.LintResult{Success: true})
+
 			result := v.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeTrue())
 		})
@@ -65,6 +78,23 @@ if __name__ == "__main__":
 
 print("Hello, World!")
 `
+			mockChecker.EXPECT().
+				CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&linters.LintResult{
+					Success: false,
+					RawOut:  "test.py:1:1: F401 'os' imported but unused",
+					Findings: []linters.LintFinding{
+						{
+							File:     "test.py",
+							Line:     1,
+							Column:   1,
+							Severity: linters.SeverityError,
+							Message:  "'os' imported but unused",
+							Rule:     "F401",
+						},
+					},
+				})
+
 			result := v.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
 			Expect(result.Message).To(ContainSubstring("Ruff validation failed"))
@@ -75,6 +105,23 @@ print("Hello, World!")
 			ctx.ToolInput.Content = `def hello():
     print(undefined_var)
 `
+			mockChecker.EXPECT().
+				CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&linters.LintResult{
+					Success: false,
+					RawOut:  "test.py:2:11: F821 undefined name 'undefined_var'",
+					Findings: []linters.LintFinding{
+						{
+							File:     "test.py",
+							Line:     2,
+							Column:   11,
+							Severity: linters.SeverityError,
+							Message:  "undefined name 'undefined_var'",
+							Rule:     "F821",
+						},
+					},
+				})
+
 			result := v.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
 			Expect(result.Message).To(ContainSubstring("Ruff validation failed"))
@@ -86,15 +133,18 @@ print("Hello, World!")
 			cfg := &config.PythonValidatorConfig{
 				ExcludeRules: []string{"F401"}, // Exclude unused import rule
 			}
-			runner := execpkg.NewCommandRunner(10 * time.Second)
-			checker := linters.NewRuffChecker(runner)
-			v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, cfg, nil)
+			mockChecker = linters.NewMockRuffChecker(mockCtrl)
+			v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, cfg, nil)
 
 			ctx.ToolInput.FilePath = "test.py"
 			ctx.ToolInput.Content = `import os
 
 print("Hello, World!")
 `
+			mockChecker.EXPECT().
+				CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&linters.LintResult{Success: true})
+
 			result := v.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeTrue())
 		})
@@ -126,6 +176,10 @@ if __name__ == "__main__":
 			ctx.ToolInput.OldString = `    """Greet someone by name."""`
 			ctx.ToolInput.NewString = `    """Say hello to someone by name."""`
 
+			mockChecker.EXPECT().
+				CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&linters.LintResult{Success: true})
+
 			result := v.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeTrue())
 		})
@@ -135,11 +189,15 @@ if __name__ == "__main__":
 			ctx.EventType = hook.EventTypePreToolUse
 			ctx.ToolName = hook.ToolTypeEdit
 			ctx.ToolInput.FilePath = tempFile
-			ctx.ToolInput.OldString = `def greet(name):
+			ctx.ToolInput.OldString = `    """Greet someone by name."""
     print(f"Hello, {name}!")`
-			ctx.ToolInput.NewString = `def greet(name):
+			ctx.ToolInput.NewString = `    """Greet someone by name."""
     import os  # This would normally trigger F401
     print(f"Hello, {name}!")`
+
+			mockChecker.EXPECT().
+				CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&linters.LintResult{Success: true})
 
 			result := v.Validate(context.Background(), ctx)
 			// Should pass because F401 is excluded for fragments
@@ -160,12 +218,16 @@ if __name__ == "__main__":
 	Describe("configuration options", func() {
 		Context("isUseRuff", func() {
 			It("should return true by default", func() {
-				runner := execpkg.NewCommandRunner(10 * time.Second)
-				checker := linters.NewRuffChecker(runner)
-				v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, nil, nil)
+				mockChecker = linters.NewMockRuffChecker(mockCtrl)
+				v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, nil, nil)
 
 				ctx.ToolInput.FilePath = "test.py"
 				ctx.ToolInput.Content = "print('hello')"
+
+				mockChecker.EXPECT().
+					CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(&linters.LintResult{Success: true})
+
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
@@ -175,9 +237,8 @@ if __name__ == "__main__":
 				cfg := &config.PythonValidatorConfig{
 					UseRuff: &useRuff,
 				}
-				runner := execpkg.NewCommandRunner(10 * time.Second)
-				checker := linters.NewRuffChecker(runner)
-				v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, cfg, nil)
+				mockChecker = linters.NewMockRuffChecker(mockCtrl)
+				v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, cfg, nil)
 
 				ctx.ToolInput.FilePath = "test.py"
 				ctx.ToolInput.Content = "import os"
@@ -190,12 +251,16 @@ if __name__ == "__main__":
 				cfg := &config.PythonValidatorConfig{
 					UseRuff: &useRuff,
 				}
-				runner := execpkg.NewCommandRunner(10 * time.Second)
-				checker := linters.NewRuffChecker(runner)
-				v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, cfg, nil)
+				mockChecker = linters.NewMockRuffChecker(mockCtrl)
+				v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, cfg, nil)
 
 				ctx.ToolInput.FilePath = "test.py"
 				ctx.ToolInput.Content = "print('hello')"
+
+				mockChecker.EXPECT().
+					CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(&linters.LintResult{Success: true})
+
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
@@ -206,12 +271,16 @@ if __name__ == "__main__":
 				cfg := &config.PythonValidatorConfig{
 					Timeout: config.Duration(30 * time.Second),
 				}
-				runner := execpkg.NewCommandRunner(30 * time.Second)
-				checker := linters.NewRuffChecker(runner)
-				v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, cfg, nil)
+				mockChecker = linters.NewMockRuffChecker(mockCtrl)
+				v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, cfg, nil)
 
 				ctx.ToolInput.FilePath = "test.py"
 				ctx.ToolInput.Content = "print('hello')"
+
+				mockChecker.EXPECT().
+					CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(&linters.LintResult{Success: true})
+
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
@@ -223,12 +292,16 @@ if __name__ == "__main__":
 				cfg := &config.PythonValidatorConfig{
 					ContextLines: &contextLines,
 				}
-				runner := execpkg.NewCommandRunner(10 * time.Second)
-				checker := linters.NewRuffChecker(runner)
-				v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, cfg, nil)
+				mockChecker = linters.NewMockRuffChecker(mockCtrl)
+				v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, cfg, nil)
 
 				ctx.ToolInput.FilePath = "test.py"
 				ctx.ToolInput.Content = "print('hello')"
+
+				mockChecker.EXPECT().
+					CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(&linters.LintResult{Success: true})
+
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
 			})
@@ -239,9 +312,8 @@ if __name__ == "__main__":
 				cfg := &config.PythonValidatorConfig{
 					RuffConfig: "/path/to/ruff.toml",
 				}
-				runner := execpkg.NewCommandRunner(10 * time.Second)
-				checker := linters.NewRuffChecker(runner)
-				v = file.NewPythonValidator(logger.NewNoOpLogger(), checker, cfg, nil)
+				mockChecker = linters.NewMockRuffChecker(mockCtrl)
+				v = file.NewPythonValidator(logger.NewNoOpLogger(), mockChecker, cfg, nil)
 
 				// Just verify validator is created with config
 				Expect(v).NotTo(BeNil())
@@ -272,6 +344,10 @@ if __name__ == "__main__":
 
 				ctx.ToolInput.FilePath = tempFile
 				ctx.ToolInput.Content = ""
+
+				mockChecker.EXPECT().
+					CheckWithOptions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(&linters.LintResult{Success: true})
 
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
