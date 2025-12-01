@@ -35,6 +35,7 @@ var DefaultSuggestions = map[Reference]string{
 	RefTflint:       "Run 'tflint' to see detailed linting issues",
 	RefActionlint:   "Run 'actionlint' to see workflow issues",
 	RefMarkdownLint: "Check markdown formatting and structure",
+	RefRuffCheck:    "Run 'ruff check <file>' to see Python code quality issues",
 
 	// Security suggestions
 	RefSecretsAPIKey:     "Remove API key and use environment variables or secret management",

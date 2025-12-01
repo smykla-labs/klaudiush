@@ -14,6 +14,9 @@ type FileConfig struct {
 
 	// Workflow validator configuration (GitHub Actions)
 	Workflow *WorkflowValidatorConfig `json:"workflow,omitempty" koanf:"workflow" toml:"workflow"`
+
+	// Python validator configuration
+	Python *PythonValidatorConfig `json:"python,omitempty" koanf:"python" toml:"python"`
 }
 
 // MarkdownValidatorConfig configures the Markdown file validator.
@@ -176,4 +179,33 @@ type WorkflowValidatorConfig struct {
 	// ActionlintPath is the path to the actionlint binary.
 	// Default: "" (use PATH)
 	ActionlintPath string `json:"actionlint_path,omitempty" koanf:"actionlint_path" toml:"actionlint_path"`
+}
+
+// PythonValidatorConfig configures the Python file validator.
+type PythonValidatorConfig struct {
+	ValidatorConfig
+
+	// Timeout is the maximum time allowed for ruff operations.
+	// Default: "10s"
+	Timeout Duration `json:"timeout,omitempty" koanf:"timeout" toml:"timeout"`
+
+	// ContextLines is the number of lines before/after an edit to include for validation.
+	// Default: 2
+	ContextLines *int `json:"context_lines,omitempty" koanf:"context_lines" toml:"context_lines"`
+
+	// UseRuff enables ruff integration if available.
+	// Default: true
+	UseRuff *bool `json:"use_ruff,omitempty" koanf:"use_ruff" toml:"use_ruff"`
+
+	// RuffPath is the path to the ruff binary.
+	// Default: "" (use PATH)
+	RuffPath string `json:"ruff_path,omitempty" koanf:"ruff_path" toml:"ruff_path"`
+
+	// ExcludeRules is a list of ruff rules to exclude (e.g., ["F401", "E501"]).
+	// Default: []
+	ExcludeRules []string `json:"exclude_rules,omitempty" koanf:"exclude_rules" toml:"exclude_rules"`
+
+	// RuffConfig is the path to a ruff configuration file (pyproject.toml or ruff.toml).
+	// Default: "" (use ruff defaults)
+	RuffConfig string `json:"ruff_config,omitempty" koanf:"ruff_config" toml:"ruff_config"`
 }

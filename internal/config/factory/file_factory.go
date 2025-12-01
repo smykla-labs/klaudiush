@@ -51,6 +51,7 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 	terraformFormatter := linters.NewTerraformFormatter(runner)
 	tfLinter := linters.NewTfLinter(runner)
 	actionLinter := linters.NewActionLinter(runner)
+	ruffChecker := linters.NewRuffChecker(runner)
 	githubClient := githubpkg.NewClient()
 
 	if cfg.Validators.File.Markdown != nil && cfg.Validators.File.Markdown.IsEnabled() {
@@ -78,6 +79,13 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 	if cfg.Validators.File.Workflow != nil && cfg.Validators.File.Workflow.IsEnabled() {
 		validators = append(validators, f.createWorkflowValidator(
 			cfg.Validators.File.Workflow, actionLinter, githubClient))
+	}
+
+	if cfg.Validators.File.Python != nil && cfg.Validators.File.Python.IsEnabled() {
+		validators = append(
+			validators,
+			f.createPythonValidator(cfg.Validators.File.Python, ruffChecker),
+		)
 	}
 
 	return validators
@@ -185,6 +193,29 @@ func (f *FileValidatorFactory) createWorkflowValidator(
 				validator.FileExtensionIs(".yml"),
 				validator.FileExtensionIs(".yaml"),
 			),
+		),
+	}
+}
+
+func (f *FileValidatorFactory) createPythonValidator(
+	cfg *config.PythonValidatorConfig,
+	checker linters.RuffChecker,
+) ValidatorWithPredicate {
+	var ruleAdapter *rules.RuleValidatorAdapter
+	if f.ruleEngine != nil {
+		ruleAdapter = rules.NewRuleValidatorAdapter(
+			f.ruleEngine,
+			rules.ValidatorFilePython,
+			rules.WithAdapterLogger(f.log),
+		)
+	}
+
+	return ValidatorWithPredicate{
+		Validator: filevalidators.NewPythonValidator(f.log, checker, cfg, ruleAdapter),
+		Predicate: validator.And(
+			validator.EventTypeIs(hook.EventTypePreToolUse),
+			validator.ToolTypeIn(hook.ToolTypeWrite, hook.ToolTypeEdit, hook.ToolTypeMultiEdit),
+			validator.FileExtensionIs(".py"),
 		),
 	}
 }
