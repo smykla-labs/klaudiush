@@ -231,9 +231,8 @@ func (*GofumptValidator) parseGoMod(goModPath string) (lang, modpath string, err
 	}
 
 	content := string(data)
-	lines := strings.Split(content, "\n")
 
-	for _, line := range lines {
+	for line := range strings.SplitSeq(content, "\n") {
 		line = strings.TrimSpace(line)
 
 		// Parse module directive
