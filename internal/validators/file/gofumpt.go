@@ -20,6 +20,11 @@ const (
 	defaultGofumptTimeout = 10 * time.Second
 )
 
+var (
+	goModModulePattern  = regexp.MustCompile(`^module\s+(\S+)`)
+	goModVersionPattern = regexp.MustCompile(`^go\s+(\d+\.\d+(?:\.\d+)?)`)
+)
+
 // GofumptValidator validates Go code formatting using gofumpt
 type GofumptValidator struct {
 	validator.BaseValidator
@@ -228,23 +233,19 @@ func (*GofumptValidator) parseGoMod(goModPath string) (lang, modpath string, err
 	content := string(data)
 	lines := strings.Split(content, "\n")
 
-	// Regex patterns
-	modulePattern := regexp.MustCompile(`^module\s+(\S+)`)
-	goVersionPattern := regexp.MustCompile(`^go\s+(\d+\.\d+(?:\.\d+)?)`)
-
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
 		// Parse module directive
 		if modpath == "" {
-			if matches := modulePattern.FindStringSubmatch(line); len(matches) > 1 {
+			if matches := goModModulePattern.FindStringSubmatch(line); len(matches) > 1 {
 				modpath = matches[1]
 			}
 		}
 
 		// Parse go directive
 		if lang == "" {
-			if matches := goVersionPattern.FindStringSubmatch(line); len(matches) > 1 {
+			if matches := goModVersionPattern.FindStringSubmatch(line); len(matches) > 1 {
 				// Convert "1.21" to "go1.21"
 				lang = "go" + matches[1]
 			}
