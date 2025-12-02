@@ -375,3 +375,59 @@ func (m *Manager) ApplyRetention(policy RetentionPolicy) (*RetentionResult, erro
 		RemovedSnapshots: removedIDs,
 	}, nil
 }
+
+// RestoreSnapshot restores a snapshot to a target path.
+func (m *Manager) RestoreSnapshot(
+	snapshotID string,
+	opts RestoreOptions,
+) (*RestoreResult, error) {
+	if !m.config.IsEnabled() {
+		return nil, ErrBackupDisabled
+	}
+
+	// Get snapshot
+	snapshot, err := m.Get(snapshotID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create restorer
+	restorer, err := NewRestorer(m.storage, m)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create restorer")
+	}
+
+	// Restore snapshot
+	result, err := restorer.RestoreSnapshot(snapshot, opts)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to restore snapshot")
+	}
+
+	return result, nil
+}
+
+// ValidateSnapshot validates a snapshot's integrity.
+func (m *Manager) ValidateSnapshot(snapshotID string) error {
+	if !m.config.IsEnabled() {
+		return ErrBackupDisabled
+	}
+
+	// Get snapshot
+	snapshot, err := m.Get(snapshotID)
+	if err != nil {
+		return err
+	}
+
+	// Create restorer
+	restorer, err := NewRestorer(m.storage, m)
+	if err != nil {
+		return errors.Wrap(err, "failed to create restorer")
+	}
+
+	// Validate snapshot
+	if err := restorer.ValidateSnapshot(snapshot); err != nil {
+		return errors.Wrap(err, "validation failed")
+	}
+
+	return nil
+}
