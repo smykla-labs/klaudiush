@@ -593,6 +593,168 @@ jobs:
 			})
 		})
 
+		Context("branch comment extraction", func() {
+			DescribeTable("should accept common branch names as version comments",
+				func(branchName string) {
+					ctx := &hook.Context{
+						EventType: hook.EventTypePreToolUse,
+						ToolName:  hook.ToolTypeWrite,
+						ToolInput: hook.ToolInput{
+							FilePath: "/project/.github/workflows/test.yml",
+							Content: `name: Test
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Homebrew/actions/setup-homebrew@b4ffde65f46336ab88eb53be808477a3936bae11 # ` + branchName + `
+`,
+						},
+					}
+
+					result := validator.Validate(context.Background(), ctx)
+					Expect(
+						result.Passed,
+					).To(BeTrue(), "branch name %q should be accepted", branchName)
+				},
+				Entry("master", "master"),
+				Entry("main", "main"),
+				Entry("develop", "develop"),
+				Entry("development", "development"),
+				Entry("trunk", "trunk"),
+			)
+
+			DescribeTable("should accept branch patterns as version comments",
+				func(branchName string) {
+					ctx := &hook.Context{
+						EventType: hook.EventTypePreToolUse,
+						ToolName:  hook.ToolTypeWrite,
+						ToolInput: hook.ToolInput{
+							FilePath: "/project/.github/workflows/test.yml",
+							Content: `name: Test
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # ` + branchName + `
+`,
+						},
+					}
+
+					result := validator.Validate(context.Background(), ctx)
+					Expect(
+						result.Passed,
+					).To(BeTrue(), "branch pattern %q should be accepted", branchName)
+				},
+				Entry("release/v1.0", "release/v1.0"),
+				Entry("release/2024.01", "release/2024.01"),
+				Entry("feature/my-feature", "feature/my-feature"),
+				Entry("feature/JIRA-123", "feature/JIRA-123"),
+				Entry("hotfix/urgent-fix", "hotfix/urgent-fix"),
+				Entry("bugfix/issue-456", "bugfix/issue-456"),
+				Entry("fix/typo", "fix/typo"),
+			)
+
+			DescribeTable("should accept custom branch names as version comments",
+				func(branchName string) {
+					ctx := &hook.Context{
+						EventType: hook.EventTypePreToolUse,
+						ToolName:  hook.ToolTypeWrite,
+						ToolInput: hook.ToolInput{
+							FilePath: "/project/.github/workflows/test.yml",
+							Content: `name: Test
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # ` + branchName + `
+`,
+						},
+					}
+
+					result := validator.Validate(context.Background(), ctx)
+					Expect(
+						result.Passed,
+					).To(BeTrue(), "custom branch %q should be accepted", branchName)
+				},
+				Entry("stable", "stable"),
+				Entry("next", "next"),
+				Entry("canary", "canary"),
+				Entry("nightly", "nightly"),
+				Entry("beta", "beta"),
+				Entry("alpha", "alpha"),
+				Entry("lts", "lts"),
+				Entry("edge", "edge"),
+			)
+
+			It("should accept branch comment on previous line", func() {
+				ctx := &hook.Context{
+					EventType: hook.EventTypePreToolUse,
+					ToolName:  hook.ToolTypeWrite,
+					ToolInput: hook.ToolInput{
+						FilePath: "/project/.github/workflows/test.yml",
+						Content: `name: Test
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # master
+      - uses: Homebrew/actions/setup-homebrew@b4ffde65f46336ab88eb53be808477a3936bae11
+`,
+					},
+				}
+
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should accept branch with trailing whitespace in comment", func() {
+				ctx := &hook.Context{
+					EventType: hook.EventTypePreToolUse,
+					ToolName:  hook.ToolTypeWrite,
+					ToolInput: hook.ToolInput{
+						FilePath: "/project/.github/workflows/test.yml",
+						Content: `name: Test
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Homebrew/actions/setup-homebrew@b4ffde65f46336ab88eb53be808477a3936bae11 # master
+`,
+					},
+				}
+
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should prefer version comment over branch comment", func() {
+				// When both patterns could match, version should take precedence
+				ctx := &hook.Context{
+					EventType: hook.EventTypePreToolUse,
+					ToolName:  hook.ToolTypeWrite,
+					ToolInput: hook.ToolInput{
+						FilePath: "/project/.github/workflows/test.yml",
+						Content: `name: Test
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+`,
+					},
+				}
+
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+		})
+
 		Context("explanation comment detection", func() {
 			It("should accept explanation with version-like numbers", func() {
 				ctx := &hook.Context{

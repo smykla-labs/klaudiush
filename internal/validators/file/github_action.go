@@ -46,6 +46,18 @@ var (
 	versionCommentRegex = regexp.MustCompile(
 		`#\s*(v?[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:[.-][a-zA-Z0-9]+)?)`,
 	)
+	// branchCommentRegex extracts branch name from comment (e.g., "# master", "# main", "# release/v1")
+	// Matches:
+	// - Well-known branches: master, main, develop, development, trunk
+	// - Common short names: stable, next, canary, nightly, beta, alpha, lts, edge, prod, staging, production
+	// - Prefixed branches: release/*, feature/*, hotfix/*, bugfix/*, fix/*
+	// - Multi-level paths: any/path/with/slashes (must contain at least one slash)
+	branchCommentRegex = regexp.MustCompile(
+		`#\s*(master|main|develop|development|trunk|` +
+			`stable|next|canary|nightly|beta|alpha|lts|edge|prod|staging|production|` +
+			`(?:release|feature|hotfix|bugfix|fix)/[a-zA-Z0-9._-]+|` +
+			`[a-zA-Z][a-zA-Z0-9._-]*/[a-zA-Z0-9._/-]+)(?:\s|$)`,
+	)
 	// sha1Regex matches 40-character hex SHA-1
 	sha1Regex = regexp.MustCompile(`^[a-f0-9]{40}$`)
 	// sha256Regex matches 64-character hex SHA-256
@@ -155,8 +167,9 @@ func (v *WorkflowValidator) Validate(ctx context.Context, hookCtx *hook.Context)
 			"file":   filepath.Base(filePath),
 			"errors": strings.Join(allErrors, "\n"),
 			"help": `Requirements:
-  - Use digest-pinned actions with version comments:
+  - Use digest-pinned actions with version or branch comments:
     uses: actions/checkout@abc123... # v4.1.7
+    uses: Homebrew/actions/setup-homebrew@abc123... # master
 
   - Or provide explanation when digest pinning not possible:
     # Cannot pin by digest: marketplace action with frequent updates
@@ -377,15 +390,24 @@ func (v *WorkflowValidator) validateTagAction(action actionUse) ([]string, []str
 	return errs, nil
 }
 
-// extractVersionComment extracts version comment from inline or previous line
+// extractVersionComment extracts version or branch comment from inline or previous line.
+// Accepts both semantic versions (v1.2.3) and branch names (master, main, release/v1).
 func (*WorkflowValidator) extractVersionComment(action actionUse) string {
-	// Check inline comment first
+	// Check inline comment first - try version regex, then branch regex
 	if matches := versionCommentRegex.FindStringSubmatch(action.InlineComment); len(matches) > 1 {
 		return matches[1]
 	}
 
-	// Check previous line
+	if matches := branchCommentRegex.FindStringSubmatch(action.InlineComment); len(matches) > 1 {
+		return matches[1]
+	}
+
+	// Check previous line - try version regex, then branch regex
 	if matches := versionCommentRegex.FindStringSubmatch(action.PreviousLine); len(matches) > 1 {
+		return matches[1]
+	}
+
+	if matches := branchCommentRegex.FindStringSubmatch(action.PreviousLine); len(matches) > 1 {
 		return matches[1]
 	}
 
