@@ -1,95 +1,131 @@
-# Session: Fuzzing Implementation
+# Fuzzing Architecture
 
-## Overview
+Go native fuzzing (Go 1.18+) for parser components to discover edge cases, crashes, and security vulnerabilities.
 
-Go native fuzzing (Go 1.18+) for parser components to discover edge cases, crashes, and security issues.
+## Core Design Philosophy
 
-## Go Fuzzing Basics
+**Risk-Based Prioritization**: Fuzz targets ordered by attack surface and code complexity. Hand-written parsers with string manipulation get priority over stdlib-based parsers.
 
-- Fuzz functions: `FuzzXxx(f *testing.F)` in `*_test.go` files
-- Seed corpus: `f.Add(...)` with interesting inputs
-- Fuzz target: `f.Fuzz(func(t *testing.T, input string) { ... })`
-- Run: `go test -fuzz=FuzzXxx -fuzztime=30s ./pkg/parser`
-- **Type limitation**: Only primitives (`string`, `[]byte`, `int*`, `uint*`, `float*`, `bool`) - no structs
+**Type Limitations as Design Constraint**: Go fuzzing only supports primitives (`string`, `[]byte`, `int*`, `uint*`, `float*`, `bool`) - no structs. Parser APIs designed to accept simple encodings (tab-separated strings, raw bytes).
 
-## Fuzz Targets (by risk)
+**Exercise All Code Paths**: Fuzz callbacks call every public method on parsed results to catch panics in accessor methods, not just Parse().
 
-| Priority | Target                     | File                                                | Risk                                               |
+**Corpus Committed to Git**: Interesting inputs discovered by fuzzer stored in `testdata/fuzz/<FuzzFunctionName>/` and committed for regression testing.
+
+## Fuzz Targets by Risk Priority
+
+| Priority | Target                     | File                                                | Risk Rationale                                     |
 |:---------|:---------------------------|:----------------------------------------------------|:---------------------------------------------------|
 | 1        | `ParseGitCommand()`        | `pkg/parser/git_fuzz_test.go`                       | Hand-written string manipulation, index arithmetic |
 | 2        | `BashParser.Parse()`       | `pkg/parser/bash_fuzz_test.go`                      | Wraps mvdan.cc/sh, custom heredoc extraction       |
 | 3        | `mdtable.Parse()`          | `pkg/mdtable/parser_fuzz_test.go`                   | Regex-based, ReDoS risk, manual `splitByPipe()`    |
-| 4        | `JSONParser.Parse()`       | `internal/parser/json_fuzz_test.go`                 | Standard library, low risk                         |
+| 4        | `JSONParser.Parse()`       | `internal/parser/json_fuzz_test.go`                 | Standard library wrapper, low risk                 |
 | 5        | `PatternDetector.Detect()` | `internal/validators/secrets/detector_fuzz_test.go` | 25+ regex patterns, `getPosition()` offset calc    |
 
-## Implementation Details
+**Rationale**: Hand-written parsers (git, mdtable) have higher bug potential than stdlib wrappers (json). Bash parser wraps well-tested `mvdan.cc/sh` but has custom heredoc logic. Secrets detector has complex regex patterns with ReDoS risk.
 
-### Git Parser Fuzz Encoding
+## Critical Implementation Details
 
-Since Go fuzzing doesn't support `[]string`, use tab-separated encoding:
+### Go Fuzzing Type Limitation
+
+Fuzz functions only accept primitive types. Use encoding for complex inputs:
 
 ```go
+// Git command fuzzing: Use tab-separated encoding for []string
 f.Add("git\tcommit\t-sS\t-m\tmessage")  // name\targ1\targ2...
 
-f.Fuzz(func(t *testing.T, input string) {
+f.Fuzz(func(_ *testing.T, input string) {
     parts := strings.Split(input, "\t")
     if len(parts) == 0 {
         return
     }
     cmd := Command{Name: parts[0], Args: parts[1:]}
     result, err := ParseGitCommand(cmd)
-    if err == nil {
-        // Exercise all methods - should not panic
-        _ = result.HasFlag("-s")
-        _ = result.ExtractCommitMessage()
-        // ...
+    if err != nil {
+        return  // Parse errors are expected
     }
+
+    // Exercise all methods - should not panic
+    _ = result.HasFlag("-s")
+    _ = result.ExtractCommitMessage()
+    _ = result.SubCommand
 })
 ```
 
-### Package Placement
+**Why Tab-Separated**: Allows arbitrary strings in arguments (spaces, newlines) without ambiguity. Alternative encodings (space-separated, JSON) have escaping complexity.
 
-Follow existing test patterns in the codebase:
+### Package Placement Patterns
 
-- `pkg/` packages: Use `package xxx_test` suffix (external test package)
-- `internal/` packages: Use `package xxx` (same package) for access to unexported constructors
-
-### Fuzz Function Parameter Naming
-
-When fuzz callback doesn't use `t *testing.T`, rename to `_` to satisfy linters:
+Follow existing test patterns in codebase:
 
 ```go
-// Wrong - triggers revive unused-parameter lint
-f.Fuzz(func(t *testing.T, input string) { ... })
+// pkg/ packages - External test package for black-box testing
+package parser_test
 
-// Correct - when t is unused
-f.Fuzz(func(_ *testing.T, input string) { ... })
+import "github.com/smykla-labs/klaudiush/pkg/parser"
+
+func FuzzGitCommand(f *testing.F) { ... }
+
+// internal/ packages - Same package for access to unexported constructors
+package parser
+
+func FuzzJSONParser(f *testing.F) {
+    // Can access unexported newContext(), etc.
+}
 ```
 
-### Nil Check Pattern
+**Gotcha**: Using `package xxx_test` in `internal/` packages breaks access to unexported functions needed for test setup. Use same package name.
 
-When checking for nil and accessing fields, must return after the nil check:
+### Unused Testing.T Parameter
+
+Fuzz callbacks receive `*testing.T` even when not needed. Satisfy linters:
 
 ```go
-// Wrong - staticcheck SA5011 possible nil pointer dereference
+// BAD - revive unused-parameter lint error
+f.Fuzz(func(t *testing.T, input string) {
+    // Never use 't'
+})
+
+// GOOD - Rename to underscore
+f.Fuzz(func(_ *testing.T, input string) {
+    // No lint error
+})
+```
+
+### Nil Check Safety Pattern
+
+After nil checks, must return before accessing fields:
+
+```go
+// WRONG - staticcheck SA5011: possible nil pointer dereference
 if result == nil {
     t.Error("nil result")
 }
-_ = result.Tables  // SA5011: possible nil pointer dereference
+_ = result.Tables  // SA5011 error - could still be nil
 
-// Correct
+// CORRECT - Return after nil check
 if result == nil {
     t.Error("nil result")
     return
 }
-_ = result.Tables
+_ = result.Tables  // Safe - control flow proves result non-nil
 ```
+
+**Why This Matters**: Staticcheck can't prove variable is non-nil without explicit return. Else block doesn't help - must return.
 
 ### Corpus Storage
 
-Go fuzzer stores interesting inputs in `testdata/fuzz/<FuzzFunctionName>/`. Commit these for reproducibility.
+Fuzzer stores interesting inputs in `testdata/fuzz/<FuzzFunctionName>/`. These are:
 
-## Taskfile Tasks
+- Auto-generated by fuzzer when it finds crashes or coverage-expanding inputs
+- Automatically replayed on every test run (regression prevention)
+- Should be committed to git for team-wide regression testing
+
+**Gotcha**: Corpus files grow over time. Review periodically and remove duplicates or uninteresting cases.
+
+## Task Integration
+
+Fuzzing integrated into Taskfile.yml:
 
 ```bash
 # Run all fuzz tests (10s each, suitable for CI)
@@ -102,37 +138,74 @@ task test:fuzz:mdtable
 task test:fuzz:json
 task test:fuzz:secrets
 
-# Run with custom duration
+# Override duration via environment variable
 FUZZ_TIME=5m task test:fuzz:git
-FUZZ_TIME=1m task test:fuzz
+FUZZ_TIME=1m task test:fuzz  # All targets, 1min each
 ```
 
-## Lint Issues Encountered
+**CI Integration**: `task test:fuzz` runs 10s per target (fast feedback). Extended fuzzing (1hr+) runs in nightly jobs.
 
-| Issue                   | File                  | Fix                                                 |
-|:------------------------|:----------------------|:----------------------------------------------------|
-| golines (line too long) | `json_fuzz_test.go`   | Split long `f.Add()` into multiple calls            |
-| revive unused-parameter | All fuzz tests        | Rename `t *testing.T` to `_ *testing.T` when unused |
-| staticcheck SA5011      | `parser_fuzz_test.go` | Add `return` after nil check                        |
+## Seed Corpus Strategy
 
-## Testing Infrastructure Stats
+Seed corpus with inputs from existing unit tests:
 
-- 55 test files total (50 unit + 5 fuzz)
-- 17 generated mock files via `mockgen`
-- 19 testscript `.txtar` integration tests
-- Benchmark tests in `internal/validators/git/runner_benchmark_test.go`
+```go
+func FuzzGitCommand(f *testing.F) {
+    // Seed from unit test cases
+    f.Add("git\tcommit\t-sS\t-m\tmessage")
+    f.Add("git\tpush\torigin\tmain")
+    f.Add("git\tcommit\t-m\tmessage\twith\tspaces")
 
-## Best Practices
+    // Edge cases
+    f.Add("git")                      // No args
+    f.Add("\t\t\t")                   // Only separators
+    f.Add("git\tcommit\t-m\t")       // Empty message
 
-1. **Seed with real inputs**: Add corpus entries from existing unit tests
-2. **Exercise all methods**: Call all public methods on parsed result to catch panics
-3. **Check invariants**: Verify line/column numbers are ≥1, required fields are non-empty
-4. **Handle parse errors gracefully**: Only validate results when `err == nil`
-5. **Multiple event types**: For parsers with modes, test all (e.g., `JSONParser` with different `EventType`s)
+    f.Fuzz(func(_ *testing.T, input string) { ... })
+}
+```
 
-## Future Improvements
+**Why Seed from Unit Tests**: Unit tests already cover common cases. Seeding focuses fuzzer on variations around known-good inputs.
 
-- Add corpus files to git for regression testing
-- Run extended fuzzing in CI nightly job
-- Add coverage-guided fuzzing metrics
-- Consider property-based testing with `rapid` for more complex invariants
+## Fuzzing Best Practices
+
+1. **Exercise all public methods**: Don't just call Parse(). Call all accessors/methods on result to find panics in downstream code.
+
+2. **Check invariants**: Validate parser invariants hold (e.g., line numbers ≥1, required fields non-empty when err==nil).
+
+3. **Handle parse errors gracefully**: Only validate results when `err == nil`. Parse failures are expected for malformed input.
+
+4. **Test all modes**: For parsers with event types or modes, seed corpus with examples of each mode.
+
+5. **Avoid expensive operations**: Fuzz callback runs millions of times. Avoid file I/O, network, external processes.
+
+## Lint Issues and Resolutions
+
+Common linter issues when writing fuzz tests:
+
+| Linter      | Issue                             | Resolution                                     |
+|:------------|:----------------------------------|:-----------------------------------------------|
+| golines     | Line too long in `f.Add()`        | Split into multiple `f.Add()` calls            |
+| revive      | unused-parameter (testing.T)      | Rename to `_ *testing.T`                       |
+| staticcheck | SA5011 nil pointer dereference    | Add `return` after nil check                   |
+| golines     | Long string literals in seed data | Split string across multiple lines with concat |
+
+## Common Pitfalls
+
+1. **Using struct types in fuzz parameters**: Go fuzzing only supports primitives. Encode complex inputs as strings (tab-separated, JSON, etc.).
+
+2. **Not exercising all methods**: Fuzzing only Parse() misses panics in accessor methods. Call every public method on result.
+
+3. **Accessing fields without return after nil check**: Staticcheck can't prove non-nil without explicit return. `if result == nil { ... }` without return still allows dereference.
+
+4. **Using `package xxx_test` in internal/**: Breaks access to unexported functions. Use same package name for internal packages.
+
+5. **Not committing corpus files**: Corpus in `testdata/fuzz/` provides regression tests. Always commit to git.
+
+6. **Long-running operations in fuzz callback**: Fuzz runs millions of iterations. File I/O, network calls, or sleeps cause timeouts.
+
+7. **Testing only happy path**: Seed corpus should include edge cases (empty strings, separators only, max length, special chars).
+
+8. **Ignoring parse errors**: Check `if err == nil` before validating results. Parse failures are expected for malformed input.
+
+9. **Not parameterizing fuzz duration**: Hardcoding duration in test prevents running quick checks in development. Use environment variables or Taskfile params.
