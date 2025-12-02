@@ -1,203 +1,504 @@
-# Session: Plugin System Implementation
+# Plugin System Architecture
 
-Implementation of external validator plugins for klaudiush, enabling extensibility through Go plugins, exec plugins, and (future) gRPC plugins.
+Extensible validator plugin system supporting Go (.so), exec (subprocess), and gRPC plugins with predicate-based matching and category-aware parallel execution.
 
-## Architecture
+## Core Design Philosophy
 
-### Public API (`pkg/plugin/api.go`)
+**Loader Pattern for Plugin Types**: Each plugin type (Go, exec, gRPC) has dedicated loader implementing common `Loader` interface. Allows adding new plugin types without modifying core system.
 
-Plugin authors implement the `Plugin` interface:
+**Predicate-Based Matching**: Plugins declare when they should run via predicates (event types, tool types, file patterns, command regex). Registry matches plugins to hook context dynamically.
+
+**Public API Stability**: Plugin authors use stable `pkg/plugin/api.go` interface. Internal implementation can evolve without breaking plugins.
+
+**Category-Aware Execution**: Plugins categorized by resource usage (CPU vs I/O). Exec plugins use CategoryIO pool (2× CPUs), Go plugins use CategoryCPU pool (NumCPU workers).
+
+**Static Error Constants**: All plugin errors use static error constants (err113 compliance) wrapped with context via `errors.Wrapf()`.
+
+## Public Plugin API
+
+Plugin authors implement single interface:
 
 ```go
+// pkg/plugin/api.go
+package pluginapi
+
 type Plugin interface {
     Info() Info
     Validate(req *ValidateRequest) *ValidateResponse
 }
+
+type Info struct {
+    Name        string
+    Version     string
+    Description string
+}
+
+type ValidateRequest struct {
+    Context *HookContext
+    Config  map[string]any  // Plugin-specific config from TOML
+}
+
+type HookContext struct {
+    EventType string  // "PreToolUse", "PostToolUse", "Notification"
+    ToolName  string  // "Bash", "Write", "Edit", "Grep"
+    ToolInput struct {
+        Command  string // Bash command
+        FilePath string // Write/Edit/Read file path
+        Content  string // Write/Edit content
+    }
+}
+
+type ValidateResponse struct {
+    Passed      bool
+    ShouldBlock bool
+    Message     string
+    ErrorCode   string  // e.g., "COMPANY001"
+    FixHint     string
+    DocLink     string  // e.g., "https://company.com/rules/COMPANY001"
+    Details     map[string]string
+}
 ```
 
-**Request**: Contains hook context (event type, tool name, command, file path, content, config)
+### Helper Functions
 
-**Response**: Validation result (passed, should_block, message, error_code, fix_hint, doc_link)
+```go
+// Quick response builders
+func PassResponse() *ValidateResponse
+func FailResponse(msg string) *ValidateResponse
+func WarnResponse(msg string) *ValidateResponse
 
-**Helper Functions**:
+// With structured error codes
+func FailWithCode(code, msg, fixHint, docLink string) *ValidateResponse
+func WarnWithCode(code, msg, fixHint, docLink string) *ValidateResponse
 
-- `PassResponse()`, `FailResponse()`, `WarnResponse()`
-- `FailWithCode()`, `WarnWithCode()` for structured errors
-- `AddDetail()` for additional context
+// Add extra context
+func (r *ValidateResponse) AddDetail(key, value string) *ValidateResponse
+```
 
-### Internal Architecture
+**Why Separate Helpers**: Plugin authors shouldn't need to remember struct field names or boolean combinations. Helpers enforce correct patterns.
 
-**Plugin Interface** (`internal/plugin/plugin.go`):
+## Internal Architecture
 
-- Internal wrapper around public plugin interface
-- Adds context support for timeouts and cancellation
-- Includes `Close()` for resource cleanup
+### Plugin Interface
 
-**Loader Interface** (`internal/plugin/loader.go`):
+Internal wrapper adds context support:
 
-- Abstraction for loading plugins from different sources
-- `Load(cfg) (Plugin, error)` creates plugin instances
-- `Close()` for loader cleanup
+```go
+// internal/plugin/plugin.go
+type Plugin interface {
+    Info() pluginapi.Info
+    Validate(ctx context.Context, req pluginapi.ValidateRequest) (pluginapi.ValidateResponse, error)
+    Close() error  // Resource cleanup
+}
+```
 
-**Implementations**:
+**Why Context**: Allows timeout and cancellation for hanging plugins. Public API stays simple (no context).
 
-1. **GoLoader**: Native Go plugins (.so files)
-   - Uses Go's `plugin` package
-   - Looks up exported "Plugin" symbol
-   - No unloading (Go limitation), Close() is no-op
-   - Runs synchronously in-process
+### Loader Interface
 
-2. **ExecLoader**: Subprocess plugins (JSON over stdin/stdout)
-   - Protocol: `--info` flag returns metadata, stdin/stdout for validation
-   - Uses `internal/exec.CommandRunner` for execution
-   - Timeouts enforced via context
-   - Full JSON marshaling of requests/responses
+Abstraction for loading plugins from different sources:
 
-3. **GRPCLoader**: Deferred for future implementation
-   - Would use protobuf-defined service
-   - Connection pooling for performance
-   - Persistent connections unlike exec plugins
+```go
+// internal/plugin/loader.go
+type Loader interface {
+    Load(cfg *config.PluginConfig) (Plugin, error)
+    Close() error
+}
+```
 
-### Registry & Predicate Matching
+Three implementations: `GoLoader`, `ExecLoader`, `GRPCLoader`.
 
-**Registry** (`internal/plugin/registry.go`):
+## Plugin Type Implementations
 
-- Manages plugin loading and lifecycle
-- Creates loaders for each plugin type
-- Stores loaded plugins with their predicates
-- Provides `GetValidators(hookCtx)` for context-based matching
+### Go Loader (.so files)
 
-**PredicateMatcher**:
+Native Go plugins using `plugin` package:
 
-- Filters plugins based on hook context
-- Four filter types:
-  - **Event types**: PreToolUse, PostToolUse, Notification
-  - **Tool types**: Bash, Write, Edit, Grep, etc.
-  - **File patterns**: Glob patterns for file tools (e.g., `*.go`, `**/*.tf`)
-  - **Command patterns**: Regex for bash commands (e.g., `^git commit`)
-- Refactored into helper methods to reduce cognitive complexity
-- Empty filter = match all (allows catch-all plugins)
+```go
+// internal/plugin/go_loader.go
+type GoLoader struct{}
 
-### Validator Integration
+func (l *GoLoader) Load(cfg *config.PluginConfig) (Plugin, error) {
+    // Open .so file
+    p, err := plugin.Open(cfg.Path)
+    if err != nil {
+        return nil, errors.Wrapf(ErrPluginLoadFailed, "path: %s", cfg.Path)
+    }
 
-**ValidatorAdapter** (`internal/plugin/adapter.go`):
+    // Lookup exported "Plugin" symbol
+    sym, err := p.Lookup("Plugin")
+    if err != nil {
+        return nil, errors.Wrap(ErrPluginSymbolNotFound, "symbol: Plugin")
+    }
 
-- Adapts `Plugin` to `Validator` interface
-- Converts `hook.Context` → `plugin.ValidateRequest`
-- Converts `plugin.ValidateResponse` → `validator.Result`
-- Maps error codes, fix hints, doc links
-- Assigns category for parallel execution:
-  - Go plugins: `CategoryCPU` (in-process)
-  - Exec plugins: `CategoryIO` (subprocess overhead)
+    // Type assert to pluginapi.Plugin
+    pluginImpl, ok := sym.(pluginapi.Plugin)
+    if !ok {
+        return nil, ErrPluginWrongType
+    }
 
-**PluginValidatorFactory** (`internal/config/factory/plugin_factory.go`):
+    return &goPluginAdapter{plugin: pluginImpl, timeout: cfg.Timeout}, nil
+}
+```
 
-- Creates plugin registry and loads all configured plugins
-- Returns `PluginRegistryValidator` that delegates to registry
-- Registered with catch-all `EventTypePreToolUse` predicate
-- Individual plugins do fine-grained matching via their predicates
+**Characteristics**:
+
+- **Performance**: Fastest (in-process, no serialization)
+- **Language**: Go only
+- **Reloading**: Not possible (Go limitation - plugins can't be unloaded)
+- **Category**: CategoryCPU (pure computation)
+- **Use case**: Performance-critical validation, shared codebases
+
+**Gotcha**: Go plugins require exact Go version match. Plugin compiled with Go 1.21.0 won't load in Go 1.21.1 binary.
+
+### Exec Loader (subprocess)
+
+JSON-based protocol over stdin/stdout:
+
+```go
+// internal/plugin/exec_loader.go
+type ExecLoader struct {
+    runner exec.CommandRunner
+}
+
+func (l *ExecLoader) Load(cfg *config.PluginConfig) (Plugin, error) {
+    // Verify plugin exists and is executable
+    if err := validateExecutable(cfg.Path); err != nil {
+        return nil, err
+    }
+
+    // Test plugin with --info flag
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    result, err := l.runner.Run(ctx, cfg.Path, []string{"--info"})
+    if err != nil {
+        return nil, errors.Wrapf(ErrPluginInfoFailed, "path: %s", cfg.Path)
+    }
+
+    var info pluginapi.Info
+    if err := json.Unmarshal([]byte(result.Stdout), &info); err != nil {
+        return nil, errors.Wrap(ErrPluginInfoInvalid, err.Error())
+    }
+
+    return &execPluginAdapter{
+        path:    cfg.Path,
+        info:    info,
+        timeout: cfg.Timeout,
+        runner:  l.runner,
+    }, nil
+}
+```
+
+**Protocol**:
+
+1. **Info**: `plugin --info` returns JSON with name/version/description
+2. **Validate**: JSON request on stdin, JSON response on stdout
+3. **Exit codes**: 0 = success, non-zero = error
+
+**Characteristics**:
+
+- **Performance**: Slower (process spawn ~50-100ms overhead)
+- **Language**: Any (shell, Python, Node.js, Ruby, etc.)
+- **Reloading**: Yes (new process each invocation)
+- **Category**: CategoryIO (subprocess overhead)
+- **Use case**: Cross-language plugins, simple validators
+
+### gRPC Loader
+
+See `session-grpc-loader.md` for complete architecture. Key points:
+
+- **Connection pooling**: Reuses connections across plugin instances
+- **TLS security**: Auto-enabled for remote addresses
+- **Category**: CategoryIO (network overhead)
+- **Use case**: Long-running plugins with state, production deployments
+
+## Predicate Matching System
+
+Plugins declare when they run via predicates in configuration:
+
+```toml
+[plugins.plugins.predicate]
+event_types = ["PreToolUse"]                    # Hook event types
+tool_types = ["Write", "Edit"]                  # Tool names
+file_patterns = ["*.go", "**/*.proto"]          # Glob patterns
+command_patterns = ["^git commit", "^docker.*"] # Regex for Bash commands
+```
+
+### PredicateMatcher Implementation
+
+```go
+// internal/plugin/registry.go
+type PredicateMatcher struct {
+    eventTypes      []string
+    toolTypes       []string
+    filePatterns    []string
+    commandPatterns []*regexp.Regexp
+}
+
+func (pm *PredicateMatcher) Matches(ctx *hook.Context) bool {
+    if !pm.matchesEventType(ctx.EventType) {
+        return false
+    }
+    if !pm.matchesToolType(ctx.ToolName) {
+        return false
+    }
+    if !pm.matchesFilePattern(ctx) {
+        return false
+    }
+    if !pm.matchesCommandPattern(ctx) {
+        return false
+    }
+    return true
+}
+```
+
+**Matching Rules**:
+
+- **Empty list = match all**: Plugin with no event_types matches all events
+- **AND logic**: All specified filters must match
+- **Glob patterns**: Use `doublestar` for `**` support
+- **Regex patterns**: Full regex power for command matching
+
+**Refactoring**: Split `Matches()` into helper methods (`matchesEventType`, etc.) to reduce cognitive complexity below gocognit threshold.
+
+## Validator Integration
+
+### ValidatorAdapter
+
+Adapts Plugin to Validator interface:
+
+```go
+// internal/plugin/adapter.go
+type ValidatorAdapter struct {
+    plugin   Plugin
+    config   *config.PluginConfig
+    category validator.ValidatorCategory
+}
+
+func (a *ValidatorAdapter) Validate(ctx *hook.Context) validator.Result {
+    // Convert hook.Context → pluginapi.ValidateRequest
+    req := pluginapi.ValidateRequest{
+        Context: convertHookContext(ctx),
+        Config:  a.config.Config,
+    }
+
+    // Call plugin with timeout
+    timeoutCtx, cancel := context.WithTimeout(context.Background(), a.config.Timeout)
+    defer cancel()
+
+    resp, err := a.plugin.Validate(timeoutCtx, req)
+    if err != nil {
+        return validator.FailWithRef(
+            validator.RefPluginError,
+            fmt.Sprintf("Plugin %s failed: %v", a.config.Name, err),
+        )
+    }
+
+    // Convert pluginapi.ValidateResponse → validator.Result
+    result := validator.Result{
+        Passed:      resp.Passed,
+        ShouldBlock: resp.ShouldBlock,
+        Message:     resp.Message,
+    }
+
+    // Use plugin's error documentation if provided
+    if resp.DocLink != "" {
+        result.Reference = validator.Reference(resp.DocLink)
+    }
+    result.FixHint = resp.FixHint
+
+    return result
+}
+
+func (a *ValidatorAdapter) Category() validator.ValidatorCategory {
+    return a.category
+}
+```
+
+**Why Adapter**: Keeps plugin API simple (no validator imports). Adapter handles conversion and timeout enforcement.
+
+### Plugin Registry
+
+Central registry managing plugin lifecycle:
+
+```go
+// internal/plugin/registry.go
+type Registry struct {
+    loaders    map[config.PluginType]Loader
+    validators []validatorWithPredicate  // Loaded plugins + predicates
+}
+
+type validatorWithPredicate struct {
+    validator *ValidatorAdapter
+    predicate *PredicateMatcher
+}
+
+func (r *Registry) GetValidators(ctx *hook.Context) []validator.Validator {
+    var matched []validator.Validator
+    for _, vp := range r.validators {
+        if vp.predicate.Matches(ctx) {
+            matched = append(matched, vp.validator)
+        }
+    }
+    return matched
+}
+```
+
+**Registry Lifecycle**:
+
+1. **Load**: Create loaders for each plugin type (Go, exec, gRPC)
+2. **Register**: Load each configured plugin, create adapter, store with predicate
+3. **Match**: For each hook context, return validators matching predicates
+4. **Close**: Close all loaders and plugins
 
 ## Configuration Schema
 
 ```toml
 [plugins]
-enabled = true
-directory = "~/.klaudiush/plugins"
-default_timeout = "5s"
+enabled = true                          # Global enable/disable
+directory = "~/.klaudiush/plugins"      # Default plugin directory
+default_timeout = "5s"                  # Timeout for plugins without explicit timeout
 
 [[plugins.plugins]]
 name = "company-rules"
-type = "go"  # or "exec" or "grpc"
-enabled = true
+type = "go"                            # "go", "exec", or "grpc"
+enabled = true                         # Per-plugin enable (default: true)
 path = "~/.klaudiush/plugins/company-rules.so"
-timeout = "10s"
+timeout = "10s"                        # Override default timeout
 
 [plugins.plugins.predicate]
-event_types = ["PreToolUse"]
-tool_types = ["Write", "Edit"]
-file_patterns = ["*.go", "**/*.rs"]
-command_patterns = []  # regex patterns for bash commands
+event_types = ["PreToolUse"]           # When to run
+tool_types = ["Write", "Edit"]        # Which tools
+file_patterns = ["*.go", "**/*.rs"]   # Which files
+command_patterns = ["^git commit"]     # Which commands (regex)
 
 [plugins.plugins.config]
-# Plugin-specific config passed to plugin via ValidateRequest.Config
+# Plugin-specific config (passed to plugin via ValidateRequest.Config)
 max_line_length = 120
 require_copyright_header = true
+allowed_licenses = ["MIT", "Apache-2.0"]
 ```
 
-### Configuration Features
+**Configuration Features**:
 
-- **Per-plugin enable/disable**: Each plugin has `enabled` flag (default: true)
-- **Plugin-specific config**: Arbitrary key-value map passed to plugin
-- **Timeout control**: Per-plugin or global default
-- **Flexible predicates**: Fine-grained control over when plugins run
+- **Per-plugin enable/disable**: Quick way to temporarily disable plugin
+- **Plugin-specific config**: Arbitrary TOML config passed to plugin
+- **Timeout control**: Global default with per-plugin override
+- **Flexible predicates**: Fine-grained control over execution
 
 ## Error Handling
 
-**Static Errors** (err113 compliance):
+### Static Error Constants
 
 ```go
+// internal/plugin/errors.go
 var (
-    ErrPluginInfoFailed     = errors.New("plugin --info exited with non-zero code")
-    ErrPluginExecFailed     = errors.New("plugin execution failed with non-zero code")
-    ErrPluginNilResponse    = errors.New("plugin returned nil response")
+    ErrPluginLoadFailed       = errors.New("failed to load plugin")
+    ErrPluginSymbolNotFound   = errors.New("plugin symbol not found")
+    ErrPluginWrongType        = errors.New("plugin symbol has wrong type")
+    ErrPluginInfoFailed       = errors.New("plugin --info exited with non-zero code")
+    ErrPluginExecFailed       = errors.New("plugin execution failed")
+    ErrPluginNilResponse      = errors.New("plugin returned nil response")
 )
 ```
 
-**Wrapping**: Uses `errors.Wrapf()` to add context while preserving static errors
+**Why Static**: err113 linter requires static error constants for sentinel errors. Allows `errors.Is()` checks.
 
-## Constants
-
-Extracted magic numbers for mnd compliance:
+### Error Wrapping Pattern
 
 ```go
-const (
-    defaultExecPluginTimeout = 5 * time.Second
-    defaultPluginTimeout     = 5 * time.Second
-    defaultRegistryTimeout   = 10 * time.Second
-)
+// BAD - Dynamic error message
+return fmt.Errorf("failed to load plugin from %s: %w", path, err)
+
+// GOOD - Static constant with wrapped context
+return errors.Wrapf(ErrPluginLoadFailed, "path: %s: %w", path, err)
 ```
 
-## Linting Fixes
+Context added via `Wrapf()` while preserving static error for `errors.Is()` checks.
 
-- **err113**: Static error constants with `errors.Wrapf()` for context
-- **gocognit**: Refactored `Matches()` into helper methods
-- **golines**: Split long function signatures across multiple lines
-- **ireturn**: Added `//nolint:ireturn` for interface returns (required by design)
-- **mnd**: Extracted magic numbers to named constants
-- **modernize**: Used `slices.Contains()` instead of loops
-- **revive**: Removed unused receiver or renamed to `_`
-- **wastedassign**: Removed unused assignments
-- **gofumpt**: Proper formatting (var blocks, etc.)
+## Linter Compliance Patterns
 
-## Plugin Categorization for Parallel Execution
+### err113: Static Errors
 
-- **Go plugins**: `CategoryCPU` (pure computation, in-process)
-- **Exec plugins**: `CategoryIO` (subprocess overhead, I/O-bound)
-- **Future gRPC**: Likely `CategoryIO` (network overhead)
+All errors must be static constants. Use `errors.Wrapf()` for context.
 
-Categorization allows dispatcher to use appropriate worker pools for optimal concurrency.
+### gocognit: Cognitive Complexity
 
-## Future Work (Deferred)
+Split complex functions into helpers:
 
-- **gRPC plugin loader**: Requires protobuf setup, service definition, code generation
-- **Unit tests**: Test each loader in isolation with mocks
-- **Integration tests**: End-to-end plugin loading and validation
-- **Plugin examples**: Sample plugins demonstrating best practices
-- **Plugin development guide**: Documentation for plugin authors
+```go
+// Before: Matches() had complexity 15
+func (pm *PredicateMatcher) Matches(ctx *hook.Context) bool {
+    // ... 50 lines of nested logic
+}
 
-## Files Created
+// After: Split into helpers (complexity 4)
+func (pm *PredicateMatcher) Matches(ctx *hook.Context) bool {
+    return pm.matchesEventType(ctx.EventType) &&
+           pm.matchesToolType(ctx.ToolName) &&
+           pm.matchesFilePattern(ctx) &&
+           pm.matchesCommandPattern(ctx)
+}
+```
 
-- `pkg/plugin/api.go`: Public API for plugin authors
-- `pkg/config/plugin.go`: Configuration schema
-- `internal/plugin/plugin.go`: Internal plugin interface
-- `internal/plugin/loader.go`: Loader interface
-- `internal/plugin/go_loader.go`: Go plugin loader
-- `internal/plugin/exec_loader.go`: Exec plugin loader
-- `internal/plugin/registry.go`: Plugin registry and predicate matching
-- `internal/plugin/adapter.go`: Validator adapter for plugins
-- `internal/config/factory/plugin_factory.go`: Factory integration
+### ireturn: Interface Returns
 
-## Files Modified
+Loader `Load()` returns `Plugin` interface (required by design):
 
-- `pkg/config/config.go`: Added `Plugins` field to root config
-- `internal/config/factory/factory.go`: Integrated plugin factory into validator creation
+```go
+//nolint:ireturn // Loader pattern requires interface return
+func (l *GoLoader) Load(cfg *config.PluginConfig) (Plugin, error) {
+    // ...
+}
+```
+
+### mnd: Magic Number Detection
+
+Extract constants:
+
+```go
+// BAD
+ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+
+// GOOD
+const defaultPluginTimeout = 5 * time.Second
+ctx, cancel := context.WithTimeout(ctx, defaultPluginTimeout)
+```
+
+### modernize: Use Standard Library
+
+```go
+// OLD
+for _, t := range pm.eventTypes {
+    if t == ctx.EventType {
+        return true
+    }
+}
+return false
+
+// MODERN (Go 1.21+)
+return slices.Contains(pm.eventTypes, ctx.EventType)
+```
+
+## Common Pitfalls
+
+1. **Not checking plugin enabled flag**: Always check `cfg.Enabled` before loading. Disabled plugins should be skipped.
+
+2. **Missing timeout on plugin operations**: Plugins can hang. Always use `context.WithTimeout` for plugin calls.
+
+3. **Forgetting Close() on loaders**: Resource leak if loaders not closed. Defer `Close()` after creating registry.
+
+4. **Empty predicate matching logic**: Empty predicate list means "match all", not "match none". This is intentional (allows catch-all plugins).
+
+5. **Not handling nil response**: Exec plugins can return nil if output parsing fails. Always check response != nil.
+
+6. **Using dynamic errors**: err113 linter rejects dynamic errors. Use static constants with `errors.Wrapf()`.
+
+7. **Go version mismatch**: Go plugins require exact version match. Plugin compiled with Go 1.21.0 won't load in 1.21.1.
+
+8. **Not validating executable path**: Exec plugins must be executable. Check file exists and has execute bit before loading.
+
+9. **Complex predicate matching in single function**: High cognitive complexity triggers gocognit. Extract helper methods.
+
+10. **Assuming sequential execution**: Plugins run in parallel (category-based pools). Don't rely on execution order.
