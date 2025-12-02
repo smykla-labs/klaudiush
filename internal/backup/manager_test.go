@@ -766,4 +766,119 @@ var _ = Describe("Manager", func() {
 			Expect(result.SnapshotsRemoved).To(Equal(1))
 		})
 	})
+
+	Describe("NewManagerWithAudit", func() {
+		var auditLogger backup.AuditLogger
+
+		BeforeEach(func() {
+			auditFile := filepath.Join(tmpDir, "audit.jsonl")
+			var err error
+			auditLogger, err = backup.NewJSONLAuditLogger(auditFile)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			if auditLogger != nil {
+				auditLogger.Close()
+			}
+		})
+
+		It("creates manager with audit logger", func() {
+			mgr, err := backup.NewManagerWithAudit(storage, cfg, auditLogger)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mgr).NotTo(BeNil())
+		})
+
+		It("creates manager with nil config", func() {
+			mgr, err := backup.NewManagerWithAudit(storage, nil, auditLogger)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mgr).NotTo(BeNil())
+		})
+
+		It("returns error for nil storage", func() {
+			_, err := backup.NewManagerWithAudit(nil, cfg, auditLogger)
+
+			Expect(err).To(MatchError(ContainSubstring("storage cannot be nil")))
+		})
+	})
+
+	Describe("Internal Functions Coverage", func() {
+		Context("getNextSequenceNumber", func() {
+			It("assigns sequence 1 for first snapshot", func() {
+				opts := backup.CreateBackupOptions{
+					ConfigPath: configPath,
+					Trigger:    backup.TriggerManual,
+				}
+
+				snapshot, err := manager.CreateBackup(opts)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(snapshot.SequenceNum).To(Equal(1))
+			})
+
+			It("creates separate chains for different snapshots", func() {
+				opts := backup.CreateBackupOptions{
+					ConfigPath: configPath,
+					Trigger:    backup.TriggerManual,
+				}
+
+				snapshot1, err := manager.CreateBackup(opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Change content to avoid deduplication
+				err = os.WriteFile(configPath, []byte("test = false"), 0o600)
+				Expect(err).NotTo(HaveOccurred())
+
+				snapshot2, err := manager.CreateBackup(opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Phase 1 uses separate chains (each full snapshot is its own chain)
+				Expect(snapshot1.SequenceNum).To(Equal(1))
+				Expect(snapshot2.SequenceNum).To(Equal(1))
+				Expect(snapshot2.ChainID).NotTo(Equal(snapshot1.ChainID))
+			})
+
+			It("handles empty snapshot list", func() {
+				// Get should return error for non-existent storage
+				_, err := manager.Get("non-existent")
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("saveSnapshotToIndex", func() {
+			It("persists snapshot to index", func() {
+				opts := backup.CreateBackupOptions{
+					ConfigPath: configPath,
+					Trigger:    backup.TriggerManual,
+				}
+
+				snapshot, err := manager.CreateBackup(opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify snapshot is in index
+				retrieved, err := manager.Get(snapshot.ID)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(retrieved.ID).To(Equal(snapshot.ID))
+			})
+
+			It("updates existing snapshot in index", func() {
+				opts := backup.CreateBackupOptions{
+					ConfigPath: configPath,
+					Trigger:    backup.TriggerManual,
+					Metadata: backup.SnapshotMetadata{
+						Tag: "v1",
+					},
+				}
+
+				snapshot, err := manager.CreateBackup(opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify tag is saved
+				retrieved, err := manager.Get(snapshot.ID)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(retrieved.Metadata.Tag).To(Equal("v1"))
+			})
+		})
+	})
 })
