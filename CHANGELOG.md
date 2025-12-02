@@ -5,6 +5,12 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0](https://github.com/smykla-labs/klaudiush/compare/v1.10.0...v1.11.0) (2025-12-02)
+
+### Features
+
+* **completion:** add shell completion support ([#142](https://github.com/smykla-labs/klaudiush/issues/142)) ([5c159e9](https://github.com/smykla-labs/klaudiush/commit/5c159e99501a88e98a11087bf27f871b42716d45))
+
 ## [1.10.0](https://github.com/smykla-labs/klaudiush/compare/v1.9.0...v1.10.0) (2025-12-02)
 
 ### Features
