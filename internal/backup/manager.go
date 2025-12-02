@@ -25,6 +25,9 @@ type Manager struct {
 
 	// config contains backup configuration.
 	config *config.BackupConfig
+
+	// auditLogger logs backup operations (optional).
+	auditLogger AuditLogger
 }
 
 // NewManager creates a new backup manager.
@@ -38,8 +41,30 @@ func NewManager(storage Storage, cfg *config.BackupConfig) (*Manager, error) {
 	}
 
 	return &Manager{
-		storage: storage,
-		config:  cfg,
+		storage:     storage,
+		config:      cfg,
+		auditLogger: nil,
+	}, nil
+}
+
+// NewManagerWithAudit creates a new backup manager with audit logging.
+func NewManagerWithAudit(
+	storage Storage,
+	cfg *config.BackupConfig,
+	auditLogger AuditLogger,
+) (*Manager, error) {
+	if storage == nil {
+		return nil, errors.New("storage cannot be nil")
+	}
+
+	if cfg == nil {
+		cfg = &config.BackupConfig{}
+	}
+
+	return &Manager{
+		storage:     storage,
+		config:      cfg,
+		auditLogger: auditLogger,
 	}, nil
 }
 
@@ -121,34 +146,27 @@ func (m *Manager) CreateBackup(opts CreateBackupOptions) (*Snapshot, error) {
 
 	size = int64(len(data))
 
-	// Determine config type
-	configType := m.determineConfigType(opts.ConfigPath)
-
 	// Create snapshot
-	snapshot := Snapshot{
-		ID:             snapshotID,
-		SequenceNum:    seqNum,
-		Timestamp:      timestamp,
-		ConfigPath:     opts.ConfigPath,
-		ConfigType:     configType,
-		Trigger:        opts.Trigger,
-		StorageType:    storageType,
-		StoragePath:    storagePath,
-		Size:           size,
-		Checksum:       contentHash,
-		ChainID:        chainID,
-		BaseSnapshotID: "",
-		PatchFrom:      "",
-		Metadata:       opts.Metadata,
+	snapshot := m.createSnapshotRecord(
+		snapshotID,
+		seqNum,
+		timestamp,
+		opts.ConfigPath,
+		storageType,
+		storagePath,
+		size,
+		contentHash,
+		chainID,
+		opts,
+	)
+
+	// Add to index and save
+	if err := m.saveSnapshotToIndex(index, snapshot, opts.ConfigPath); err != nil {
+		return nil, err
 	}
 
-	// Add to index
-	index.Add(snapshot)
-
-	// Save index
-	if err := m.storage.SaveIndex(index); err != nil {
-		return nil, errors.Wrap(err, "failed to save index")
-	}
+	// Log successful backup creation
+	m.logCreateSuccess(opts.ConfigPath, snapshotID, size, storageType, opts.Trigger)
 
 	return &snapshot, nil
 }
@@ -364,9 +382,28 @@ func (m *Manager) ApplyRetention(policy RetentionPolicy) (*RetentionResult, erro
 	// Save updated index
 	if len(removedIDs) > 0 {
 		if err := m.storage.SaveIndex(index); err != nil {
+			m.logAuditEntry(AuditEntry{
+				Timestamp: time.Now(),
+				Operation: OperationPrune,
+				Success:   false,
+				Error:     err.Error(),
+			})
+
 			return nil, errors.Wrap(err, "failed to save index after retention")
 		}
 	}
+
+	// Log retention operation
+	m.logAuditEntry(AuditEntry{
+		Timestamp: time.Now(),
+		Operation: OperationPrune,
+		Success:   true,
+		Extra: map[string]any{
+			"snapshots_removed": len(removedIDs),
+			"chains_removed":    len(removedChains),
+			"bytes_freed":       bytesFreed,
+		},
+	})
 
 	return &RetentionResult{
 		SnapshotsRemoved: len(removedIDs),
@@ -400,8 +437,31 @@ func (m *Manager) RestoreSnapshot(
 	// Restore snapshot
 	result, err := restorer.RestoreSnapshot(snapshot, opts)
 	if err != nil {
+		m.logAuditEntry(AuditEntry{
+			Timestamp:  time.Now(),
+			Operation:  OperationRestore,
+			ConfigPath: snapshot.ConfigPath,
+			SnapshotID: snapshotID,
+			Success:    false,
+			Error:      err.Error(),
+		})
+
 		return nil, errors.Wrap(err, "failed to restore snapshot")
 	}
+
+	// Log successful restore
+	m.logAuditEntry(AuditEntry{
+		Timestamp:  time.Now(),
+		Operation:  OperationRestore,
+		ConfigPath: result.RestoredPath,
+		SnapshotID: snapshotID,
+		Success:    true,
+		Extra: map[string]any{
+			"bytes_restored":    result.BytesRestored,
+			"checksum_verified": result.ChecksumVerified,
+			"backup_created":    result.BackupSnapshot != nil,
+		},
+	})
 
 	return result, nil
 }
@@ -430,4 +490,125 @@ func (m *Manager) ValidateSnapshot(snapshotID string) error {
 	}
 
 	return nil
+}
+
+// createSnapshotRecord creates a snapshot record with the given parameters.
+func (m *Manager) createSnapshotRecord(
+	snapshotID string,
+	seqNum int,
+	timestamp time.Time,
+	configPath string,
+	storageType StorageType,
+	storagePath string,
+	size int64,
+	contentHash string,
+	chainID string,
+	opts CreateBackupOptions,
+) Snapshot {
+	configType := m.determineConfigType(configPath)
+
+	return Snapshot{
+		ID:             snapshotID,
+		SequenceNum:    seqNum,
+		Timestamp:      timestamp,
+		ConfigPath:     configPath,
+		ConfigType:     configType,
+		Trigger:        opts.Trigger,
+		StorageType:    storageType,
+		StoragePath:    storagePath,
+		Size:           size,
+		Checksum:       contentHash,
+		ChainID:        chainID,
+		BaseSnapshotID: "",
+		PatchFrom:      "",
+		Metadata:       opts.Metadata,
+	}
+}
+
+// saveSnapshotToIndex adds snapshot to index and saves it.
+func (m *Manager) saveSnapshotToIndex(
+	index *SnapshotIndex,
+	snapshot Snapshot,
+	configPath string,
+) error {
+	index.Add(snapshot)
+
+	if err := m.storage.SaveIndex(index); err != nil {
+		m.logAuditEntry(AuditEntry{
+			Timestamp:  time.Now(),
+			Operation:  OperationCreate,
+			ConfigPath: configPath,
+			SnapshotID: snapshot.ID,
+			Success:    false,
+			Error:      err.Error(),
+		})
+
+		return errors.Wrap(err, "failed to save index")
+	}
+
+	return nil
+}
+
+// logCreateSuccess logs successful backup creation.
+func (m *Manager) logCreateSuccess(
+	configPath string,
+	snapshotID string,
+	size int64,
+	storageType StorageType,
+	trigger Trigger,
+) {
+	m.logAuditEntry(AuditEntry{
+		Timestamp:  time.Now(),
+		Operation:  OperationCreate,
+		ConfigPath: configPath,
+		SnapshotID: snapshotID,
+		Success:    true,
+		Extra: map[string]any{
+			"size":         size,
+			"storage_type": string(storageType),
+			"trigger":      string(trigger),
+		},
+	})
+}
+
+// logAuditEntry logs an audit entry if audit logger is configured.
+func (m *Manager) logAuditEntry(entry AuditEntry) {
+	if m.auditLogger == nil {
+		return
+	}
+
+	// Fill in user and hostname if not provided
+	if entry.User == "" {
+		entry.User = getCurrentUser()
+	}
+
+	if entry.Hostname == "" {
+		entry.Hostname = getHostname()
+	}
+
+	// Log entry (ignore errors as audit logging is best-effort)
+	_ = m.auditLogger.Log(entry)
+}
+
+// getCurrentUser returns the current username.
+func getCurrentUser() string {
+	if user := os.Getenv("USER"); user != "" {
+		return user
+	}
+
+	if user := os.Getenv("USERNAME"); user != "" {
+		return user
+	}
+
+	return "unknown"
+}
+
+// getHostname returns the current hostname.
+func getHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+
+	return hostname
 }

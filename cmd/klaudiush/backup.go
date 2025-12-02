@@ -127,6 +127,34 @@ Examples:
 	RunE: runBackupStatus,
 }
 
+var backupAuditCmd = &cobra.Command{
+	Use:   "audit",
+	Short: "Show backup audit log",
+	Long: `Show audit log of backup operations.
+
+Displays a chronological list of all backup operations with filters.
+
+Examples:
+  klaudiush backup audit                          # Show all audit entries
+  klaudiush backup audit --operation create       # Show only create operations
+  klaudiush backup audit --since "2025-01-01"     # Show entries since date
+  klaudiush backup audit --snapshot abc123        # Show entries for snapshot
+  klaudiush backup audit --success                # Show only successful operations
+  klaudiush backup audit --failure                # Show only failed operations
+  klaudiush backup audit --limit 20               # Show last 20 entries
+  klaudiush backup audit --json                   # Output as JSON`,
+	RunE: runBackupAudit,
+}
+
+// Audit command flags.
+var (
+	auditOperation string
+	auditSince     string
+	auditSnapshot  string
+	auditSuccess   bool
+	auditFailure   bool
+)
+
 func init() {
 	rootCmd.AddCommand(backupCmd)
 	backupCmd.AddCommand(backupListCmd)
@@ -135,11 +163,13 @@ func init() {
 	backupCmd.AddCommand(backupDeleteCmd)
 	backupCmd.AddCommand(backupPruneCmd)
 	backupCmd.AddCommand(backupStatusCmd)
+	backupCmd.AddCommand(backupAuditCmd)
 
 	setupBackupListFlags()
 	setupBackupCreateFlags()
 	setupBackupRestoreFlags()
 	setupBackupPruneFlags()
+	setupBackupAuditFlags()
 }
 
 func setupBackupListFlags() {
@@ -175,6 +205,22 @@ func setupBackupPruneFlags() {
 	backupPruneCmd.Flags().
 		StringVar(&backupProject, "project", "", "Prune backups for specific project path")
 	backupPruneCmd.Flags().BoolVar(&backupAll, "all", false, "Prune all backups (default)")
+}
+
+func setupBackupAuditFlags() {
+	backupAuditCmd.Flags().
+		StringVar(&auditOperation, "operation", "", "Filter by operation type (create, restore, delete, prune)")
+	backupAuditCmd.Flags().
+		StringVar(&auditSince, "since", "", "Show entries since this time (RFC3339 format)")
+	backupAuditCmd.Flags().
+		StringVar(&auditSnapshot, "snapshot", "", "Filter by snapshot ID")
+	backupAuditCmd.Flags().
+		BoolVar(&auditSuccess, "success", false, "Show only successful operations")
+	backupAuditCmd.Flags().
+		BoolVar(&auditFailure, "failure", false, "Show only failed operations")
+	backupAuditCmd.Flags().
+		IntVar(&backupLimit, "limit", 0, "Limit number of entries to show (0 = all)")
+	backupAuditCmd.Flags().BoolVar(&backupJSON, "json", false, "Output as JSON")
 }
 
 func runBackupList(_ *cobra.Command, _ []string) error {
@@ -737,6 +783,140 @@ func displayRetentionPolicy(backupCfg *config.BackupConfig) {
 	fmt.Printf("Max backups: %d per directory\n", backupCfg.GetMaxBackups())
 	fmt.Printf("Max age: %s\n", backupCfg.GetMaxAge())
 	fmt.Printf("Max size: %s total\n", formatBytes(backupCfg.GetMaxSize()))
+}
+
+func runBackupAudit(_ *cobra.Command, _ []string) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return errors.Wrap(err, "failed to get home directory")
+	}
+
+	logFile := filepath.Join(homeDir, ".claude", "hooks", "dispatcher.log")
+
+	log, err := logger.NewFileLogger(logFile, false, false)
+	if err != nil {
+		return errors.Wrap(err, "failed to create logger")
+	}
+
+	log.Info("backup audit command invoked",
+		"operation", auditOperation,
+		"since", auditSince,
+		"snapshot", auditSnapshot,
+		"success", auditSuccess,
+		"failure", auditFailure,
+		"limit", backupLimit,
+		"json", backupJSON,
+	)
+
+	// Create audit logger
+	baseDir := filepath.Join(homeDir, internalconfig.GlobalConfigDir, ".backups")
+
+	auditLogger, err := backup.NewJSONLAuditLogger(baseDir)
+	if err != nil {
+		return errors.Wrap(err, "failed to create audit logger")
+	}
+
+	defer func() {
+		if closeErr := auditLogger.Close(); closeErr != nil {
+			log.Error("failed to close audit logger", "error", closeErr)
+		}
+	}()
+
+	// Build filter
+	filter := backup.AuditFilter{
+		Operation:  auditOperation,
+		SnapshotID: auditSnapshot,
+		Limit:      backupLimit,
+	}
+
+	// Parse since time
+	if auditSince != "" {
+		sinceTime, parseErr := time.Parse(time.RFC3339, auditSince)
+		if parseErr != nil {
+			return errors.Wrapf(parseErr, "invalid since time format: %s", auditSince)
+		}
+
+		filter.Since = sinceTime
+	}
+
+	// Parse success/failure filter
+	if auditSuccess && !auditFailure {
+		success := true
+		filter.Success = &success
+	} else if auditFailure && !auditSuccess {
+		success := false
+		filter.Success = &success
+	}
+
+	// Query audit log
+	entries, err := auditLogger.Query(filter)
+	if err != nil {
+		return errors.Wrap(err, "failed to query audit log")
+	}
+
+	// Output results
+	if backupJSON {
+		return outputBackupAuditJSON(entries)
+	}
+
+	outputBackupAuditTable(entries)
+
+	return nil
+}
+
+func outputBackupAuditJSON(entries []backup.AuditEntry) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+
+	if err := encoder.Encode(entries); err != nil {
+		return errors.Wrap(err, "encoding JSON output")
+	}
+
+	return nil
+}
+
+func outputBackupAuditTable(entries []backup.AuditEntry) {
+	if len(entries) == 0 {
+		fmt.Println("No audit entries found.")
+
+		return
+	}
+
+	fmt.Printf("Found %d audit entries:\n\n", len(entries))
+
+	for _, entry := range entries {
+		status := "✅"
+		if !entry.Success {
+			status = "❌"
+		}
+
+		fmt.Printf("%s %s  %s  %s\n",
+			status,
+			entry.Timestamp.Format("2006-01-02 15:04:05"),
+			entry.Operation,
+			entry.SnapshotID,
+		)
+
+		if entry.ConfigPath != "" {
+			fmt.Printf("    Config: %s\n", entry.ConfigPath)
+		}
+
+		if entry.User != "" {
+			fmt.Printf("    User: %s@%s\n", entry.User, entry.Hostname)
+		}
+
+		if !entry.Success && entry.Error != "" {
+			fmt.Printf("    Error: %s\n", entry.Error)
+		}
+
+		if entry.Extra != nil {
+			for key, value := range entry.Extra {
+				fmt.Printf("    %s: %v\n", key, value)
+			}
+		}
+
+		fmt.Println("")
+	}
 }
 
 //nolint:ireturn // Logger interface return is intentional for flexibility
