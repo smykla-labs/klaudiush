@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -208,17 +209,27 @@ func (*Manager) determineStorageType(index *SnapshotIndex) StorageType {
 }
 
 // generateChainID generates a chain ID for the snapshot.
-//
-//nolint:unparam // Will be dynamic when multi-chain logic is implemented
 func (*Manager) generateChainID(index *SnapshotIndex) string {
 	snapshots := index.List()
 	if len(snapshots) == 0 {
 		return "chain-1"
 	}
 
-	// For Phase 1, use a single chain
-	// Multi-chain logic will be implemented when delta is added
-	return "chain-1"
+	// For Phase 1, each full snapshot is its own chain
+	// This allows retention policies to work correctly
+	// In Phase 3, when delta is added, multiple snapshots will share chains
+	maxChainNum := 0
+
+	for _, snapshot := range snapshots {
+		var chainNum int
+
+		_, err := fmt.Sscanf(snapshot.ChainID, "chain-%d", &chainNum)
+		if err == nil && chainNum > maxChainNum {
+			maxChainNum = chainNum
+		}
+	}
+
+	return fmt.Sprintf("chain-%d", maxChainNum+1)
 }
 
 // getNextSequenceNumber returns the next sequence number for a chain.
@@ -260,4 +271,107 @@ func contains(s, substr string) bool {
 	}
 
 	return false
+}
+
+// RetentionResult contains information about retention operations.
+type RetentionResult struct {
+	// SnapshotsRemoved is the number of snapshots removed.
+	SnapshotsRemoved int
+
+	// ChainsRemoved is the number of chains removed.
+	ChainsRemoved int
+
+	// BytesFreed is the number of bytes freed.
+	BytesFreed int64
+
+	// RemovedSnapshots contains the IDs of removed snapshots.
+	RemovedSnapshots []string
+}
+
+// ApplyRetention applies a retention policy and removes snapshots that should not be retained.
+func (m *Manager) ApplyRetention(policy RetentionPolicy) (*RetentionResult, error) {
+	if !m.config.IsEnabled() {
+		return nil, ErrBackupDisabled
+	}
+
+	if policy == nil {
+		return nil, errors.New("policy cannot be nil")
+	}
+
+	if !m.storage.Exists() {
+		return &RetentionResult{}, nil
+	}
+
+	// Load index
+	index, err := m.storage.LoadIndex()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load index")
+	}
+
+	allSnapshots := index.List()
+	if len(allSnapshots) == 0 {
+		return &RetentionResult{}, nil
+	}
+
+	// Calculate total size
+	var totalSize int64
+	for _, snapshot := range allSnapshots {
+		totalSize += snapshot.Size
+	}
+
+	// Determine which snapshots to remove
+	toRemove := make([]Snapshot, 0)
+	removedChains := make(map[string]bool)
+
+	for _, snapshot := range allSnapshots {
+		chain := index.GetChain(snapshot.ChainID)
+
+		context := RetentionContext{
+			AllSnapshots: allSnapshots,
+			Chain:        chain,
+			TotalSize:    totalSize,
+			Now:          time.Now(),
+		}
+
+		if !policy.ShouldRetain(snapshot, context) {
+			toRemove = append(toRemove, snapshot)
+			removedChains[snapshot.ChainID] = true
+		}
+	}
+
+	// Remove snapshots
+	var bytesFreed int64
+
+	removedIDs := make([]string, 0, len(toRemove))
+
+	for _, snapshot := range toRemove {
+		// Delete from storage
+		if err := m.storage.Delete(snapshot.StoragePath); err != nil {
+			// Continue removing other snapshots even if one fails
+			// Log error but don't fail the entire operation
+			continue
+		}
+
+		// Delete from index
+		if err := index.Delete(snapshot.ID); err != nil {
+			continue
+		}
+
+		bytesFreed += snapshot.Size
+		removedIDs = append(removedIDs, snapshot.ID)
+	}
+
+	// Save updated index
+	if len(removedIDs) > 0 {
+		if err := m.storage.SaveIndex(index); err != nil {
+			return nil, errors.Wrap(err, "failed to save index after retention")
+		}
+	}
+
+	return &RetentionResult{
+		SnapshotsRemoved: len(removedIDs),
+		ChainsRemoved:    len(removedChains),
+		BytesFreed:       bytesFreed,
+		RemovedSnapshots: removedIDs,
+	}, nil
 }

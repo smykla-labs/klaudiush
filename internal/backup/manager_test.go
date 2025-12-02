@@ -148,7 +148,7 @@ var _ = Describe("Manager", func() {
 			Expect(err).To(MatchError(ContainSubstring("config file not found")))
 		})
 
-		It("increments sequence number", func() {
+		It("uses separate chains for full snapshots", func() {
 			opts := backup.CreateBackupOptions{
 				ConfigPath: configPath,
 				Trigger:    backup.TriggerManual,
@@ -158,6 +158,7 @@ var _ = Describe("Manager", func() {
 			snapshot1, err := manager.CreateBackup(opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(snapshot1.SequenceNum).To(Equal(1))
+			Expect(snapshot1.ChainID).To(Equal("chain-1"))
 
 			// Update config to create different content
 			err = os.WriteFile(configPath, []byte("test = false"), 0o600)
@@ -166,7 +167,8 @@ var _ = Describe("Manager", func() {
 			// Create second backup
 			snapshot2, err := manager.CreateBackup(opts)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(snapshot2.SequenceNum).To(Equal(2))
+			Expect(snapshot2.SequenceNum).To(Equal(1)) // New chain, so sequence is 1
+			Expect(snapshot2.ChainID).To(Equal("chain-2"))
 		})
 
 		Describe("Deduplication", func() {
@@ -475,6 +477,293 @@ var _ = Describe("Manager", func() {
 
 			Expect(snapshot.Timestamp).To(BeTemporally(">=", before))
 			Expect(snapshot.Timestamp).To(BeTemporally("<=", after))
+		})
+	})
+
+	Describe("ApplyRetention", func() {
+		var countPolicy *backup.CountRetentionPolicy
+
+		BeforeEach(func() {
+			var err error
+
+			err = storage.Initialize()
+			Expect(err).NotTo(HaveOccurred())
+
+			countPolicy, err = backup.NewCountRetentionPolicy(2)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns error for nil policy", func() {
+			_, err := manager.ApplyRetention(nil)
+			Expect(err).To(MatchError(ContainSubstring("policy cannot be nil")))
+		})
+
+		It("returns error when backup is disabled", func() {
+			disabled := false
+			cfg.Enabled = &disabled
+
+			_, err := manager.ApplyRetention(countPolicy)
+			Expect(err).To(MatchError(backup.ErrBackupDisabled))
+		})
+
+		It("returns empty result when storage not initialized", func() {
+			newStorage, err := backup.NewFilesystemStorage(
+				tmpDir+"/new",
+				backup.ConfigTypeGlobal,
+				"",
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			newManager, err := backup.NewManager(newStorage, cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := newManager.ApplyRetention(countPolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.SnapshotsRemoved).To(Equal(0))
+		})
+
+		It("returns empty result when no snapshots exist", func() {
+			result, err := manager.ApplyRetention(countPolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.SnapshotsRemoved).To(Equal(0))
+			Expect(result.ChainsRemoved).To(Equal(0))
+			Expect(result.BytesFreed).To(Equal(int64(0)))
+		})
+
+		It("removes snapshots that violate retention policy", func() {
+			opts := backup.CreateBackupOptions{
+				ConfigPath: configPath,
+				Trigger:    backup.TriggerManual,
+			}
+
+			// Create 3 snapshots with different content
+			snap1, err := manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = false"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			snap2, err := manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = nil"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			snap3, err := manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Apply retention (keep only 2)
+			result, err := manager.ApplyRetention(countPolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.SnapshotsRemoved).To(Equal(1))
+			Expect(result.BytesFreed).To(BeNumerically(">", 0))
+
+			// Verify oldest snapshot was removed
+			_, err = manager.Get(snap1.ID)
+			Expect(err).To(HaveOccurred())
+
+			// Verify newer snapshots still exist
+			_, err = manager.Get(snap2.ID)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.Get(snap3.ID)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("removes multiple snapshots when needed", func() {
+			policy, err := backup.NewCountRetentionPolicy(1)
+			Expect(err).NotTo(HaveOccurred())
+
+			opts := backup.CreateBackupOptions{
+				ConfigPath: configPath,
+				Trigger:    backup.TriggerManual,
+			}
+
+			// Create 3 snapshots
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = false"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = nil"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			snap3, err := manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Apply retention (keep only 1)
+			result, err := manager.ApplyRetention(policy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.SnapshotsRemoved).To(Equal(2))
+
+			// Only newest should remain
+			snapshots, err := manager.List()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(snapshots).To(HaveLen(1))
+			Expect(snapshots[0].ID).To(Equal(snap3.ID))
+		})
+
+		It("calculates bytes freed correctly", func() {
+			opts := backup.CreateBackupOptions{
+				ConfigPath: configPath,
+				Trigger:    backup.TriggerManual,
+			}
+
+			// Create snapshot
+			snap1, err := manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create second snapshot with different content
+			err = os.WriteFile(configPath, []byte("test = false\nanother = line"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create third snapshot with different content
+			err = os.WriteFile(configPath, []byte("test = nil\nyet = another"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Apply retention (keep only 2 chains)
+			result, err := manager.ApplyRetention(countPolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.BytesFreed).To(Equal(snap1.Size))
+		})
+
+		It("records removed snapshot IDs", func() {
+			opts := backup.CreateBackupOptions{
+				ConfigPath: configPath,
+				Trigger:    backup.TriggerManual,
+			}
+
+			// Create snapshots
+			snap1, err := manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = false"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = nil"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Apply retention
+			result, err := manager.ApplyRetention(countPolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RemovedSnapshots).To(ContainElement(snap1.ID))
+		})
+
+		It("works with age-based retention", func() {
+			agePolicy, err := backup.NewAgeRetentionPolicy(1 * time.Hour)
+			Expect(err).NotTo(HaveOccurred())
+
+			opts := backup.CreateBackupOptions{
+				ConfigPath: configPath,
+				Trigger:    backup.TriggerManual,
+			}
+
+			// Create snapshot (will be current time)
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Apply retention immediately (should keep all)
+			result, err := manager.ApplyRetention(agePolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.SnapshotsRemoved).To(Equal(0))
+
+			// All snapshots should still exist
+			snapshots, err := manager.List()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(snapshots).To(HaveLen(1))
+		})
+
+		It("works with size-based retention", func() {
+			sizePolicy, err := backup.NewSizeRetentionPolicy(20) // Very small size
+			Expect(err).NotTo(HaveOccurred())
+
+			opts := backup.CreateBackupOptions{
+				ConfigPath: configPath,
+				Trigger:    backup.TriggerManual,
+			}
+
+			// Create multiple snapshots to exceed size limit
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = false\nmore = content"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = nil\neven = more\nlines = here"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Apply retention
+			result, err := manager.ApplyRetention(sizePolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.SnapshotsRemoved).To(BeNumerically(">", 0))
+		})
+
+		It("works with composite retention policy", func() {
+			countPol, err := backup.NewCountRetentionPolicy(2)
+			Expect(err).NotTo(HaveOccurred())
+
+			agePol, err := backup.NewAgeRetentionPolicy(24 * time.Hour)
+			Expect(err).NotTo(HaveOccurred())
+
+			compositePolicy := backup.NewCompositeRetentionPolicy(countPol, agePol)
+
+			opts := backup.CreateBackupOptions{
+				ConfigPath: configPath,
+				Trigger:    backup.TriggerManual,
+			}
+
+			// Create 3 snapshots
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = false"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.WriteFile(configPath, []byte("test = nil"), 0o600)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = manager.CreateBackup(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Apply composite retention
+			result, err := manager.ApplyRetention(compositePolicy)
+
+			Expect(err).NotTo(HaveOccurred())
+			// Count policy will remove 1 (keep 2)
+			Expect(result.SnapshotsRemoved).To(Equal(1))
 		})
 	})
 })
