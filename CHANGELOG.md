@@ -5,6 +5,12 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0](https://github.com/smykla-labs/klaudiush/compare/v1.9.0...v1.10.0) (2025-12-02)
+
+### Features
+
+* **backup:** add backup and restore system ([#137](https://github.com/smykla-labs/klaudiush/issues/137)) ([f2a235e](https://github.com/smykla-labs/klaudiush/commit/f2a235ef0afb0927c6c351cf03f74f0b9db74e59))
+
 ## [1.9.0](https://github.com/smykla-labs/klaudiush/compare/v1.8.1...v1.9.0) (2025-12-02)
 
 ### Features
