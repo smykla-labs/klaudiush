@@ -246,6 +246,7 @@ func performFirstRunMigration(homeDir string, log logger.Logger) error {
 		globalConfigPath,
 		backup.ConfigTypeGlobal,
 		"",
+		homeDir,
 		log,
 	); err != nil {
 		log.Error("failed to backup global config", "error", err)
@@ -262,6 +263,7 @@ func performFirstRunMigration(homeDir string, log logger.Logger) error {
 			projectConfigPath,
 			backup.ConfigTypeProject,
 			workDir,
+			homeDir,
 			log,
 		); err != nil {
 			log.Error("failed to backup project config", "error", err)
@@ -288,17 +290,12 @@ func backupConfigIfExists(
 	configPath string,
 	configType backup.ConfigType,
 	projectPath string,
+	homeDir string,
 	log logger.Logger,
 ) error {
 	// Check if config exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil
-	}
-
-	// Get home directory for backup storage
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return errors.Wrap(err, "failed to get home directory")
 	}
 
 	// Create storage
