@@ -98,6 +98,10 @@ func (*DirectoryChecker) Category() doctor.Category {
 
 // Check performs the directory check.
 func (c *DirectoryChecker) Check(_ context.Context) doctor.CheckResult {
+	if c.provider == nil {
+		return doctor.FailError("Backup directory", "Storage provider not initialized")
+	}
+
 	baseDir := c.provider.GetBaseDir()
 	backupDir := filepath.Join(baseDir, backup.DefaultBackupDir)
 
@@ -172,6 +176,10 @@ func (*MetadataChecker) Category() doctor.Category {
 
 // Check performs the metadata check.
 func (c *MetadataChecker) Check(_ context.Context) doctor.CheckResult {
+	if c.provider == nil {
+		return doctor.FailError("Backup metadata", "Storage provider not initialized")
+	}
+
 	// Check global storage
 	globalStorage, err := c.provider.GetGlobalStorage()
 	if err != nil {
@@ -242,6 +250,10 @@ func (*IntegrityChecker) Category() doctor.Category {
 
 // Check performs the integrity check.
 func (c *IntegrityChecker) Check(ctx context.Context) doctor.CheckResult {
+	if c.provider == nil {
+		return doctor.FailError("Backup integrity", "Storage provider not initialized")
+	}
+
 	globalStorage, err := c.provider.GetGlobalStorage()
 	if err != nil {
 		return doctor.FailError(

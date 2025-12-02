@@ -3,6 +3,8 @@ package backup
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -272,23 +274,16 @@ func (*Manager) getNextSequenceNumber(index *SnapshotIndex, chainID string) int 
 func (*Manager) determineConfigType(configPath string) ConfigType {
 	// Check if path contains .klaudiush directory (project config)
 	// vs ~/.klaudiush (global config)
-	// This is a simple heuristic for Phase 1
-	if contains(configPath, "/.klaudiush/") {
-		return ConfigTypeProject
-	}
+	// Normalize the path and check if any component is .klaudiush
+	cleanPath := filepath.Clean(configPath)
 
-	return ConfigTypeGlobal
-}
-
-// contains checks if s contains substr.
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
+	for part := range strings.SplitSeq(cleanPath, string(filepath.Separator)) {
+		if part == ".klaudiush" {
+			return ConfigTypeProject
 		}
 	}
 
-	return false
+	return ConfigTypeGlobal
 }
 
 // RetentionResult contains information about retention operations.

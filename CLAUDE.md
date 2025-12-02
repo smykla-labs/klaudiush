@@ -274,7 +274,7 @@ Additional implementation details and policies are in `.claude/` files:
 - `session-github-quality.md` - OSSF Scorecard, branch rulesets API, Renovate version sync (customManagers:githubActionsVersions), smyklot bot workflows
 - `session-codeql-regex-security.md` - CodeQL regex anchor fixes (CWE-020), URL pattern anchoring with `(?:^|://|[^/a-zA-Z0-9])`, bounded quantifiers for ReDoS, prefix consumption in matches, GitHub push protection bypass for test secrets, PR review thread resolution
 - `session-rule-engine.md` - Rule engine implementation details (covered more comprehensively in `docs/RULES_GUIDE.md`)
-- `session-backup-system.md` - Backup system Phase 1-8 implementation (snapshot types, storage, manager, deduplication, retention policies, restore operations, writer integration, CLI commands, audit logging, doctor checks, comprehensive documentation), centralized storage architecture, interface-based design, security, testing (89.6% coverage)
+- `session-backup-system.md` - Backup system Phase 1-8 implementation (snapshot types, storage, manager, deduplication, retention policies, restore operations, writer integration, CLI commands, audit logging, doctor checks, comprehensive documentation), centralized storage architecture, interface-based design, security
 
 ## Plugin Documentation
 
