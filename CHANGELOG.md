@@ -5,6 +5,12 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1](https://github.com/smykla-labs/klaudiush/compare/v1.11.0...v1.11.1) (2025-12-03)
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-git/go-git/v6 to v6.0.0-20251202212438-5d40cdde8ca0 ([#147](https://github.com/smykla-labs/klaudiush/issues/147)) ([cfedfa9](https://github.com/smykla-labs/klaudiush/commit/cfedfa908aa3a89a1cafa46876900680985ef3a5))
+
 ## [1.11.0](https://github.com/smykla-labs/klaudiush/compare/v1.10.0...v1.11.0) (2025-12-02)
 
 ### Features
