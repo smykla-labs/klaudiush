@@ -1,0 +1,48 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":semanticCommits",
+    ":gitSignOff",
+    ":dependencyDashboard",
+    ":label(dependencies)",
+    ":rebaseStalePrs",
+    ":enableVulnerabilityAlertsWithAdditionalLabel(kind/security)",
+    ":automergeMinor",
+    ":automergeDigest",
+    ":automergeLinters",
+    ":automergeTesters",
+    ":prConcurrentLimit20",
+    "helpers:pinGitHubActionDigests",
+    "security:openssf-scorecard",
+    "group:linters"
+  ],
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "GitHub Actions dependencies",
+      "matchManagers": ["github-actions"],
+      "addLabels": ["area/ci"],
+      "semanticCommitType": "ci",
+      "commitMessageTopic": "{{depName}} action"
+    },
+    {
+      "description": "Group Go tool dependencies",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["require"],
+      "matchPackageNames": ["/^golang.org/x/tools/"],
+      "groupName": "Go tooling"
+    },
+    {
+      "description": "Group golangci-lint across mise and CI workflow",
+      "matchPackageNames": ["golangci-lint", "golangci/golangci-lint"],
+      "groupName": "golangci-lint"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "automerge": true
+  },
+  "ignorePaths": [
+    "**/tmp/**"
+  ]
+}

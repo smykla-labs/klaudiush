@@ -46,24 +46,13 @@ body:
       required: true
 
   - type: textarea
-    id: logs
-    attributes:
-      label: Logs
-      description: |
-        Please include relevant logs from `~/.claude/hooks/dispatcher.log`
-        Tip: You can attach files by clicking this area to highlight it and then dragging files in.
-      render: shell
-
-  - type: textarea
     id: environment
     attributes:
       label: Environment
       description: Please provide information about your environment
-      value: |
+      placeholder: |
         - OS: [e.g., macOS 14.0, Ubuntu 22.04]
-        - Go version: [e.g., 1.25.4]
-        - Claude Hooks version: [e.g., v1.0.0 or commit hash]
-        - Claude Code version: [e.g., 1.0.0]
+        - Version: [e.g., v1.0.0 or commit hash]
       render: markdown
     validations:
       required: true

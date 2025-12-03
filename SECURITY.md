@@ -16,57 +16,39 @@ If you discover a security vulnerability, please report it by emailing the maint
 
 ### Contact Information
 
-- **GitHub Security Advisories**: [Report via GitHub](https://github.com/smykla-labs/klaudiush/security/advisories/new)
 - **Email**: [bartek@smykla.com](mailto:bartek@smykla.com)
+- **GitHub Security Advisories**: Use the "Security" tab in the relevant repository
 
-To report a security vulnerability:
+### What to Include
 
-1. **Preferred**: Use [GitHub Security Advisories](https://github.com/smykla-labs/klaudiush/security/advisories/new)
-2. **Alternative**: Email [bartek@smykla.com](mailto:bartek@smykla.com)
-3. **Provide details**: Include as much information as possible about the vulnerability:
+Please provide as much information as possible about the vulnerability:
 
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-   - Suggested fix (if available)
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if available)
 
-4. **Wait for response**: You should receive a response within 48 hours
-5. **Coordinated disclosure**: Please allow time for the vulnerability to be fixed before public disclosure
+### Response Timeline
 
-## Security Update Process
+- **Acknowledgment**: We will acknowledge receipt of your vulnerability report within 48 hours
+- **Investigation**: We will investigate and validate the reported vulnerability
+- **Fix**: We will develop and test a fix
+- **Release**: We will release a security update
+- **Disclosure**: We will publicly disclose the vulnerability after the fix is released
 
-1. **Acknowledgment**: We will acknowledge receipt of your vulnerability report within 48 hours
-2. **Investigation**: We will investigate and validate the reported vulnerability
-3. **Fix**: We will develop and test a fix
-4. **Release**: We will release a security update
-5. **Disclosure**: We will publicly disclose the vulnerability after the fix is released
+### Coordinated Disclosure
 
-## Best Practices
+Please allow time for the vulnerability to be fixed before public disclosure.
 
-When using Claude Hooks:
+## Security Best Practices
 
-- Keep your installation up to date with the latest version
-- Review hook configurations regularly
-- Use GPG signing for commits (`-S` flag)
-- Enable signoff for commits (`-s` flag)
-- Follow the principle of least privilege when configuring validators
-- Review logs regularly: `~/.claude/hooks/dispatcher.log`
+When contributing to smykla-labs projects:
 
-## Security Features
-
-Claude Hooks includes several security features:
-
-- **Command validation**: Validates commands before execution
-- **Path protection**: Blocks writes to sensitive paths like `/tmp`
-- **Commit signing enforcement**: Requires GPG-signed commits
-- **Signoff validation**: Enforces Developer Certificate of Origin
-- **Timeout protection**: Prevents long-running validations from hanging
-
-## Known Security Considerations
-
-- Claude Hooks runs as a PreToolUse hook and has access to command inputs
-- Logs are stored in plaintext at `~/.claude/hooks/dispatcher.log`
-- Git operations may execute external commands
+- Keep dependencies up to date
+- Never commit secrets, credentials, or API keys
+- Use environment variables for sensitive configuration
+- Follow the principle of least privilege
+- Review code changes for security implications
 
 ## Acknowledgments
 
