@@ -300,6 +300,91 @@ EOF
 	})
 })
 
+var _ = Describe("ContainsUnpoisonAttempt", func() {
+	Context("with KLACK env var marker", func() {
+		It("returns true for KLACK= at start", func() {
+			Expect(session.ContainsUnpoisonAttempt(`KLACK="SESS:GIT001" echo test`)).To(BeTrue())
+		})
+
+		It("returns true for KLACK= without quotes", func() {
+			Expect(session.ContainsUnpoisonAttempt(`KLACK=SESS:GIT001 echo test`)).To(BeTrue())
+		})
+
+		It("returns true for KLACK= in middle of command", func() {
+			cmd := `export KLACK="SESS:GIT001" && echo test`
+			Expect(session.ContainsUnpoisonAttempt(cmd)).To(BeTrue())
+		})
+
+		It("returns true for substring match (lenient behavior)", func() {
+			// ContainsUnpoisonAttempt is intentionally lenient - it's a quick check
+			// to prevent deadlocks, not a precise parser
+			Expect(session.ContainsUnpoisonAttempt(`MY_KLACK="value" echo test`)).To(BeTrue())
+		})
+
+		It("returns false for KLACK without equals", func() {
+			Expect(session.ContainsUnpoisonAttempt(`echo KLACK is a variable`)).To(BeFalse())
+		})
+	})
+
+	Context("with comment marker", func() {
+		It("returns true for # SESS: comment", func() {
+			Expect(session.ContainsUnpoisonAttempt("echo test # SESS:GIT001")).To(BeTrue())
+		})
+
+		It("returns true for comment with just prefix", func() {
+			Expect(session.ContainsUnpoisonAttempt("echo test # SESS:")).To(BeTrue())
+		})
+
+		It("returns false for comment without space before SESS", func() {
+			// Only matches "# SESS:" not "#SESS:"
+			Expect(session.ContainsUnpoisonAttempt("echo test #SESS:GIT001")).To(BeFalse())
+		})
+
+		It("returns false for SESS: without hash-space prefix", func() {
+			Expect(session.ContainsUnpoisonAttempt("echo SESS:GIT001")).To(BeFalse())
+		})
+	})
+
+	Context("with complex commands", func() {
+		It("returns true for heredoc with KLACK", func() {
+			cmd := `KLACK="SESS:FILE005" cat << 'EOF' | pbcopy
+some content
+EOF`
+			Expect(session.ContainsUnpoisonAttempt(cmd)).To(BeTrue())
+		})
+
+		It("returns true for pipeline with comment", func() {
+			Expect(
+				session.ContainsUnpoisonAttempt("cat file | grep test # SESS:GIT001"),
+			).To(BeTrue())
+		})
+
+		It("returns true for chained commands with KLACK", func() {
+			Expect(
+				session.ContainsUnpoisonAttempt(`KLACK="SESS:GIT001" git add . && git commit`),
+			).To(BeTrue())
+		})
+	})
+
+	Context("without unpoison markers", func() {
+		It("returns false for simple command", func() {
+			Expect(session.ContainsUnpoisonAttempt("echo hello")).To(BeFalse())
+		})
+
+		It("returns false for command with regular comment", func() {
+			Expect(session.ContainsUnpoisonAttempt("echo test # just a comment")).To(BeFalse())
+		})
+
+		It("returns false for empty string", func() {
+			Expect(session.ContainsUnpoisonAttempt("")).To(BeFalse())
+		})
+
+		It("returns false for EXC token (wrong prefix)", func() {
+			Expect(session.ContainsUnpoisonAttempt("echo test # EXC:GIT001:reason")).To(BeFalse())
+		})
+	})
+})
+
 var _ = Describe("CheckUnpoisonAcknowledgment", func() {
 	Context("with empty poison codes", func() {
 		It("returns acknowledged for nil codes", func() {

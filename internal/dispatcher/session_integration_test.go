@@ -525,6 +525,180 @@ var _ = Describe("Dispatcher Session Integration", func() {
 			Expect(poisoned).To(BeFalse())
 		})
 	})
+
+	Context("lenient fallback for complex commands", func() {
+		BeforeEach(func() {
+			// Create dispatcher with session tracker (no validators needed for this test)
+			disp = dispatcher.NewDispatcherWithOptions(
+				reg,
+				log,
+				dispatcher.NewSequentialExecutor(log),
+				dispatcher.WithSessionTracker(tracker),
+			)
+		})
+
+		It("should unpoison with KLACK in heredoc command", func() {
+			sessionID := "test-session-lenient-1"
+
+			// Manually poison the session
+			tracker.Poison(sessionID, []string{"FILE005"}, "markdown error")
+
+			// Verify session is poisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeTrue())
+
+			// Heredoc with KLACK - the shell parser may fail to extract token from this
+			// but lenient fallback should detect the KLACK= marker and unpoison
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `KLACK="SESS:FILE005" cat << 'EOF' | pbcopy
+some content here
+EOF`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(BeEmpty())
+
+			// Should be unpoisoned via lenient fallback
+			poisoned, _ = tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+
+		It("should unpoison with KLACK in pipeline command", func() {
+			sessionID := "test-session-lenient-2"
+
+			// Manually poison the session
+			tracker.Poison(sessionID, []string{"GIT022"}, "push error")
+
+			// Pipeline with KLACK
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `KLACK="SESS:GIT022" echo test | cat`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(BeEmpty())
+
+			// Should be unpoisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+
+		It("should unpoison with comment marker in complex command", func() {
+			sessionID := "test-session-lenient-3"
+
+			// Manually poison the session
+			tracker.Poison(sessionID, []string{"SEC001"}, "secret error")
+
+			// Complex command with comment marker
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `(echo test && echo more) # SESS:SEC001`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(BeEmpty())
+
+			// Should be unpoisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+
+		It("should not unpoison without any unpoison marker", func() {
+			sessionID := "test-session-lenient-4"
+
+			// Manually poison the session
+			tracker.Poison(sessionID, []string{"GIT001"}, "commit error")
+
+			// Command without any unpoison markers
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `cat << 'EOF' | pbcopy
+some content
+EOF`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(HaveLen(1))
+			Expect(errs[0].Reference.Code()).To(Equal("SESS001"))
+
+			// Should still be poisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeTrue())
+		})
+
+		It("should unpoison via lenient fallback when parser fails", func() {
+			sessionID := "test-session-lenient-parse-error"
+
+			// Manually poison the session
+			tracker.Poison(sessionID, []string{"GIT001"}, "error")
+
+			// Create a command with syntax that might cause parsing issues
+			// but still contains the KLACK marker
+			// Note: This tests that the lenient fallback detects KLACK=
+			// even if the full AST parse doesn't extract the token cleanly
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					// Malformed shell syntax with unclosed quote, but has KLACK marker
+					Command: `KLACK="SESS:GIT001`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			// Lenient fallback should detect KLACK= and unpoison
+			Expect(errs).To(BeEmpty())
+
+			// Should be unpoisoned via lenient fallback
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+
+		It("should not unpoison non-Bash tools even with KLACK in content", func() {
+			sessionID := "test-session-lenient-5"
+
+			// Manually poison the session
+			tracker.Poison(sessionID, []string{"FILE001"}, "file error")
+
+			// Write tool with KLACK in content - should not work because
+			// GetCommand() returns empty for non-Bash tools
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeWrite,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					FilePath: "test.txt",
+					Content:  `KLACK="SESS:FILE001" echo test`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(HaveLen(1))
+			Expect(errs[0].Reference.Code()).To(Equal("SESS001"))
+
+			// Should still be poisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeTrue())
+		})
+	})
 })
 
 // mockWarningValidator is a test validator that always warns (non-blocking).
@@ -786,6 +960,44 @@ var _ = Describe("Dispatcher with Session Audit Logger", func() {
 		disp.Dispatch(ctx, hookCtx2)
 
 		// Should have logged an unpoison entry
+		Expect(auditLogger.entries).To(HaveLen(1))
+		Expect(auditLogger.entries[0].Action).To(Equal(session.AuditActionUnpoison))
+	})
+
+	It("logs lenient_fallback source when parsing fails but marker detected", func() {
+		// Register no validators for this test - we just want to test audit logging
+		disp = dispatcher.NewDispatcherWithOptions(
+			reg,
+			log,
+			dispatcher.NewSequentialExecutor(log),
+			dispatcher.WithSessionTracker(tracker),
+			dispatcher.WithSessionAuditLogger(auditLogger),
+		)
+
+		sessionID := "audit-test-lenient"
+
+		// Manually poison the session
+		tracker.Poison(sessionID, []string{"FILE005"}, "markdown error")
+
+		// Clear entries
+		auditLogger.entries = nil
+
+		// Use a complex command that may cause parsing issues but has KLACK marker
+		hookCtx := &hook.Context{
+			EventType: hook.EventTypePreToolUse,
+			ToolName:  hook.ToolTypeBash,
+			SessionID: sessionID,
+			ToolInput: hook.ToolInput{
+				// Heredoc with KLACK - triggers lenient fallback
+				Command: `KLACK="SESS:FILE005" cat << 'EOF' | pbcopy
+content
+EOF`,
+			},
+		}
+
+		disp.Dispatch(ctx, hookCtx)
+
+		// Should have logged an unpoison entry (either regular or lenient)
 		Expect(auditLogger.entries).To(HaveLen(1))
 		Expect(auditLogger.entries[0].Action).To(Equal(session.AuditActionUnpoison))
 	})

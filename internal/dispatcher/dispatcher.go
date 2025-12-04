@@ -365,6 +365,11 @@ func (d *Dispatcher) validateBashFileWrites(
 // checkUnpoisonAcknowledgment checks if the current command contains an unpoison token
 // that acknowledges all poison codes. If all codes are acknowledged, it unpoisons
 // the session and returns true. Otherwise, returns false.
+//
+// IMPORTANT: To prevent deadlocks, this function is lenient when it detects an
+// unpoison attempt. If the command contains unpoison markers (KLACK= or # SESS:)
+// but parsing fails, the command is allowed through to prevent the session from
+// becoming permanently stuck.
 func (d *Dispatcher) checkUnpoisonAcknowledgment(
 	hookCtx *hook.Context,
 	info *session.SessionInfo,
@@ -375,6 +380,9 @@ func (d *Dispatcher) checkUnpoisonAcknowledgment(
 		return false
 	}
 
+	// Quick check: does this look like an unpoison attempt?
+	hasUnpoisonAttempt := session.ContainsUnpoisonAttempt(command)
+
 	// Check if the command contains an unpoison acknowledgment token
 	result, err := session.CheckUnpoisonAcknowledgmentFull(
 		command,
@@ -384,6 +392,30 @@ func (d *Dispatcher) checkUnpoisonAcknowledgment(
 		d.logger.Debug("failed to parse unpoison token",
 			"error", err,
 		)
+
+		// If it looks like an unpoison attempt but parsing failed,
+		// be lenient and allow the command through to prevent deadlocks.
+		// The command will still be validated by normal validators.
+		if hasUnpoisonAttempt {
+			d.logger.Info("allowing command with unpoison attempt despite parse error",
+				"session_id", hookCtx.SessionID,
+				"error", err,
+			)
+
+			// Unpoison since we're being lenient (user is clearly trying)
+			d.sessionTracker.Unpoison(hookCtx.SessionID)
+
+			// Log audit entry for lenient unpoison
+			d.logSessionAuditEntry(
+				hookCtx,
+				session.AuditActionUnpoison,
+				info.PoisonCodes,
+				"lenient_fallback",
+				"",
+			)
+
+			return true
+		}
 
 		return false
 	}
