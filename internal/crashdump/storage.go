@@ -54,17 +54,13 @@ func NewFilesystemStorage(dumpDir string) (*FilesystemStorage, error) {
 	}
 
 	// Expand home directory
-	if dumpDir[0] == '~' {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get home directory")
-		}
-
-		dumpDir = filepath.Join(home, dumpDir[1:])
+	expandedDir, err := expandHomeDir(dumpDir)
+	if err != nil {
+		return nil, err
 	}
 
 	return &FilesystemStorage{
-		dumpDir: dumpDir,
+		dumpDir: expandedDir,
 	}, nil
 }
 
