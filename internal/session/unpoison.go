@@ -387,6 +387,14 @@ func CheckUnpoisonAcknowledgment(
 	return false, result.UnacknowledgedCodes, nil
 }
 
+// ContainsUnpoisonAttempt checks if the command contains markers that suggest
+// an unpoison attempt (KLACK= or # SESS:). This is a quick string check used
+// for lenient fallback handling when full parsing fails.
+func ContainsUnpoisonAttempt(command string) bool {
+	return strings.Contains(command, DefaultUnpoisonEnvVar+"=") ||
+		strings.Contains(command, "# "+DefaultUnpoisonPrefix+":")
+}
+
 // CheckUnpoisonAcknowledgmentFull checks if the given command contains an unpoison token
 // that acknowledges all the specified poison codes, returning full details.
 func CheckUnpoisonAcknowledgmentFull(
