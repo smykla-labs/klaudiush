@@ -32,6 +32,12 @@ klaudiush completion powershell   # generate powershell completion
 ./bin/klaudiush debug exceptions                  # show exception config
 ./bin/klaudiush debug exceptions --state          # include rate limit state
 
+# Crash (crash dump management)
+klaudiush debug crash list                        # list all crash dumps
+klaudiush debug crash view <id>                   # view crash dump details
+klaudiush debug crash clean                       # remove old dumps
+klaudiush debug crash clean --dry-run             # show what would be removed
+
 # Audit (exception audit log management)
 ./bin/klaudiush audit list                        # list all entries
 ./bin/klaudiush audit list --error-code GIT019    # filter by code
@@ -313,6 +319,7 @@ Framework: Ginkgo/Gomega. 336 tests. Run: `mise exec -- go test -v ./pkg/parser 
 
 - `0`: Allowed (pass/warn/no match)
 - `2`: Blocked (fail with `ShouldBlock=true`)
+- `3`: Crash (panic with crash dump created)
 
 ## GitHub Push Protection
 
@@ -413,3 +420,47 @@ klaudiush backup audit [--operation OP --since TIME --snapshot ID]
 ```
 
 Doctor integration: `klaudiush doctor --category backup [--fix]`
+
+## Crash Dump System
+
+Automatic diagnostic collection on panic for troubleshooting crashes.
+
+**Core Components**:
+
+- **Dump Writer** (`internal/crashdump/writer.go`): Atomic JSON writes with `crash-{timestamp}-{shortID}.json` naming
+- **Collector** (`internal/crashdump/collector.go`): Captures panic value, stack trace (panicking goroutine only), runtime info (GOOS/GOARCH/NumGoroutine/Version), sanitized config, hook context. Handles Go 1.21+ `*runtime.PanicNilError` from `panic(nil)`.
+- **Storage** (`internal/crashdump/storage.go`): List/get/delete/prune operations with age and count-based retention
+- **Sanitizer** (`internal/crashdump/sanitizer.go`): Removes sensitive fields (*token*, *secret*, *password*, *key*, *credential*) from config snapshots
+- **CLI Commands** (`cmd/klaudiush/crash.go`): List, view, and clean crash dumps
+
+**Configuration** (`pkg/config/crashdump.go`):
+
+```toml
+[crash_dump]
+enabled = true                              # Enable automatic dumps (default)
+dump_dir = "~/.klaudiush/crash_dumps"      # Storage location
+max_dumps = 10                              # Maximum dumps to keep
+max_age = "720h"                            # 30 days retention
+include_config = true                       # Include sanitized config
+include_context = true                      # Include hook context
+```
+
+**Usage**:
+
+```bash
+# List all crash dumps (sorted newest first)
+klaudiush debug crash list
+
+# View full details including stack trace
+klaudiush debug crash view crash-20251204T160432-a1b2c3
+
+# Clean old dumps based on retention policy
+klaudiush debug crash clean
+klaudiush debug crash clean --dry-run       # Preview removals
+```
+
+**Integration** (`cmd/klaudiush/main.go`): Panic recovery wrapper in main() creates dumps on crash, logs dump path, exits with code 3.
+
+**Defaults**: Enabled with automatic cleanup (10 dumps max, 30-day retention). No manual configuration required.
+
+**Example Config**: See `examples/config/crashdump.toml` for all options.

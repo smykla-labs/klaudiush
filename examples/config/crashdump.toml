@@ -1,0 +1,74 @@
+# Crash Dump Configuration Example
+# This shows all available crash dump configuration options
+
+[crash_dump]
+# Enable automatic crash dump creation on panic
+# When enabled, klaudiush will capture diagnostic information whenever it crashes
+# Default: true
+enabled = true
+
+# Directory where crash dumps are stored
+# Supports tilde expansion for home directory
+# Default: "~/.klaudiush/crash_dumps"
+dump_dir = "~/.klaudiush/crash_dumps"
+
+# Maximum number of crash dumps to keep
+# When this limit is exceeded, oldest dumps are removed automatically
+# Set to 0 for unlimited (not recommended)
+# Default: 10
+max_dumps = 10
+
+# Maximum age of crash dumps before they are pruned
+# Accepts duration strings: "24h", "720h", "30d"
+# Set to "0" for unlimited retention (not recommended)
+# Default: "720h" (30 days)
+max_age = "720h"
+
+# Include sanitized configuration snapshot in crash dumps
+# Config is automatically sanitized to remove sensitive fields:
+#   - Fields matching: *token*, *secret*, *password*, *key*, *credential*
+# Useful for debugging configuration-related crashes
+# Default: true
+include_config = true
+
+# Include hook context in crash dumps
+# Captures the tool invocation that triggered the crash:
+#   - Event type (PreToolUse, PostToolUse, Notification)
+#   - Tool name (Bash, Write, Edit, etc.)
+#   - Command or file path being processed
+# Essential for reproducing crashes
+# Default: true
+include_context = true
+
+# Example configurations for different use cases:
+
+# Production: Extended retention with more dumps
+# [crash_dump]
+# enabled = true
+# dump_dir = "~/.klaudiush/crash_dumps"
+# max_dumps = 20
+# max_age = "2160h"  # 90 days
+# include_config = true
+# include_context = true
+
+# Development: More dumps, shorter retention
+# [crash_dump]
+# enabled = true
+# dump_dir = "~/.klaudiush/crash_dumps"
+# max_dumps = 15
+# max_age = "336h"  # 14 days
+# include_config = true
+# include_context = true
+
+# Minimal storage: Conservative limits
+# [crash_dump]
+# enabled = true
+# dump_dir = "~/.klaudiush/crash_dumps"
+# max_dumps = 5
+# max_age = "168h"  # 7 days
+# include_config = false
+# include_context = true
+
+# Disabled: No crash dumps created
+# [crash_dump]
+# enabled = false
