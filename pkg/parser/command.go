@@ -50,11 +50,12 @@ type Location struct {
 
 // Command represents a parsed command with metadata.
 type Command struct {
-	Name     string   // Command name (e.g., "git")
-	Args     []string // Command arguments
-	Location Location // Position in source
-	Type     CmdType  // Command type
-	Raw      string   // Raw command string
+	Name             string   // Command name (e.g., "git")
+	Args             []string // Command arguments
+	Location         Location // Position in source
+	Type             CmdType  // Command type
+	Raw              string   // Raw command string
+	WorkingDirectory string   // Effective working directory from preceding cd commands
 }
 
 // String returns a string representation of the command.

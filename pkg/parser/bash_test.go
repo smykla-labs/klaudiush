@@ -660,5 +660,96 @@ EOF`
 				Expect(locations[0].Context).To(Equal(parser.QuotingContextUnquoted))
 			})
 		})
+
+		Context("directory context tracking with cd commands", func() {
+			It("tracks directory change from cd command", func() {
+				result, err := p.Parse("cd /tmp && git status")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Commands).To(HaveLen(2))
+
+				cdCmd := result.Commands[0]
+				Expect(cdCmd.Name).To(Equal("cd"))
+				Expect(cdCmd.Args).To(Equal([]string{"/tmp"}))
+				Expect(cdCmd.WorkingDirectory).To(BeEmpty())
+
+				gitCmd := result.Commands[1]
+				Expect(gitCmd.Name).To(Equal("git"))
+				Expect(gitCmd.WorkingDirectory).To(Equal("/tmp"))
+			})
+
+			It("tracks multiple directory changes", func() {
+				result, err := p.Parse("cd /home && ls && cd /tmp && git status")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Commands).To(HaveLen(4))
+
+				Expect(result.Commands[0].Name).To(Equal("cd"))
+				Expect(result.Commands[0].WorkingDirectory).To(BeEmpty())
+
+				Expect(result.Commands[1].Name).To(Equal("ls"))
+				Expect(result.Commands[1].WorkingDirectory).To(Equal("/home"))
+
+				Expect(result.Commands[2].Name).To(Equal("cd"))
+				Expect(result.Commands[2].WorkingDirectory).To(Equal("/home"))
+
+				Expect(result.Commands[3].Name).To(Equal("git"))
+				Expect(result.Commands[3].WorkingDirectory).To(Equal("/tmp"))
+			})
+
+			It("tracks directory context in user's failing scenario", func() {
+				result, err := p.Parse(
+					"cd ~/Projects/github.com/smykla-labs/smyklot && " +
+						"git fetch upstream main && " +
+						"git checkout -b feat/sync-smyklot-version upstream/main",
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Commands).To(HaveLen(3))
+
+				cdCmd := result.Commands[0]
+				Expect(cdCmd.Name).To(Equal("cd"))
+				Expect(cdCmd.Args).To(Equal([]string{"~/Projects/github.com/smykla-labs/smyklot"}))
+				Expect(cdCmd.WorkingDirectory).To(BeEmpty())
+
+				fetchCmd := result.Commands[1]
+				Expect(fetchCmd.Name).To(Equal("git"))
+				Expect(fetchCmd.Args[0]).To(Equal("fetch"))
+				Expect(fetchCmd.WorkingDirectory).To(
+					Equal("~/Projects/github.com/smykla-labs/smyklot"),
+				)
+
+				checkoutCmd := result.Commands[2]
+				Expect(checkoutCmd.Name).To(Equal("git"))
+				Expect(checkoutCmd.Args[0]).To(Equal("checkout"))
+				Expect(checkoutCmd.WorkingDirectory).To(
+					Equal("~/Projects/github.com/smykla-labs/smyklot"),
+				)
+			})
+
+			It("handles cd without affecting commands before it", func() {
+				result, err := p.Parse("git status && cd /tmp && git log")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Commands).To(HaveLen(3))
+
+				Expect(result.Commands[0].Name).To(Equal("git"))
+				Expect(result.Commands[0].WorkingDirectory).To(BeEmpty())
+
+				Expect(result.Commands[1].Name).To(Equal("cd"))
+				Expect(result.Commands[1].WorkingDirectory).To(BeEmpty())
+
+				Expect(result.Commands[2].Name).To(Equal("git"))
+				Expect(result.Commands[2].WorkingDirectory).To(Equal("/tmp"))
+			})
+
+			It("ignores cd without arguments", func() {
+				result, err := p.Parse("cd && git status")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Commands).To(HaveLen(2))
+
+				Expect(result.Commands[0].Name).To(Equal("cd"))
+				Expect(result.Commands[0].WorkingDirectory).To(BeEmpty())
+
+				Expect(result.Commands[1].Name).To(Equal("git"))
+				Expect(result.Commands[1].WorkingDirectory).To(BeEmpty())
+			})
+		})
 	})
 })

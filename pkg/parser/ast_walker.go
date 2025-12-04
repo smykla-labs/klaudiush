@@ -8,6 +8,7 @@ import (
 type astWalker struct {
 	commands   []Command
 	fileWrites []FileWrite
+	currentDir string // Tracks the effective working directory from cd commands
 }
 
 // visit is called for each node in the AST.
@@ -53,13 +54,19 @@ func (w *astWalker) extractCommand(call *syntax.CallExpr) {
 	cmdType := CmdTypeSimple
 
 	cmd := Command{
-		Name:     name,
-		Args:     args,
-		Location: loc,
-		Type:     cmdType,
+		Name:             name,
+		Args:             args,
+		Location:         loc,
+		Type:             cmdType,
+		WorkingDirectory: w.currentDir,
 	}
 
 	w.commands = append(w.commands, cmd)
+
+	// Check if this is a cd command and update current directory
+	if name == "cd" && len(args) > 0 {
+		w.currentDir = args[0]
+	}
 
 	// Check if this is a file write command
 	w.extractFileWriteCommand(cmd)
