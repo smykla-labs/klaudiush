@@ -39,6 +39,9 @@ tmp/
 # Task cache
 .task/
 
+# User configuration
+.klaudiush/
+
 .gemini/
 gha-creds-*.json
 .gemini-clipboard
