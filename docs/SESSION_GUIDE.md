@@ -298,6 +298,99 @@ Fix: Acknowledge violations to unpoison: KLACK="SESS:GIT001,GIT002" your_command
 
 Claude Code can parse the `unpoison` field to automatically add the token to the next command attempt.
 
+## Audit Logging
+
+Session audit logging provides a complete trail of poison and unpoison events for troubleshooting and compliance.
+
+### Configuration
+
+Session audit logging is enabled by default:
+
+```toml
+[session.audit]
+enabled = true
+log_file = "~/.klaudiush/session_audit.jsonl"
+max_size_mb = 10
+max_age_days = 30
+max_backups = 5
+```
+
+### Disabling Audit Logging
+
+```toml
+[session.audit]
+enabled = false
+```
+
+### Audit Entry Format
+
+Each audit entry is a JSON object on a single line (JSONL format):
+
+```json
+{
+  "timestamp": "2025-12-04T10:30:05Z",
+  "action": "Poison",
+  "session_id": "abc-123",
+  "poison_codes": ["GIT001", "GIT002"],
+  "poison_message": "git commit -sS flag missing",
+  "command": "git commit -m \"fix\"",
+  "working_dir": "/project"
+}
+```
+
+```json
+{
+  "timestamp": "2025-12-04T10:31:00Z",
+  "action": "Unpoison",
+  "session_id": "abc-123",
+  "poison_codes": ["GIT001", "GIT002"],
+  "source": "env_var",
+  "command": "KLACK=\"SESS:GIT001,GIT002\" git commit -sS -m \"fix\"",
+  "working_dir": "/project"
+}
+```
+
+### Audit Entry Fields
+
+| Field            | Description                                                |
+|------------------|------------------------------------------------------------|
+| `timestamp`      | When the action occurred                                   |
+| `action`         | `Poison` or `Unpoison`                                     |
+| `session_id`     | Claude Code session identifier                             |
+| `poison_codes`   | Error codes involved                                       |
+| `source`         | Token source: `env_var` or `comment` (unpoison only)       |
+| `command`        | Command that triggered the action (truncated to 500 chars) |
+| `poison_message` | Original error message (poison only)                       |
+| `working_dir`    | Working directory                                          |
+
+### Log Rotation
+
+- Rotation triggers when log exceeds `max_size_mb`
+- Backup files named `session_audit.YYYYMMDD-HHMMSS.jsonl`
+- Oldest backups deleted when exceeding `max_backups`
+
+### Log Cleanup
+
+- Entries older than `max_age_days` are removed during cleanup
+- Cleanup runs automatically on rotation
+- Manual cleanup: restart klaudiush or trigger rotation
+
+### Viewing Audit Logs
+
+```bash
+# View recent entries
+tail ~/.klaudiush/session_audit.jsonl | jq
+
+# Filter by action
+jq 'select(.action == "Unpoison")' ~/.klaudiush/session_audit.jsonl
+
+# Filter by session
+jq 'select(.session_id == "abc-123")' ~/.klaudiush/session_audit.jsonl
+
+# Count poison/unpoison events
+jq -s 'group_by(.action) | map({action: .[0].action, count: length})' ~/.klaudiush/session_audit.jsonl
+```
+
 ## Implementation Details
 
 ### Session Context Fields

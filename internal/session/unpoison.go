@@ -351,6 +351,21 @@ func unpoisonWordToString(word *syntax.Word) string {
 	return result.String()
 }
 
+// UnpoisonAcknowledgmentResult contains the result of checking for unpoison acknowledgment.
+type UnpoisonAcknowledgmentResult struct {
+	// Acknowledged is true if all poison codes were acknowledged.
+	Acknowledged bool
+
+	// UnacknowledgedCodes contains codes that were not acknowledged.
+	UnacknowledgedCodes []string
+
+	// Source indicates where the token was found (if any).
+	Source UnpoisonTokenSource
+
+	// Token is the parsed unpoison token (if found).
+	Token *UnpoisonToken
+}
+
 // CheckUnpoisonAcknowledgment checks if the given command contains an unpoison token
 // that acknowledges all the specified poison codes.
 // Returns true if all codes are acknowledged, false otherwise.
@@ -359,23 +374,48 @@ func CheckUnpoisonAcknowledgment(
 	command string,
 	poisonCodes []string,
 ) (acknowledged bool, unacknowledgedCodes []string, err error) {
-	if len(poisonCodes) == 0 {
-		return true, nil, nil
-	}
-
-	parser := NewUnpoisonParser()
-
-	result, err := parser.Parse(command)
+	result, err := CheckUnpoisonAcknowledgmentFull(command, poisonCodes)
 	if err != nil {
 		return false, poisonCodes, err
 	}
 
-	if !result.Found {
-		return false, poisonCodes, nil
+	// Return nil instead of empty slice when acknowledged
+	if result.Acknowledged {
+		return true, nil, nil
 	}
 
-	ackedSet := make(map[string]struct{}, len(result.Token.Codes))
-	for _, code := range result.Token.Codes {
+	return false, result.UnacknowledgedCodes, nil
+}
+
+// CheckUnpoisonAcknowledgmentFull checks if the given command contains an unpoison token
+// that acknowledges all the specified poison codes, returning full details.
+func CheckUnpoisonAcknowledgmentFull(
+	command string,
+	poisonCodes []string,
+) (*UnpoisonAcknowledgmentResult, error) {
+	if len(poisonCodes) == 0 {
+		return &UnpoisonAcknowledgmentResult{Acknowledged: true}, nil
+	}
+
+	parser := NewUnpoisonParser()
+
+	parseResult, err := parser.Parse(command)
+	if err != nil {
+		return &UnpoisonAcknowledgmentResult{
+			Acknowledged:        false,
+			UnacknowledgedCodes: poisonCodes,
+		}, err
+	}
+
+	if !parseResult.Found {
+		return &UnpoisonAcknowledgmentResult{
+			Acknowledged:        false,
+			UnacknowledgedCodes: poisonCodes,
+		}, nil
+	}
+
+	ackedSet := make(map[string]struct{}, len(parseResult.Token.Codes))
+	for _, code := range parseResult.Token.Codes {
 		ackedSet[code] = struct{}{}
 	}
 
@@ -387,9 +427,12 @@ func CheckUnpoisonAcknowledgment(
 		}
 	}
 
-	if len(unacked) > 0 {
-		return false, unacked, nil
+	result := &UnpoisonAcknowledgmentResult{
+		Acknowledged:        len(unacked) == 0,
+		UnacknowledgedCodes: unacked,
+		Source:              parseResult.Source,
+		Token:               parseResult.Token,
 	}
 
-	return true, nil, nil
+	return result, nil
 }

@@ -207,6 +207,11 @@ Fast-fail mechanism preventing subsequent commands from executing after a blocki
   - Sources: `KLACK` env var or shell comment
   - `CheckUnpoisonAcknowledgment()` - Check if all poison codes are acknowledged
 
+- **Audit Logger** (`audit.go`): Audit trail for poison/unpoison events
+  - JSONL format with rotation and retention
+  - Records action type, session ID, codes, source, command
+  - Configurable via `[session.audit]` in config
+
 - **Persistence** (`persistence.go`): Atomic file I/O with proper permissions
   - JSON serialization to `~/.klaudiush/session_state.json`
   - Atomic writes (tmp + rename), file permissions 0600, dir permissions 0700
@@ -221,6 +226,13 @@ Fast-fail mechanism preventing subsequent commands from executing after a blocki
 enabled = true  # Default: true
 state_file = "~/.klaudiush/session_state.json"
 max_session_age = "24h"  # Auto-expire old sessions
+
+[session.audit]
+enabled = true  # Default: true
+log_file = "~/.klaudiush/session_audit.jsonl"
+max_size_mb = 10
+max_age_days = 30
+max_backups = 5
 ```
 
 **Error Code**: `SESS001` - Session poisoned by previous blocking error

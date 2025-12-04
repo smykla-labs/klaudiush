@@ -4,7 +4,9 @@ package dispatcher
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 
@@ -38,6 +40,15 @@ type SessionTracker interface {
 	RecordCommand(sessionID string)
 
 	// IsEnabled returns true if session tracking is enabled.
+	IsEnabled() bool
+}
+
+// SessionAuditLogger logs session events (poison/unpoison) for audit purposes.
+type SessionAuditLogger interface {
+	// Log writes an audit entry to the log file.
+	Log(entry *session.AuditEntry) error
+
+	// IsEnabled returns true if audit logging is enabled.
 	IsEnabled() bool
 }
 
@@ -79,11 +90,12 @@ func shortName(name string) string {
 
 // Dispatcher orchestrates validation of hook contexts.
 type Dispatcher struct {
-	registry         *validator.Registry
-	logger           logger.Logger
-	executor         Executor
-	exceptionChecker ExceptionChecker
-	sessionTracker   SessionTracker
+	registry           *validator.Registry
+	logger             logger.Logger
+	executor           Executor
+	exceptionChecker   ExceptionChecker
+	sessionTracker     SessionTracker
+	sessionAuditLogger SessionAuditLogger
 }
 
 // NewDispatcher creates a new Dispatcher with sequential execution.
@@ -125,6 +137,15 @@ func WithSessionTracker(tracker SessionTracker) DispatcherOption {
 	return func(d *Dispatcher) {
 		if tracker != nil {
 			d.sessionTracker = tracker
+		}
+	}
+}
+
+// WithSessionAuditLogger sets the session audit logger for the dispatcher.
+func WithSessionAuditLogger(auditLogger SessionAuditLogger) DispatcherOption {
+	return func(d *Dispatcher) {
+		if auditLogger != nil {
+			d.sessionAuditLogger = auditLogger
 		}
 	}
 }
@@ -197,6 +218,15 @@ func (d *Dispatcher) Dispatch(ctx context.Context, hookCtx *hook.Context) []*Val
 			)
 
 			d.sessionTracker.Poison(hookCtx.SessionID, codes, message)
+
+			// Log audit entry for poison
+			d.logSessionAuditEntry(
+				hookCtx,
+				session.AuditActionPoison,
+				codes,
+				"", // no source for poison (it's from validation failure)
+				message,
+			)
 		} else {
 			// Record command when validation passes or only has warnings (no blocking errors)
 			d.sessionTracker.RecordCommand(hookCtx.SessionID)
@@ -346,7 +376,7 @@ func (d *Dispatcher) checkUnpoisonAcknowledgment(
 	}
 
 	// Check if the command contains an unpoison acknowledgment token
-	acknowledged, unackedCodes, err := session.CheckUnpoisonAcknowledgment(
+	result, err := session.CheckUnpoisonAcknowledgmentFull(
 		command,
 		info.PoisonCodes,
 	)
@@ -358,12 +388,13 @@ func (d *Dispatcher) checkUnpoisonAcknowledgment(
 		return false
 	}
 
-	if !acknowledged {
-		if len(unackedCodes) > 0 && len(unackedCodes) < len(info.PoisonCodes) {
+	if !result.Acknowledged {
+		if len(result.UnacknowledgedCodes) > 0 &&
+			len(result.UnacknowledgedCodes) < len(info.PoisonCodes) {
 			// Partial acknowledgment - log which codes still need acknowledgment
 			d.logger.Info("partial unpoison acknowledgment",
 				"session_id", hookCtx.SessionID,
-				"unacknowledged_codes", unackedCodes,
+				"unacknowledged_codes", result.UnacknowledgedCodes,
 			)
 		}
 
@@ -373,7 +404,58 @@ func (d *Dispatcher) checkUnpoisonAcknowledgment(
 	// All codes acknowledged - unpoison the session
 	d.sessionTracker.Unpoison(hookCtx.SessionID)
 
+	// Log audit entry for unpoison
+	d.logSessionAuditEntry(
+		hookCtx,
+		session.AuditActionUnpoison,
+		info.PoisonCodes,
+		result.Source.String(),
+		"",
+	)
+
 	return true
+}
+
+// logSessionAuditEntry logs a session audit entry if audit logging is enabled.
+func (d *Dispatcher) logSessionAuditEntry(
+	hookCtx *hook.Context,
+	action session.AuditAction,
+	codes []string,
+	source string,
+	poisonMessage string,
+) {
+	if d.sessionAuditLogger == nil || !d.sessionAuditLogger.IsEnabled() {
+		return
+	}
+
+	// Truncate command to prevent sensitive data leakage
+	command := hookCtx.GetCommand()
+
+	const maxCommandLength = 500
+	if len(command) > maxCommandLength {
+		command = command[:maxCommandLength] + "..."
+	}
+
+	// Get working directory
+	workingDir, _ := os.Getwd()
+
+	entry := &session.AuditEntry{
+		Timestamp:     time.Now(),
+		Action:        action,
+		SessionID:     hookCtx.SessionID,
+		PoisonCodes:   codes,
+		Source:        source,
+		Command:       command,
+		PoisonMessage: poisonMessage,
+		WorkingDir:    workingDir,
+	}
+
+	if err := d.sessionAuditLogger.Log(entry); err != nil {
+		d.logger.Error("failed to log session audit entry",
+			"action", action.String(),
+			"error", err,
+		)
+	}
 }
 
 // ShouldBlock returns true if any validation error should block the operation.
