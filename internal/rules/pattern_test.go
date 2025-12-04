@@ -486,7 +486,7 @@ var _ = Describe("Pattern", func() {
 
 // Helper function to compile a pattern without error handling.
 //
-//nolint:ireturn // test helper returns interface intentionally
+
 func mustCompilePattern(s string) rules.Pattern {
 	p, err := rules.CompilePattern(s)
 	if err != nil {

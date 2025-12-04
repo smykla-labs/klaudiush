@@ -25,6 +25,13 @@ const (
 	statusEnabledLower = "enabled"
 )
 
+// Filter constants.
+const (
+	filterGit          = "git"
+	filterFile         = "file"
+	filterNotification = "notification"
+)
+
 var validatorFilter string
 
 var debugCmd = &cobra.Command{
@@ -33,6 +40,7 @@ var debugCmd = &cobra.Command{
 	Long: `Debug klaudiush configuration and internal state.
 
 Subcommands:
+  config      Show loaded configuration
   rules       Show loaded validation rules
   exceptions  Show exception workflow configuration`,
 }
@@ -49,6 +57,21 @@ Examples:
   klaudiush debug rules                    # Show all rules
   klaudiush debug rules --validator git.push  # Show rules for git.push validator`,
 	RunE: runDebugRules,
+}
+
+var debugConfigCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Show loaded configuration",
+	Long: `Show loaded configuration from all sources.
+
+Displays configuration files loaded, their paths and modification times,
+and the final merged configuration values. Useful for debugging configuration
+issues and understanding which settings are active.
+
+Examples:
+  klaudiush debug config               # Show all configuration
+  klaudiush debug config --validator git.push  # Show git.push config only`,
+	RunE: runDebugConfig,
 }
 
 var debugExceptionsCmd = &cobra.Command{
@@ -69,8 +92,16 @@ var showState bool
 
 func init() {
 	rootCmd.AddCommand(debugCmd)
+	debugCmd.AddCommand(debugConfigCmd)
 	debugCmd.AddCommand(debugRulesCmd)
 	debugCmd.AddCommand(debugExceptionsCmd)
+
+	debugConfigCmd.Flags().StringVar(
+		&validatorFilter,
+		"validator",
+		"",
+		"Filter config by validator type (e.g., git.push, file.markdown)",
+	)
 
 	debugRulesCmd.Flags().StringVar(
 		&validatorFilter,
@@ -564,4 +595,238 @@ func formatLimits(maxHour, maxDay int) string {
 	}
 
 	return hourStr + "/hour, " + dayStr + "/day"
+}
+
+func runDebugConfig(_ *cobra.Command, _ []string) error {
+	cfg, err := setupDebugContext("debug config", "validatorFilter", validatorFilter)
+	if err != nil {
+		return err
+	}
+
+	displayFullConfig(cfg, validatorFilter)
+
+	return nil
+}
+
+func displayFullConfig(cfg *config.Config, filter string) {
+	// Header
+	fmt.Println("Configuration")
+	fmt.Println("=============")
+	fmt.Println("")
+
+	// Config sources
+	displayConfigSources()
+
+	// Global settings
+	fmt.Println("Global Settings")
+	fmt.Println("---------------")
+
+	if cfg.Global != nil {
+		useSDK := true
+		if cfg.Global.UseSDKGit != nil {
+			useSDK = *cfg.Global.UseSDKGit
+		}
+
+		fmt.Printf("  Use SDK Git: %v\n", useSDK)
+		fmt.Printf("  Default Timeout: %s\n", cfg.Global.DefaultTimeout)
+	}
+
+	fmt.Println("")
+
+	// Validators config
+	displayValidatorsConfig(cfg, filter)
+}
+
+func displayConfigSources() {
+	fmt.Println("Configuration Sources")
+	fmt.Println("--------------------")
+
+	loader, err := internalconfig.NewKoanfLoader()
+	if err != nil {
+		fmt.Printf("  ⚠️  Could not create loader: %v\n", err)
+		fmt.Println("")
+
+		return
+	}
+
+	// Global config
+	globalPath := loader.GlobalConfigPath()
+	displayConfigFile("Global", globalPath)
+
+	// Project config
+	projectPath := loader.FindProjectConfigPath()
+	if projectPath != "" {
+		displayConfigFile("Project", projectPath)
+	} else {
+		fmt.Println("  Project: (none)")
+	}
+
+	fmt.Println("")
+}
+
+func displayConfigFile(label, path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		fmt.Printf("  %s: %s (not found)\n", label, path)
+		return
+	}
+
+	// Check if symlink
+	linkTarget := ""
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(path)
+		if err == nil {
+			linkTarget = " -> " + target
+		}
+	}
+
+	fmt.Printf("  %s: %s%s\n", label, path, linkTarget)
+	fmt.Printf("    Modified: %s\n", info.ModTime().Format("2006-01-02 15:04:05"))
+	fmt.Printf("    Size: %d bytes\n", info.Size())
+}
+
+func displayValidatorsConfig(cfg *config.Config, filter string) {
+	if cfg.Validators == nil {
+		return
+	}
+
+	// Show git validators if no filter or filter matches
+	if filter == "" || filter == filterGit || strings.HasPrefix(filter, "git.") {
+		displayGitValidators(cfg.Validators.Git, filter)
+	}
+
+	// Show file validators if no filter or filter matches
+	if filter == "" || filter == filterFile || strings.HasPrefix(filter, "file.") {
+		displayFileValidators(cfg.Validators.File, filter)
+	}
+
+	// Show notification validators if no filter or filter matches
+	if filter == "" || filter == filterNotification || strings.HasPrefix(filter, "notification.") {
+		displayNotificationValidators(cfg.Validators.Notification, filter)
+	}
+}
+
+func displayGitValidators(git *config.GitConfig, filter string) {
+	if git == nil {
+		return
+	}
+
+	fmt.Println("Git Validators")
+	fmt.Println("--------------")
+
+	// Push validator
+	displayGitPushConfig(git, filter)
+
+	// Commit validator
+	displayGitCommitConfig(git, filter)
+
+	fmt.Println("")
+}
+
+func displayGitPushConfig(git *config.GitConfig, filter string) {
+	if filter != "" && filter != filterGit && filter != "git.push" {
+		return
+	}
+
+	if git.Push == nil {
+		return
+	}
+
+	fmt.Println("  git.push:")
+	fmt.Printf("    Enabled: %v\n", git.Push.IsEnabled())
+	fmt.Printf("    Severity: %s\n", git.Push.GetSeverity())
+
+	if len(git.Push.BlockedRemotes) > 0 {
+		fmt.Printf("    Blocked Remotes: %v\n", git.Push.BlockedRemotes)
+	}
+
+	if len(git.Push.AllowedRemotePriority) > 0 {
+		fmt.Printf("    Allowed Remote Priority: %v\n", git.Push.AllowedRemotePriority)
+	}
+}
+
+func displayGitCommitConfig(git *config.GitConfig, filter string) {
+	if filter != "" && filter != filterGit && filter != "git.commit" {
+		return
+	}
+
+	if git.Commit == nil {
+		return
+	}
+
+	fmt.Println("  git.commit:")
+	fmt.Printf("    Enabled: %v\n", git.Commit.IsEnabled())
+	fmt.Printf("    Severity: %s\n", git.Commit.GetSeverity())
+	fmt.Printf("    Required Flags: %v\n", git.Commit.RequiredFlags)
+
+	checkStaging := true
+	if git.Commit.CheckStagingArea != nil {
+		checkStaging = *git.Commit.CheckStagingArea
+	}
+
+	fmt.Printf("    Check Staging Area: %v\n", checkStaging)
+}
+
+func displayFileValidators(file *config.FileConfig, filter string) {
+	if file == nil {
+		return
+	}
+
+	hasMatch := false
+
+	// Check if any file validator matches filter
+	if filter == "" || filter == "file.markdown" || strings.HasPrefix(filter, "file.") {
+		hasMatch = hasMatch || file.Markdown != nil
+	}
+
+	if filter == "" || filter == "file.shellscript" || strings.HasPrefix(filter, "file.") {
+		hasMatch = hasMatch || file.ShellScript != nil
+	}
+
+	if !hasMatch {
+		return
+	}
+
+	fmt.Println("File Validators")
+	fmt.Println("---------------")
+
+	if filter == "" || filter == "file.markdown" || strings.HasPrefix(filter, "file.") {
+		if file.Markdown != nil {
+			fmt.Println("  file.markdown:")
+			fmt.Printf("    Enabled: %v\n", file.Markdown.IsEnabled())
+			fmt.Printf("    Severity: %s\n", file.Markdown.GetSeverity())
+		}
+	}
+
+	if filter == "" || filter == "file.shellscript" || strings.HasPrefix(filter, "file.") {
+		if file.ShellScript != nil {
+			fmt.Println("  file.shellscript:")
+			fmt.Printf("    Enabled: %v\n", file.ShellScript.IsEnabled())
+			fmt.Printf("    Severity: %s\n", file.ShellScript.GetSeverity())
+		}
+	}
+
+	fmt.Println("")
+}
+
+func displayNotificationValidators(notif *config.NotificationConfig, filter string) {
+	if notif == nil {
+		return
+	}
+
+	if filter != "" && !strings.HasPrefix(filter, "notification.") {
+		return
+	}
+
+	fmt.Println("Notification Validators")
+	fmt.Println("-----------------------")
+
+	if notif.Bell != nil {
+		fmt.Println("  notification.bell:")
+		fmt.Printf("    Enabled: %v\n", notif.Bell.IsEnabled())
+		fmt.Printf("    Severity: %s\n", notif.Bell.GetSeverity())
+	}
+
+	fmt.Println("")
 }
