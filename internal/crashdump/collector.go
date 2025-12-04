@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/smykla-labs/klaudiush/pkg/config"
@@ -14,18 +15,36 @@ import (
 )
 
 const (
-	// stackBufferSize is the initial buffer size for stack trace capture.
-	stackBufferSize = 4096
-
-	// maxStackSize is the maximum stack trace size.
-	maxStackSize = 64 * 1024
-
 	// shortIDLength is the length of the short ID suffix.
 	shortIDLength = 8
-
-	// stackGrowthFactor is the multiplier for growing stack buffer.
-	stackGrowthFactor = 2
 )
+
+// formatPanicValue converts a recovered panic value to a string representation.
+// Handles Go 1.21+ PanicNilError, error interface, and default cases.
+func formatPanicValue(v any) string {
+	if v == nil {
+		return "panic(nil)"
+	}
+
+	// Go 1.21+ converts panic(nil) to *runtime.PanicNilError
+	// Use type assertion with interface to avoid direct dependency
+	type panicNilError interface {
+		error
+		RuntimeError()
+	}
+
+	if _, ok := v.(panicNilError); ok {
+		return "panic(nil)"
+	}
+
+	// Handle error interface
+	if err, ok := v.(error); ok {
+		return err.Error()
+	}
+
+	// Default: use fmt.Sprintf
+	return fmt.Sprintf("%v", v)
+}
 
 // Collector collects crash diagnostic information.
 type Collector interface {
@@ -57,7 +76,7 @@ func (c *DefaultCollector) Collect(
 	cfg *config.Config,
 ) *CrashInfo {
 	now := time.Now()
-	panicValue := fmt.Sprintf("%v", recovered)
+	panicValue := formatPanicValue(recovered)
 	stackTrace := captureStack()
 
 	info := &CrashInfo{
@@ -81,21 +100,10 @@ func (c *DefaultCollector) Collect(
 }
 
 // captureStack captures the stack trace of the panicking goroutine.
+// Uses debug.Stack() which automatically sizes the buffer and returns
+// the stack trace for the current goroutine.
 func captureStack() string {
-	buf := make([]byte, stackBufferSize)
-
-	for {
-		n := runtime.Stack(buf, false) // false = current goroutine only
-		if n < len(buf) {
-			return string(buf[:n])
-		}
-
-		if len(buf) >= maxStackSize {
-			return string(buf)
-		}
-
-		buf = make([]byte, len(buf)*stackGrowthFactor)
-	}
+	return string(debug.Stack())
 }
 
 // collectRuntime gathers runtime information.
