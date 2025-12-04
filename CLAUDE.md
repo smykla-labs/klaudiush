@@ -89,7 +89,7 @@ Represents tool invocations: `EventType` (PreToolUse/PostToolUse/Notification), 
 
 **Creating**: 1) Embed `BaseValidator`, 2) Implement `Validate(ctx *hook.Context)`, 3) Register in `main.go:registerValidators()`
 
-**Error Format Policy**: Validators return errors with structured format including error codes (GIT001-GIT024, FILE001-FILE009, SEC001-SEC005, SHELL001-SHELL005), automatic fix hints from suggestions registry, and documentation URLs (`https://klaudiu.sh/{CODE}`). Use `FailWithRef(ref, msg)` to auto-populate fix hints - NEVER set `FixHint` manually. Error priority determines which reference is shown when multiple rules fail. See `.claude/validator-error-format-policy.md` for comprehensive guide.
+**Error Format Policy**: Validators return errors with structured format including error codes (GIT001-GIT024, FILE001-FILE009, SEC001-SEC005, SHELL001-SHELL005, SESS001), automatic fix hints from suggestions registry, and documentation URLs (`https://klaudiu.sh/{CODE}`). Use `FailWithRef(ref, msg)` to auto-populate fix hints - NEVER set `FixHint` manually. Error priority determines which reference is shown when multiple rules fail. See `.claude/validator-error-format-policy.md` for comprehensive guide.
 
 ### Rule Engine (`internal/rules/`)
 
@@ -178,6 +178,49 @@ min_reason_length = 10
 ```
 
 **Documentation**: See `docs/EXCEPTIONS_GUIDE.md` for complete guide. Example configs in `examples/exceptions/`.
+
+### Session Tracking (`internal/session/`)
+
+Fast-fail mechanism preventing subsequent commands from executing after a blocking error occurs in the same Claude Code session.
+
+**Problem**: When klaudiush blocks a command (exit 2), Claude Code continues executing queued commands independently, causing poor UX as each fails one-by-one.
+
+**Solution**: Track session state. When any command is blocked, "poison" the session. Subsequent commands immediately fail with reference to original error.
+
+**Core Components**:
+
+- **Tracker** (`tracker.go`): Main session tracking logic with thread-safe state management
+  - `IsPoisoned(sessionID)` - Check if session is poisoned
+  - `Poison(sessionID, code, message)` - Mark session as poisoned
+  - `RecordCommand(sessionID)` - Increment command count
+  - `CleanupExpired()` - Remove sessions older than max age
+
+- **State** (`state.go`): Session state types
+  - `SessionInfo` - Per-session metadata (status, poison info, command count, timestamps)
+  - `Status` enum - Clean/Poisoned (enumer generated)
+  - `SessionState` - Global state container with sessions map
+
+- **Persistence** (`persistence.go`): Atomic file I/O with proper permissions
+  - JSON serialization to `~/.klaudiush/session_state.json`
+  - Atomic writes (tmp + rename), file permissions 0600, dir permissions 0700
+  - Home directory expansion for `~` in paths
+
+**Integration**: Dispatcher checks session state before validation. If poisoned, returns `SESS001` error with reference to original blocking error. On validation failure with `ShouldBlock=true`, dispatcher poisons the session.
+
+**Configuration** (`pkg/config/session.go`):
+
+```toml
+[session]
+enabled = true  # Default: true
+state_file = "~/.klaudiush/session_state.json"
+max_session_age = "24h"  # Auto-expire old sessions
+```
+
+**Error Code**: `SESS001` - Session poisoned by previous blocking error
+
+**Session Context**: Parser extracts `session_id`, `tool_use_id`, `transcript_path` from Claude Code hook JSON. Available in `pkg/hook/context.go` Context struct.
+
+**Documentation**: See `docs/SESSION_GUIDE.md` for user guide and troubleshooting.
 
 ### Linter Abstractions (`internal/linters/`)
 
@@ -288,6 +331,7 @@ Additional implementation details and policies are in `.claude/` files:
 - `session-codeql-regex-security.md` - CodeQL regex anchor fixes (CWE-020), URL pattern anchoring with `(?:^|://|[^/a-zA-Z0-9])`, bounded quantifiers for ReDoS, prefix consumption in matches, GitHub push protection bypass for test secrets, PR review thread resolution
 - `session-rule-engine.md` - Rule engine implementation details (covered more comprehensively in `docs/RULES_GUIDE.md`)
 - `session-backup-system.md` - Backup system Phase 1-8 implementation (snapshot types, storage, manager, deduplication, retention policies, restore operations, writer integration, CLI commands, audit logging, doctor checks, comprehensive documentation), centralized storage architecture, interface-based design, security
+- `session-poisoning.md` - Session poisoning implementation (parser extensions, dispatcher integration, config schema, error codes SESS001, fast-fail mechanism after blocking errors)
 
 ## Plugin Documentation
 
@@ -318,6 +362,15 @@ Exception workflow guide available in `docs/EXCEPTIONS_GUIDE.md` with example co
 - **development.toml** - Relaxed limits for development environments
 
 Debug exceptions with: `klaudiush debug exceptions`
+
+## Session Documentation
+
+Session tracking guide available in `docs/SESSION_GUIDE.md`:
+
+- Feature overview and problem statement
+- Configuration options (enabled, state_file, max_session_age)
+- Troubleshooting session issues
+- SESS001 error code explanation
 
 ## Backup Documentation
 
