@@ -165,7 +165,14 @@ func (d *Dispatcher) Dispatch(ctx context.Context, hookCtx *hook.Context) []*Val
 				"poison_codes", info.PoisonCodes,
 			)
 
-			return []*ValidationError{createPoisonedSessionError(info)}
+			// Check for unpoison acknowledgment token
+			if !d.checkUnpoisonAcknowledgment(hookCtx, info) {
+				return []*ValidationError{createPoisonedSessionError(info)}
+			}
+
+			d.logger.Info("session unpoisoned via acknowledgment",
+				"session_id", hookCtx.SessionID,
+			)
 		}
 	}
 
@@ -323,6 +330,50 @@ func (d *Dispatcher) validateBashFileWrites(
 	}
 
 	return allErrors
+}
+
+// checkUnpoisonAcknowledgment checks if the current command contains an unpoison token
+// that acknowledges all poison codes. If all codes are acknowledged, it unpoisons
+// the session and returns true. Otherwise, returns false.
+func (d *Dispatcher) checkUnpoisonAcknowledgment(
+	hookCtx *hook.Context,
+	info *session.SessionInfo,
+) bool {
+	// Get command from context (only Bash commands have commands to check)
+	command := hookCtx.GetCommand()
+	if command == "" {
+		return false
+	}
+
+	// Check if the command contains an unpoison acknowledgment token
+	acknowledged, unackedCodes, err := session.CheckUnpoisonAcknowledgment(
+		command,
+		info.PoisonCodes,
+	)
+	if err != nil {
+		d.logger.Debug("failed to parse unpoison token",
+			"error", err,
+		)
+
+		return false
+	}
+
+	if !acknowledged {
+		if len(unackedCodes) > 0 && len(unackedCodes) < len(info.PoisonCodes) {
+			// Partial acknowledgment - log which codes still need acknowledgment
+			d.logger.Info("partial unpoison acknowledgment",
+				"session_id", hookCtx.SessionID,
+				"unacknowledged_codes", unackedCodes,
+			)
+		}
+
+		return false
+	}
+
+	// All codes acknowledged - unpoison the session
+	d.sessionTracker.Unpoison(hookCtx.SessionID)
+
+	return true
 }
 
 // ShouldBlock returns true if any validation error should block the operation.

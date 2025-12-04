@@ -284,6 +284,247 @@ var _ = Describe("Dispatcher Session Integration", func() {
 			Expect(errs2[0].Reference.Code()).To(Equal("GIT001"))
 		})
 	})
+
+	Context("session unpoisoning", func() {
+		BeforeEach(func() {
+			// Register a blocking validator for git commit only
+			reg.Register(
+				&mockBlockingValidator{
+					name:      "test-blocker",
+					reference: validator.RefGitNoSignoff,
+				},
+				validator.And(
+					validator.EventTypeIs(hook.EventTypePreToolUse),
+					validator.ToolTypeIs(hook.ToolTypeBash),
+					validator.CommandContains("git commit"),
+				),
+			)
+
+			// Create dispatcher with session tracker
+			disp = dispatcher.NewDispatcherWithOptions(
+				reg,
+				log,
+				dispatcher.NewSequentialExecutor(log),
+				dispatcher.WithSessionTracker(tracker),
+			)
+		})
+
+		It("should unpoison session with valid acknowledgment token in env var", func() {
+			sessionID := "test-session-unpoison-1"
+
+			// First command - poisons session
+			hookCtx1 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: "git commit",
+				},
+			}
+
+			errs1 := disp.Dispatch(ctx, hookCtx1)
+			Expect(errs1).To(HaveLen(1))
+			Expect(errs1[0].Reference.Code()).To(Equal("GIT001"))
+
+			// Verify session is poisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeTrue())
+
+			// Second command with unpoison token in env var
+			hookCtx2 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `KLACK="SESS:GIT001" echo fixed`,
+				},
+			}
+
+			errs2 := disp.Dispatch(ctx, hookCtx2)
+			// Should pass (no matching validators for echo)
+			Expect(errs2).To(BeEmpty())
+
+			// Verify session is unpoisoned
+			poisoned, _ = tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+
+		It("should unpoison session with valid acknowledgment token in comment", func() {
+			sessionID := "test-session-unpoison-2"
+
+			// First command - poisons session
+			hookCtx1 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: "git commit",
+				},
+			}
+
+			errs1 := disp.Dispatch(ctx, hookCtx1)
+			Expect(errs1).To(HaveLen(1))
+
+			// Second command with unpoison token in comment
+			hookCtx2 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `echo fixed # SESS:GIT001`,
+				},
+			}
+
+			errs2 := disp.Dispatch(ctx, hookCtx2)
+			Expect(errs2).To(BeEmpty())
+
+			// Verify session is unpoisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+
+		It("should remain poisoned without acknowledgment token", func() {
+			sessionID := "test-session-unpoison-3"
+
+			// First command - poisons session
+			hookCtx1 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: "git commit",
+				},
+			}
+
+			disp.Dispatch(ctx, hookCtx1)
+
+			// Second command without token
+			hookCtx2 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: "echo no token",
+				},
+			}
+
+			errs2 := disp.Dispatch(ctx, hookCtx2)
+			Expect(errs2).To(HaveLen(1))
+			Expect(errs2[0].Reference.Code()).To(Equal("SESS001"))
+
+			// Session should still be poisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeTrue())
+		})
+
+		It("should remain poisoned with wrong acknowledgment code", func() {
+			sessionID := "test-session-unpoison-4"
+
+			// First command - poisons session with GIT001
+			hookCtx1 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: "git commit",
+				},
+			}
+
+			disp.Dispatch(ctx, hookCtx1)
+
+			// Second command with wrong code
+			hookCtx2 := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `KLACK="SESS:GIT999" echo wrong`,
+				},
+			}
+
+			errs2 := disp.Dispatch(ctx, hookCtx2)
+			Expect(errs2).To(HaveLen(1))
+			Expect(errs2[0].Reference.Code()).To(Equal("SESS001"))
+		})
+
+		It("should require all codes for multi-code poison", func() {
+			sessionID := "test-session-unpoison-5"
+
+			// Manually poison with multiple codes
+			tracker.Poison(sessionID, []string{"GIT001", "GIT002"}, "multiple errors")
+
+			// Verify session is poisoned with multiple codes
+			poisoned, info := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeTrue())
+			Expect(info.PoisonCodes).To(Equal([]string{"GIT001", "GIT002"}))
+
+			// Try with only one code - should fail (partial acknowledgment)
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `KLACK="SESS:GIT001" echo partial`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(HaveLen(1))
+			Expect(errs[0].Reference.Code()).To(Equal("SESS001"))
+
+			// Still poisoned
+			poisoned, _ = tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeTrue())
+		})
+
+		It("should unpoison with all codes acknowledged", func() {
+			sessionID := "test-session-unpoison-6"
+
+			// Manually poison with multiple codes
+			tracker.Poison(sessionID, []string{"GIT001", "GIT002"}, "multiple errors")
+
+			// Acknowledge all codes
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `KLACK="SESS:GIT001,GIT002" echo all acked`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(BeEmpty())
+
+			// Should be unpoisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+
+		It("should allow acknowledging superset of codes", func() {
+			sessionID := "test-session-unpoison-7"
+
+			// Manually poison with one code
+			tracker.Poison(sessionID, []string{"GIT001"}, "single error")
+
+			// Acknowledge more codes than needed (superset)
+			hookCtx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				SessionID: sessionID,
+				ToolInput: hook.ToolInput{
+					Command: `KLACK="SESS:GIT001,GIT002,GIT003" echo superset`,
+				},
+			}
+
+			errs := disp.Dispatch(ctx, hookCtx)
+			Expect(errs).To(BeEmpty())
+
+			// Should be unpoisoned
+			poisoned, _ := tracker.IsPoisoned(sessionID)
+			Expect(poisoned).To(BeFalse())
+		})
+	})
 })
 
 // mockWarningValidator is a test validator that always warns (non-blocking).
