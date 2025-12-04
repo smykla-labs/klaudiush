@@ -431,8 +431,8 @@ EOF
 			})
 		})
 
-		Context("with CommandDirectory from cd command", func() {
-			It("returns CommandDirectory when no -C flag", func() {
+		Context("with WorkingDirectory from cd command", func() {
+			It("returns WorkingDirectory when no -C flag", func() {
 				cmd := parser.Command{
 					Name:             "git",
 					Args:             []string{"status"},
@@ -445,8 +445,8 @@ EOF
 			})
 		})
 
-		Context("with both -C flag and CommandDirectory", func() {
-			It("prioritizes -C flag over CommandDirectory", func() {
+		Context("with both -C flag and WorkingDirectory", func() {
+			It("prioritizes -C flag over WorkingDirectory", func() {
 				cmd := parser.Command{
 					Name:             "git",
 					Args:             []string{"-C", "/explicit/path", "status"},
@@ -459,7 +459,7 @@ EOF
 			})
 		})
 
-		Context("with neither -C flag nor CommandDirectory", func() {
+		Context("with neither -C flag nor WorkingDirectory", func() {
 			It("returns empty string", func() {
 				cmd := parser.Command{
 					Name: "git",

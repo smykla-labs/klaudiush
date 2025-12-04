@@ -20,7 +20,7 @@ type GitCommand struct {
 	Args             []string          // Positional arguments
 	FlagMap          map[string]string // Flag values (e.g., "-m" -> "commit message")
 	GlobalOptions    map[string]string // Global git options (e.g., "-C" -> "/path/to/repo")
-	CommandDirectory string            // Working directory from preceding cd commands
+	WorkingDirectory string            // Working directory from preceding cd commands
 }
 
 // Global git options that take a value.
@@ -76,7 +76,7 @@ func ParseGitCommand(cmd Command) (*GitCommand, error) {
 		Args:             make([]string, 0),
 		FlagMap:          make(map[string]string),
 		GlobalOptions:    make(map[string]string),
-		CommandDirectory: cmd.WorkingDirectory,
+		WorkingDirectory: cmd.WorkingDirectory,
 	}
 
 	// First, parse global options and find the subcommand
@@ -353,8 +353,8 @@ func (g *GitCommand) GetWorkingDirectory() string {
 	}
 
 	// Then check the cd command's directory from bash context
-	if g.CommandDirectory != "" {
-		return g.CommandDirectory
+	if g.WorkingDirectory != "" {
+		return g.WorkingDirectory
 	}
 
 	return ""
