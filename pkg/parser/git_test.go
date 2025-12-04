@@ -416,4 +416,77 @@ EOF
 			Expect(gitPush.ExtractRemote()).To(Equal("upstream"))
 		})
 	})
+
+	Describe("GetWorkingDirectory", func() {
+		Context("with -C flag", func() {
+			It("returns -C flag directory", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"-C", "/path/to/repo", "status"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetWorkingDirectory()).To(Equal("/path/to/repo"))
+			})
+		})
+
+		Context("with WorkingDirectory from cd command", func() {
+			It("returns WorkingDirectory when no -C flag", func() {
+				cmd := parser.Command{
+					Name:             "git",
+					Args:             []string{"status"},
+					WorkingDirectory: "/tmp/project",
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetWorkingDirectory()).To(Equal("/tmp/project"))
+			})
+		})
+
+		Context("with both -C flag and WorkingDirectory", func() {
+			It("prioritizes -C flag over WorkingDirectory", func() {
+				cmd := parser.Command{
+					Name:             "git",
+					Args:             []string{"-C", "/explicit/path", "status"},
+					WorkingDirectory: "/cd/path",
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetWorkingDirectory()).To(Equal("/explicit/path"))
+			})
+		})
+
+		Context("with neither -C flag nor WorkingDirectory", func() {
+			It("returns empty string", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"status"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetWorkingDirectory()).To(BeEmpty())
+			})
+		})
+
+		Context("in user's failing scenario", func() {
+			It("extracts working directory from cd command for git operations", func() {
+				result, err := p.Parse(
+					"cd ~/Projects/github.com/smykla-labs/smyklot && git fetch upstream main",
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.GitOperations).To(HaveLen(1))
+
+				gitFetch, err := parser.ParseGitCommand(result.GitOperations[0])
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitFetch.Subcommand).To(Equal("fetch"))
+				Expect(gitFetch.GetWorkingDirectory()).To(
+					Equal("~/Projects/github.com/smykla-labs/smyklot"),
+				)
+			})
+		})
+	})
 })

@@ -15,11 +15,12 @@ var (
 
 // GitCommand represents a parsed git command.
 type GitCommand struct {
-	Subcommand    string            // Git subcommand (e.g., "commit", "push", "add")
-	Flags         []string          // Command flags
-	Args          []string          // Positional arguments
-	FlagMap       map[string]string // Flag values (e.g., "-m" -> "commit message")
-	GlobalOptions map[string]string // Global git options (e.g., "-C" -> "/path/to/repo")
+	Subcommand       string            // Git subcommand (e.g., "commit", "push", "add")
+	Flags            []string          // Command flags
+	Args             []string          // Positional arguments
+	FlagMap          map[string]string // Flag values (e.g., "-m" -> "commit message")
+	GlobalOptions    map[string]string // Global git options (e.g., "-C" -> "/path/to/repo")
+	WorkingDirectory string            // Working directory from preceding cd commands
 }
 
 // Global git options that take a value.
@@ -71,10 +72,11 @@ func ParseGitCommand(cmd Command) (*GitCommand, error) {
 	}
 
 	gitCmd := &GitCommand{
-		Flags:         make([]string, 0),
-		Args:          make([]string, 0),
-		FlagMap:       make(map[string]string),
-		GlobalOptions: make(map[string]string),
+		Flags:            make([]string, 0),
+		Args:             make([]string, 0),
+		FlagMap:          make(map[string]string),
+		GlobalOptions:    make(map[string]string),
+		WorkingDirectory: cmd.WorkingDirectory,
 	}
 
 	// First, parse global options and find the subcommand
@@ -340,10 +342,19 @@ func (g *GitCommand) ExtractFilePaths() []string {
 	return nil
 }
 
-// GetWorkingDirectory returns the working directory from -C global option.
+// GetWorkingDirectory returns the effective working directory.
+// Priority: git's -C flag > cd command's directory > empty string.
+// The git -C flag takes precedence over the cd command because it's
+// git-specific and more explicit.
 func (g *GitCommand) GetWorkingDirectory() string {
+	// First check git's -C flag (highest priority)
 	if dir, ok := g.GlobalOptions["-C"]; ok {
 		return dir
+	}
+
+	// Then check the cd command's directory from bash context
+	if g.WorkingDirectory != "" {
+		return g.WorkingDirectory
 	}
 
 	return ""
