@@ -1,0 +1,34 @@
+# Test: Debug config with filter shows only matching validators
+# This tests that the --validator flag filters output correctly
+
+mkdir .klaudiush
+
+# Create config with multiple validators
+cp config.toml .klaudiush/config.toml
+
+# Test filtering by specific validator
+exec klaudiush debug config --validator git.push
+stdout 'Configuration Sources'
+stdout 'Global Settings'
+stdout 'Git Validators'
+stdout 'git.push:'
+stdout 'Enabled: true'
+! stdout 'git.commit:'
+! stdout 'File Validators'
+
+# Test filtering by validator prefix
+exec klaudiush debug config --validator git
+stdout 'Git Validators'
+stdout 'git.commit:'
+stdout 'git.push:'
+! stdout 'File Validators'
+
+-- config.toml --
+[validators.git.commit]
+enabled = true
+
+[validators.git.push]
+enabled = true
+
+[validators.file.markdown]
+enabled = true

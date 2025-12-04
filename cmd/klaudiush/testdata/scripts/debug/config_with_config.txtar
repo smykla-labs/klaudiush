@@ -1,0 +1,28 @@
+# Test: Debug config with configuration shows config sources and validator settings
+# This tests that the debug config command displays configured validators
+
+mkdir .klaudiush
+
+# Create config with git commit validator settings
+cp config.toml .klaudiush/config.toml
+
+exec klaudiush debug config
+stdout 'Configuration Sources'
+stdout 'Global Settings'
+stdout 'Use SDK Git: true'
+stdout 'Git Validators'
+stdout 'git.commit:'
+stdout 'Enabled: true'
+stdout 'Severity: error'
+
+-- config.toml --
+[global]
+use_sdk_git = true
+
+[validators.git.commit]
+enabled = true
+severity = "error"
+
+[validators.git.commit.message]
+title_max_length = 50
+check_conventional_commits = true

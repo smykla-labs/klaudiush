@@ -665,7 +665,7 @@ func displayConfigSources() {
 }
 
 func displayConfigFile(label, path string) {
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		fmt.Printf("  %s: %s (not found)\n", label, path)
 		return
@@ -773,38 +773,32 @@ func displayFileValidators(file *config.FileConfig, filter string) {
 		return
 	}
 
-	hasMatch := false
+	showMarkdown := (filter == "" ||
+		filter == "file.markdown" ||
+		strings.HasPrefix(filter, "file.")) &&
+		file.Markdown != nil
+	showShellScript := (filter == "" ||
+		filter == "file.shellscript" ||
+		strings.HasPrefix(filter, "file.")) &&
+		file.ShellScript != nil
 
-	// Check if any file validator matches filter
-	if filter == "" || filter == "file.markdown" || strings.HasPrefix(filter, "file.") {
-		hasMatch = hasMatch || file.Markdown != nil
-	}
-
-	if filter == "" || filter == "file.shellscript" || strings.HasPrefix(filter, "file.") {
-		hasMatch = hasMatch || file.ShellScript != nil
-	}
-
-	if !hasMatch {
+	if !showMarkdown && !showShellScript {
 		return
 	}
 
 	fmt.Println("File Validators")
 	fmt.Println("---------------")
 
-	if filter == "" || filter == "file.markdown" || strings.HasPrefix(filter, "file.") {
-		if file.Markdown != nil {
-			fmt.Println("  file.markdown:")
-			fmt.Printf("    Enabled: %v\n", file.Markdown.IsEnabled())
-			fmt.Printf("    Severity: %s\n", file.Markdown.GetSeverity())
-		}
+	if showMarkdown {
+		fmt.Println("  file.markdown:")
+		fmt.Printf("    Enabled: %v\n", file.Markdown.IsEnabled())
+		fmt.Printf("    Severity: %s\n", file.Markdown.GetSeverity())
 	}
 
-	if filter == "" || filter == "file.shellscript" || strings.HasPrefix(filter, "file.") {
-		if file.ShellScript != nil {
-			fmt.Println("  file.shellscript:")
-			fmt.Printf("    Enabled: %v\n", file.ShellScript.IsEnabled())
-			fmt.Printf("    Severity: %s\n", file.ShellScript.GetSeverity())
-		}
+	if showShellScript {
+		fmt.Println("  file.shellscript:")
+		fmt.Printf("    Enabled: %v\n", file.ShellScript.IsEnabled())
+		fmt.Printf("    Severity: %s\n", file.ShellScript.GetSeverity())
 	}
 
 	fmt.Println("")
@@ -815,7 +809,7 @@ func displayNotificationValidators(notif *config.NotificationConfig, filter stri
 		return
 	}
 
-	if filter != "" && !strings.HasPrefix(filter, "notification.") {
+	if filter != "" && filter != filterNotification && !strings.HasPrefix(filter, "notification.") {
 		return
 	}
 

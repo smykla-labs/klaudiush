@@ -1,0 +1,8 @@
+# Test: Debug config without configuration shows sources and defaults
+# This tests that the debug config command works without any config
+
+exec klaudiush debug config
+stdout 'Configuration Sources'
+stdout 'Global Settings'
+stdout 'Use SDK Git:'
+stdout 'Default Timeout:'
