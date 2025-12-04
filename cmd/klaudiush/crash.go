@@ -169,7 +169,12 @@ func displayCrashList(cfg *config.Config) error {
 
 func displaySummary(index int, summary *crashdump.DumpSummary) {
 	timestamp := summary.Timestamp.Format("2006-01-02 15:04:05")
-	size := humanize.Bytes(uint64(summary.Size))
+
+	// Safe conversion: only convert non-negative sizes to uint64
+	size := "unknown"
+	if summary.Size >= 0 {
+		size = humanize.Bytes(uint64(summary.Size))
+	}
 
 	fmt.Printf("%d. %s\n", index, summary.ID)
 	fmt.Printf("   Time: %s\n", timestamp)
