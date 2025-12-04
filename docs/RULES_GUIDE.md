@@ -590,7 +590,7 @@ When a rule blocks with a reference, Claude can include an exception token:
 git push origin main  # EXC:RULE001:Emergency+hotfix+approved+by+lead
 
 # Via environment variable
-KLAUDIUSH_ACK="EXC:RULE001:Hotfix+deployment" git push origin main
+KLACK="EXC:RULE001:Hotfix+deployment" git push origin main
 ```
 
 See [EXCEPTIONS_GUIDE.md](EXCEPTIONS_GUIDE.md) for complete exception configuration.

@@ -120,9 +120,9 @@ var _ = Describe("Token Parser", func() {
 		})
 
 		Context("with token in environment variable", func() {
-			It("parses token from KLAUDIUSH_ACK", func() {
+			It("parses token from KLACK", func() {
 				result, err := parser.Parse(
-					`KLAUDIUSH_ACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"`,
+					`KLACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"`,
 				)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.Found).To(BeTrue())
@@ -132,14 +132,14 @@ var _ = Describe("Token Parser", func() {
 			})
 
 			It("parses token without quotes", func() {
-				result, err := parser.Parse(`KLAUDIUSH_ACK=EXC:GIT022:reason git push`)
+				result, err := parser.Parse(`KLACK=EXC:GIT022:reason git push`)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.Found).To(BeTrue())
 				Expect(result.Token.ErrorCode).To(Equal("GIT022"))
 			})
 
 			It("parses token with single quotes", func() {
-				result, err := parser.Parse(`KLAUDIUSH_ACK='EXC:FILE001:reason' touch file.txt`)
+				result, err := parser.Parse(`KLACK='EXC:FILE001:reason' touch file.txt`)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.Found).To(BeTrue())
 				Expect(result.Token.ErrorCode).To(Equal("FILE001"))
@@ -155,7 +155,7 @@ var _ = Describe("Token Parser", func() {
 		Context("with env var priority over comment", func() {
 			It("prefers env var when both present", func() {
 				result, err := parser.Parse(
-					`KLAUDIUSH_ACK="EXC:SEC001:env" git push # EXC:GIT022:comment`,
+					`KLACK="EXC:SEC001:env" git push # EXC:GIT022:comment`,
 				)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.Found).To(BeTrue())
@@ -213,7 +213,7 @@ var _ = Describe("Token Parser", func() {
 			})
 
 			It("finds token in env var before chain", func() {
-				result, err := parser.Parse(`KLAUDIUSH_ACK="EXC:GIT022" git add . && git push`)
+				result, err := parser.Parse(`KLACK="EXC:GIT022" git add . && git push`)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.Found).To(BeTrue())
 				Expect(result.Token.ErrorCode).To(Equal("GIT022"))

@@ -42,7 +42,7 @@ const (
 	TokenSourceComment
 
 	// TokenSourceEnvVar indicates the token was found in an environment variable.
-	// Example: KLAUDIUSH_ACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"
+	// Example: KLACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"
 	TokenSourceEnvVar
 )
 

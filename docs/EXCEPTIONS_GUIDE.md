@@ -74,7 +74,7 @@ When Claude encounters a block, it can include an exception token:
 git push origin main  # EXC:GIT019:Emergency+hotfix+for+production
 
 # Environment variable format
-KLAUDIUSH_ACK="EXC:GIT019:Emergency+hotfix" git push origin main
+KLACK="EXC:GIT019:Emergency+hotfix" git push origin main
 ```
 
 ### 3. Verify Configuration
@@ -117,10 +117,10 @@ git add . && git commit -sS -m "fix" && git push  # EXC:GIT022:Hotfix
 #### Environment Variable
 
 ```bash
-KLAUDIUSH_ACK="EXC:SEC001:Test+fixture" git commit -sS -m "Add test data"
+KLACK="EXC:SEC001:Test+fixture" git commit -sS -m "Add test data"
 
 # With reason
-export KLAUDIUSH_ACK="EXC:GIT019:Emergency+release"
+export KLACK="EXC:GIT019:Emergency+release"
 git push origin main
 ```
 
@@ -465,7 +465,7 @@ Usage:
 
 ```bash
 # Write test file with mock credentials
-KLAUDIUSH_ACK="EXC:SEC001:test+fixture" cat > test/fixtures/config.json << 'EOF'
+KLACK="EXC:SEC001:test+fixture" cat > test/fixtures/config.json << 'EOF'
 {
   "api_key": "test_key_12345",
   "password": "mock_password"
@@ -537,7 +537,7 @@ description = "Limited exceptions for commit message format"
 
 1. **Comment format:** Ensure `# EXC:CODE:reason` (space after `#`)
 2. **URL encoding:** Encode special characters in reason
-3. **Env var name:** Use `KLAUDIUSH_ACK` exactly
+3. **Env var name:** Use `KLACK` exactly
 4. **Token prefix:** Match configured `token_prefix` (default: `EXC`)
 
 ### Common Mistakes

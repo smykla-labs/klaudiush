@@ -136,7 +136,7 @@ Allow bypassing validation blocks with explicit acknowledgment and audit trail.
 
 **Core Components**:
 
-- **Token Parser** (`token.go`): Extracts `EXC:<CODE>:<REASON>` from shell comments or `KLAUDIUSH_ACK` env var
+- **Token Parser** (`token.go`): Extracts `EXC:<CODE>:<REASON>` from shell comments or `KLACK` env var
 - **Policy Engine** (`policy.go`, `engine.go`): Per-error-code policies with reason validation
 - **Rate Limiter** (`ratelimit.go`): Global + per-code hourly/daily limits, file-persisted state
 - **Audit Logger** (`audit.go`): JSONL format with rotation and retention
@@ -161,7 +161,7 @@ Allow bypassing validation blocks with explicit acknowledgment and audit trail.
 git push origin main  # EXC:GIT019:Emergency+hotfix
 
 # Environment variable
-KLAUDIUSH_ACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"
+KLACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"
 ```
 
 **Enabling Exceptions for Error Codes**: Configure in `.klaudiush/config.toml`:

@@ -152,7 +152,7 @@ var _ = Describe("Engine", func() {
 
 			It("allows exception from env var", func() {
 				result := engine.Evaluate(&exceptions.EvaluateRequest{
-					Command:       `KLAUDIUSH_ACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"`,
+					Command:       `KLACK="EXC:SEC001:Test+fixture" git commit -sS -m "msg"`,
 					ValidatorName: "git.commit",
 					ErrorCode:     "SEC001",
 				})

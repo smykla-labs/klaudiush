@@ -12,9 +12,9 @@ func FuzzTokenParse(f *testing.F) {
 	f.Add("git push # EXC:GIT022:reason")
 	f.Add("git push # EXC:GIT022:Emergency+hotfix")
 	f.Add("git push # EXC:SEC001:Test%20fixture")
-	f.Add(`KLAUDIUSH_ACK="EXC:GIT022:reason" git push`)
-	f.Add(`KLAUDIUSH_ACK='EXC:SEC001' git commit`)
-	f.Add(`KLAUDIUSH_ACK=EXC:FILE001 touch file.txt`)
+	f.Add(`KLACK="EXC:GIT022:reason" git push`)
+	f.Add(`KLACK='EXC:SEC001' git commit`)
+	f.Add(`KLACK=EXC:FILE001 touch file.txt`)
 
 	// Seed with edge cases
 	f.Add("")
@@ -29,7 +29,7 @@ func FuzzTokenParse(f *testing.F) {
 	f.Add("git push # EXC:GIT")
 	f.Add("git push # EXC:GIT022:reason:extra:parts")
 	f.Add("git push # notEXC:GIT022")
-	f.Add(`KLAUDIUSH_ACK="" git push`)
+	f.Add(`KLACK="" git push`)
 	f.Add(`OTHER_VAR="EXC:GIT022" git push`)
 
 	// Seed with complex commands

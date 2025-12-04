@@ -16,7 +16,7 @@ const (
 	DefaultTokenPrefix = "EXC"
 
 	// DefaultEnvVarName is the default environment variable name for tokens.
-	DefaultEnvVarName = "KLAUDIUSH_ACK"
+	DefaultEnvVarName = "KLACK"
 
 	// tokenParts is the expected number of parts in a token (prefix:code:reason).
 	tokenParts = 3
@@ -63,7 +63,7 @@ func WithTokenPrefix(prefix string) ParserOption {
 	}
 }
 
-// WithEnvVarName sets the environment variable name (default: "KLAUDIUSH_ACK").
+// WithEnvVarName sets the environment variable name (default: "KLACK").
 func WithEnvVarName(name string) ParserOption {
 	return func(p *Parser) {
 		if name != "" {
@@ -146,7 +146,7 @@ func (p *Parser) findTokenInEnvVars(file *syntax.File) *ParseResult {
 			return true
 		}
 
-		// Check assignments (e.g., KLAUDIUSH_ACK="EXC:GIT022:reason" git commit)
+		// Check assignments (e.g., KLACK="EXC:GIT022:reason" git commit)
 		for _, assign := range call.Assigns {
 			if assign.Name == nil {
 				continue
