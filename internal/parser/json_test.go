@@ -94,7 +94,7 @@ var _ = Describe("JSONParser", func() {
 				ctx.TranscriptPath,
 			).To(Equal("/Users/test/projects/klaudiush/d267099c-6c3a-45ed-997c-2fa4c8ec9b39.jsonl"))
 			Expect(ctx.HasSessionID()).To(BeTrue())
-			Expect(ctx.GetSessionID()).To(Equal("d267099c-6c3a-45ed-997c-2fa4c8ec9b39"))
+			Expect(ctx.SessionID).To(Equal("d267099c-6c3a-45ed-997c-2fa4c8ec9b39"))
 
 			// Verify existing fields still work
 			Expect(ctx.EventType).To(Equal(hook.EventTypePreToolUse))
@@ -130,22 +130,6 @@ var _ = Describe("JSONParser", func() {
 })
 
 var _ = Describe("Context session helpers", func() {
-	Describe("GetSessionID", func() {
-		It("returns the session ID", func() {
-			ctx := &hook.Context{
-				SessionID: "test-session-123",
-			}
-
-			Expect(ctx.GetSessionID()).To(Equal("test-session-123"))
-		})
-
-		It("returns empty string when no session ID", func() {
-			ctx := &hook.Context{}
-
-			Expect(ctx.GetSessionID()).To(BeEmpty())
-		})
-	})
-
 	Describe("HasSessionID", func() {
 		It("returns true when session ID is present", func() {
 			ctx := &hook.Context{

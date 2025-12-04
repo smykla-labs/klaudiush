@@ -139,11 +139,6 @@ func (c *Context) IsFileTool() bool {
 		c.ToolName == ToolTypeMultiEdit
 }
 
-// GetSessionID returns the session identifier.
-func (c *Context) GetSessionID() string {
-	return c.SessionID
-}
-
 // HasSessionID returns true if a session ID is present.
 func (c *Context) HasSessionID() bool {
 	return c.SessionID != ""

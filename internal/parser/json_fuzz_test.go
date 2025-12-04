@@ -46,7 +46,6 @@ func FuzzJSONParse(f *testing.F) {
 				_ = ctx.SessionID
 				_ = ctx.ToolUseID
 				_ = ctx.TranscriptPath
-				_ = ctx.GetSessionID()
 				_ = ctx.HasSessionID()
 			}
 

@@ -63,9 +63,8 @@ const (
 	defaultExceptionMinReasonLength = 10
 
 	// Session defaults.
-	defaultSessionStateFile  = "~/.klaudiush/session_state.json"
-	defaultSessionMaxAgeStr  = "24h"
-	defaultSessionMaxAgeDays = 1
+	defaultSessionStateFile = "~/.klaudiush/session_state.json"
+	defaultSessionMaxAgeStr = "24h"
 )
 
 // defaultValidTypes is the list of valid commit types.

@@ -2,7 +2,6 @@ package dispatcher
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/smykla-labs/klaudiush/internal/session"
 	"github.com/smykla-labs/klaudiush/internal/validator"
@@ -20,14 +19,14 @@ func createPoisonedSessionError(info *session.SessionInfo) *ValidationError {
 		return nil
 	}
 
-	// Format timestamp
+	// Format timestamp with full date and time
 	var timestamp string
 	if info.PoisonedAt != nil {
-		timestamp = info.PoisonedAt.Format(time.Kitchen)
+		timestamp = info.PoisonedAt.Format("2006-01-02 15:04:05")
 	}
 
-	// Build error message
-	msg := fmt.Sprintf("Session poisoned by %s at %s", info.PoisonCode, timestamp)
+	// Build error message with "Blocked:" prefix to match documentation
+	msg := fmt.Sprintf("Blocked: session poisoned by %s at %s", info.PoisonCode, timestamp)
 
 	// Create details with original error
 	details := make(map[string]string)
@@ -67,9 +66,4 @@ func extractSessionPoisonMessage(errors []*ValidationError) string {
 	}
 
 	return ""
-}
-
-// hasBlockingError returns true if any validation error should block.
-func hasBlockingError(errors []*ValidationError) bool {
-	return ShouldBlock(errors)
 }
