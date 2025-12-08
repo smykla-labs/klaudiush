@@ -2,7 +2,7 @@
 
 buildGoModule rec {
   pname = "klaudiush";
-  version = "1.12.1";
+  version = "1.12.2";
 
   src = lib.cleanSource ./..;
 
