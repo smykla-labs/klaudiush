@@ -98,21 +98,21 @@ linters:
       # Exclude some linters from test files
       - path: _test\.go
         linters:
-          - gocyclo
-          - gocognit
-          - cyclop
-          - errcheck
-          - dupl
-          - gosec
-          - funlen
-          - goconst
-          - nestif
-          - bodyclose
-          - noctx
-          - thelper
-          - tparallel
-          - forcetypeassert
-          - wrapcheck
+          - gocyclo        # Tests often have complex setup/teardown
+          - gocognit       # Test logic can be cognitively complex
+          - cyclop         # Test flows can exceed complexity limits
+          - errcheck       # Tests may intentionally ignore errors
+          - dupl           # Repetitive test setup is acceptable
+          - gosec          # Tests may use insecure patterns intentionally
+          - funlen         # Test functions can be long with setup/assertions
+          - goconst        # Repeated test strings improve readability
+          - nestif         # Test cases can have nested conditions
+          - bodyclose      # Tests may not close bodies in all scenarios
+          - noctx          # Simple test requests don't need context
+          - thelper        # Some test helpers don't need t.Helper()
+          - tparallel      # Not all tests should run in parallel
+          - forcetypeassert # Type assertions in tests are safe
+          - wrapcheck      # Tests can return errors directly
           - mnd            # Magic numbers are fine in tests
           - unparam        # Unused params are fine in test helpers
           - wastedassign   # Test setup may have intentional waste

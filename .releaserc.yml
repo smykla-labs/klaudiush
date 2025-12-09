@@ -12,6 +12,7 @@ plugins:
   # Analyze commits to determine version bump
   - - '@semantic-release/commit-analyzer'
     - preset: conventionalcommits
+      # noinspection YAMLIncompatibleTypes
       releaseRules:
         - type: feat
           release: minor
