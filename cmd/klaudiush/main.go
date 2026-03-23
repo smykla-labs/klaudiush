@@ -17,10 +17,12 @@ import (
 	"github.com/smykla-skalski/klaudiush/internal/crashdump"
 	"github.com/smykla-skalski/klaudiush/internal/dispatcher"
 	"github.com/smykla-skalski/klaudiush/internal/exceptions"
+	"github.com/smykla-skalski/klaudiush/internal/github"
 	"github.com/smykla-skalski/klaudiush/internal/hookresponse"
 	"github.com/smykla-skalski/klaudiush/internal/hooksession"
 	"github.com/smykla-skalski/klaudiush/internal/parser"
 	"github.com/smykla-skalski/klaudiush/internal/patterns"
+	"github.com/smykla-skalski/klaudiush/internal/updatecheck"
 	"github.com/smykla-skalski/klaudiush/internal/xdg"
 	"github.com/smykla-skalski/klaudiush/pkg/config"
 	"github.com/smykla-skalski/klaudiush/pkg/hook"
@@ -272,8 +274,11 @@ func run(cmd *cobra.Command, _ []string) error {
 	// Run failure pattern tracking
 	patternWarnings := runPatternTracking(cfg, ctx, errs, workDir, log)
 
+	// Check for updates
+	updateMsg := checkForUpdates(cfg, log)
+
 	// Build and write response
-	writeErr := writeResponse(ctx, errs, patternWarnings, log)
+	writeErr := writeResponse(ctx, errs, patternWarnings, updateMsg, log)
 
 	sessionCleanup()
 
@@ -356,9 +361,20 @@ func writeResponse(
 	hookCtx *hook.Context,
 	errs []*dispatcher.ValidationError,
 	patternWarnings []string,
+	updateNotification string,
 	log logger.Logger,
 ) error {
 	response := hookresponse.BuildForContext(hookCtx, errs, patternWarnings)
+
+	// Inject update notification into response
+	if updateNotification != "" {
+		if response == nil {
+			response = hookresponse.BuildUpdateNotification(hookCtx, updateNotification)
+		} else {
+			hookresponse.AppendUpdateNotification(response, updateNotification)
+		}
+	}
+
 	if response == nil {
 		log.Info("validation passed")
 
@@ -382,6 +398,19 @@ func writeResponse(
 	}
 
 	return nil
+}
+
+// checkForUpdates performs a cached update check and returns a notification
+// message if a new version is available. Returns "" if no notification is needed.
+func checkForUpdates(cfg *config.Config, log logger.Logger) string {
+	checker := updatecheck.NewChecker(
+		version,
+		github.NewClient(),
+		cfg.GetUpdateCheck(),
+		updatecheck.WithLogger(log),
+	)
+
+	return checker.Check(context.Background())
 }
 
 // loadConfig loads configuration from all sources with precedence.
