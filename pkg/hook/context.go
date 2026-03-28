@@ -147,6 +147,7 @@ type Context struct {
 	WorkingDir string
 
 	// PermissionMode is the provider-specific permission mode.
+	// Known values: "default", "plan", "acceptEdits", "dontAsk", "bypassPermissions".
 	PermissionMode string
 
 	// Model is the active model identifier, when present.
@@ -193,6 +194,14 @@ type Context struct {
 
 	// CompactTrigger is what triggered the compaction (PostCompact only).
 	CompactTrigger string
+}
+
+// PermissionModeBypass is the permission mode value when --dangerously-skip-permissions is active.
+const PermissionModeBypass = "bypassPermissions"
+
+// IsBypassPermissions returns true if the session is running with --dangerously-skip-permissions.
+func (c *Context) IsBypassPermissions() bool {
+	return c.PermissionMode == PermissionModeBypass
 }
 
 // GetCommand returns the command from ToolInput.

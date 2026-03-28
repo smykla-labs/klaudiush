@@ -111,6 +111,54 @@ var _ = Describe("Dispatcher Exception Integration", func() {
 		})
 	})
 
+	Context("with bypass permissions mode", func() {
+		BeforeEach(func() {
+			reg = validator.NewRegistry()
+
+			reg.Register(
+				&mockBlockingValidator{
+					name:      "git.push",
+					reference: "https://klaudiu.sh/e/GIT022",
+				},
+				validator.And(
+					validator.EventTypeIs(hook.EventTypePreToolUse),
+					validator.ToolTypeIs(hook.ToolTypeBash),
+				),
+			)
+
+			disp = dispatcher.NewDispatcher(reg, log)
+		})
+
+		It("skips all validation when permission mode is bypassPermissions", func() {
+			hookCtx := &hook.Context{
+				EventType:      hook.EventTypePreToolUse,
+				ToolName:       hook.ToolTypeBash,
+				PermissionMode: hook.PermissionModeBypass,
+				ToolInput: hook.ToolInput{
+					Command: "git push origin main",
+				},
+			}
+
+			errors := disp.Dispatch(context.Background(), hookCtx)
+			Expect(errors).To(BeEmpty())
+		})
+
+		It("still validates when permission mode is not bypassPermissions", func() {
+			hookCtx := &hook.Context{
+				EventType:      hook.EventTypePreToolUse,
+				ToolName:       hook.ToolTypeBash,
+				PermissionMode: "default",
+				ToolInput: hook.ToolInput{
+					Command: "git push origin main",
+				},
+			}
+
+			errors := disp.Dispatch(context.Background(), hookCtx)
+			Expect(errors).To(HaveLen(1))
+			Expect(errors[0].ShouldBlock).To(BeTrue())
+		})
+	})
+
 	Context("with exception checker", func() {
 		BeforeEach(func() {
 			reg = validator.NewRegistry()
