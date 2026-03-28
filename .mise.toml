@@ -11,7 +11,7 @@ golangci-lint = "2.11.4"
 
 # Markdown linter
 # https://github.com/DavidAnson/markdownlint-cli2
-markdownlint-cli2 = "0.21.0"
+markdownlint-cli2 = "0.22.0"
 
 # Ginkgo BDD test framework CLI
 # https://onsi.github.io/ginkgo/
