@@ -19,12 +19,13 @@ const (
 // DefaultConfig returns a Config with all default values populated.
 func DefaultConfig() *config.Config {
 	return &config.Config{
-		Version:    config.CurrentConfigVersion,
-		Global:     DefaultGlobalConfig(),
-		Providers:  DefaultProvidersConfig(),
-		Validators: DefaultValidatorsConfig(),
-		Rules:      DefaultRulesConfig(),
-		Patterns:   DefaultPatternsConfig(),
+		Version:     config.CurrentConfigVersion,
+		Global:      DefaultGlobalConfig(),
+		Providers:   DefaultProvidersConfig(),
+		Validators:  DefaultValidatorsConfig(),
+		Rules:       DefaultRulesConfig(),
+		Patterns:    DefaultPatternsConfig(),
+		UpdateCheck: DefaultUpdateCheckConfig(),
 	}
 }
 
@@ -76,6 +77,18 @@ func DefaultPatternsConfig() *config.PatternsConfig {
 		UseSeedData:         &useSeedData,
 		MaxPatterns:         config.DefaultPatternsMaxPatterns,
 		MaxSessions:         config.DefaultPatternsMaxSessions,
+	}
+}
+
+// DefaultUpdateCheckConfig returns the default update check configuration.
+func DefaultUpdateCheckConfig() *config.UpdateCheckConfig {
+	enabled := true
+	notify := true
+
+	return &config.UpdateCheckConfig{
+		Enabled:       &enabled,
+		CheckInterval: config.Duration(config.DefaultUpdateCheckInterval),
+		Notify:        &notify,
 	}
 }
 

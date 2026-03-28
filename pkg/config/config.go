@@ -38,6 +38,9 @@ type Config struct {
 
 	// Overrides contains persistent disable/enable overrides for error codes and validators.
 	Overrides *OverridesConfig `json:"overrides,omitempty" koanf:"overrides" toml:"overrides,omitempty"`
+
+	// UpdateCheck contains configuration for automatic update checking.
+	UpdateCheck *UpdateCheckConfig `json:"update_check,omitempty" koanf:"update_check" toml:"update_check,omitempty"`
 }
 
 // ValidatorsConfig groups all validator configurations by category.
@@ -243,4 +246,13 @@ func (c *Config) GetOverrides() *OverridesConfig {
 	}
 
 	return c.Overrides
+}
+
+// GetUpdateCheck returns the update check config, creating it if it doesn't exist.
+func (c *Config) GetUpdateCheck() *UpdateCheckConfig {
+	if c.UpdateCheck == nil {
+		c.UpdateCheck = &UpdateCheckConfig{}
+	}
+
+	return c.UpdateCheck
 }
