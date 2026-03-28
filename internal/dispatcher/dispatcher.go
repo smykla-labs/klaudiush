@@ -144,6 +144,12 @@ func (d *Dispatcher) Dispatch(ctx context.Context, hookCtx *hook.Context) []*Val
 		"tool", hookCtx.ToolName,
 	)
 
+	if hookCtx.IsBypassPermissions() {
+		d.logger.Info("skipping validation: bypass permissions mode active")
+
+		return nil
+	}
+
 	// Run validators on the main context
 	validationErrors := d.runValidators(ctx, hookCtx)
 
