@@ -5,6 +5,17 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.0](https://github.com/smykla-skalski/klaudiush/compare/v1.30.3...v1.31.0) (2026-03-29)
+
+### Features
+
+* **dispatcher:** skip validation in bypass mode ([#413](https://github.com/smykla-skalski/klaudiush/issues/413)) ([20b7b45](https://github.com/smykla-skalski/klaudiush/commit/20b7b452fdc856249f5980a208df498e29aafc6c))
+* **update:** add update check notification ([#410](https://github.com/smykla-skalski/klaudiush/issues/410)) ([bab6cf4](https://github.com/smykla-skalski/klaudiush/commit/bab6cf443d1374ef3a9227f69b53d27adb2ef3fd))
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-git/go-git/v6 to v6.0.0-20260324221343-cd85c8c75d34 ([#409](https://github.com/smykla-skalski/klaudiush/issues/409)) ([c55bec7](https://github.com/smykla-skalski/klaudiush/commit/c55bec73ec60742f2d3ad9f0473a80c916588ab5))
+
 ## [1.30.3](https://github.com/smykla-skalski/klaudiush/compare/v1.30.2...v1.30.3) (2026-03-28)
 
 ### Bug Fixes
