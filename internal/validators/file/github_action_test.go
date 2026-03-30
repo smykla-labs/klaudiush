@@ -47,16 +47,22 @@ func (m *mockGitHubClient) IsAuthenticated() bool {
 
 var _ = Describe("WorkflowValidator", func() {
 	var (
-		validator *file.WorkflowValidator
-		log       logger.Logger
+		validator        *file.WorkflowValidator
+		log              logger.Logger
+		githubClient     *mockGitHubClient
+		githubClientUses int
 	)
 
 	BeforeEach(func() {
 		log = logger.NewNoOpLogger()
 		runner := execpkg.NewCommandRunner(10 * time.Second)
 		linter := linters.NewActionLinter(runner)
-		githubClient := &mockGitHubClient{authenticated: false}
-		validator = file.NewWorkflowValidator(linter, githubClient, log, nil, nil)
+		githubClient = &mockGitHubClient{authenticated: false}
+		githubClientUses = 0
+		validator = file.NewWorkflowValidator(linter, func() github.Client {
+			githubClientUses++
+			return githubClient
+		}, log, nil, nil)
 	})
 
 	Describe("Validate", func() {
@@ -73,6 +79,7 @@ var _ = Describe("WorkflowValidator", func() {
 
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
+				Expect(githubClientUses).To(Equal(0))
 			})
 
 			It("should pass for workflows in wrong directory", func() {
@@ -87,6 +94,7 @@ var _ = Describe("WorkflowValidator", func() {
 
 				result := validator.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
+				Expect(githubClientUses).To(Equal(0))
 			})
 		})
 

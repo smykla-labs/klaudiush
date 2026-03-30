@@ -74,6 +74,10 @@ var (
 	// crashConfig stores the current configuration for crash recovery.
 	// Set during validation dispatch and accessed by panic handler.
 	crashConfig *config.Config
+
+	newGitHubClient = func() github.Client {
+		return github.NewClient()
+	}
 )
 
 func main() {
@@ -403,10 +407,15 @@ func writeResponse(
 // checkForUpdates performs a cached update check and returns a notification
 // message if a new version is available. Returns "" if no notification is needed.
 func checkForUpdates(cfg *config.Config, log logger.Logger) string {
+	updateCfg := cfg.GetUpdateCheck()
+	if version == "dev" || !updateCfg.IsEnabled() {
+		return ""
+	}
+
 	checker := updatecheck.NewChecker(
 		version,
-		github.NewClient(),
-		cfg.GetUpdateCheck(),
+		newGitHubClient(),
+		updateCfg,
 		updatecheck.WithLogger(log),
 	)
 

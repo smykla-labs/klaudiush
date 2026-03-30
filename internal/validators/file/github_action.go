@@ -77,24 +77,24 @@ type actionUse struct {
 // WorkflowValidator validates GitHub Actions workflow and composable action files
 type WorkflowValidator struct {
 	validator.BaseValidator
-	linter       linters.ActionLinter
-	githubClient github.Client
-	config       *config.WorkflowValidatorConfig
+	linter              linters.ActionLinter
+	githubClientFactory func() github.Client
+	config              *config.WorkflowValidatorConfig
 }
 
 // NewWorkflowValidator creates a new WorkflowValidator
 func NewWorkflowValidator(
 	linter linters.ActionLinter,
-	githubClient github.Client,
+	githubClientFactory func() github.Client,
 	log logger.Logger,
 	cfg *config.WorkflowValidatorConfig,
 	ruleAdapter validator.RuleChecker,
 ) *WorkflowValidator {
 	return &WorkflowValidator{
-		BaseValidator: *validator.NewBaseValidatorWithRules("validate-github-workflow", log, ruleAdapter),
-		linter:        linter,
-		githubClient:  githubClient,
-		config:        cfg,
+		BaseValidator:       *validator.NewBaseValidatorWithRules("validate-github-workflow", log, ruleAdapter),
+		linter:              linter,
+		githubClientFactory: githubClientFactory,
+		config:              cfg,
 	}
 }
 
@@ -438,6 +438,10 @@ func (*WorkflowValidator) hasExplanationComment(action actionUse) bool {
 
 // getLatestVersion queries GitHub API for the latest version of an action
 func (v *WorkflowValidator) getLatestVersion(ctx context.Context, actionName string) string {
+	if v.githubClientFactory == nil {
+		return ""
+	}
+
 	// Parse action name (format: owner/repo)
 	parts := strings.SplitN(actionName, "/", ownerRepoParts)
 	if len(parts) != ownerRepoParts {
@@ -450,8 +454,13 @@ func (v *WorkflowValidator) getLatestVersion(ctx context.Context, actionName str
 	apiCtx, cancel := context.WithTimeout(ctx, v.getGHAPITimeout())
 	defer cancel()
 
+	githubClient := v.githubClientFactory()
+	if githubClient == nil {
+		return ""
+	}
+
 	// Try releases first
-	release, err := v.githubClient.GetLatestRelease(apiCtx, owner, repo)
+	release, err := githubClient.GetLatestRelease(apiCtx, owner, repo)
 	if err == nil && release.TagName != "" {
 		return release.TagName
 	}
@@ -466,7 +475,7 @@ func (v *WorkflowValidator) getLatestVersion(ctx context.Context, actionName str
 	apiCtx, cancel = context.WithTimeout(ctx, v.getGHAPITimeout())
 	defer cancel()
 
-	tags, err := v.githubClient.GetTags(apiCtx, owner, repo)
+	tags, err := githubClient.GetTags(apiCtx, owner, repo)
 	if err != nil {
 		if !errors.Is(err, github.ErrNoTags) && !errors.Is(err, github.ErrRepositoryNotFound) {
 			v.Logger().Debug("failed to get tags", "action", actionName, "error", err)

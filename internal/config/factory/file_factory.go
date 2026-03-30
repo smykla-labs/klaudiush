@@ -55,8 +55,6 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 	ruffChecker := linters.NewRuffChecker(runner)
 	oxlintChecker := linters.NewOxlintChecker(runner)
 	rustfmtChecker := linters.NewRustfmtChecker(runner)
-	githubClient := githubpkg.NewClient()
-
 	if cfg.Validators.File.Markdown != nil && cfg.Validators.File.Markdown.IsEnabled() &&
 		!isValidatorOverridden(cfg.Overrides, "file.markdown") {
 		// Create markdown linter with config for rule support
@@ -85,7 +83,10 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 	if cfg.Validators.File.Workflow != nil && cfg.Validators.File.Workflow.IsEnabled() &&
 		!isValidatorOverridden(cfg.Overrides, "file.workflow") {
 		validators = append(validators, f.createWorkflowValidator(
-			cfg.Validators.File.Workflow, actionLinter, githubClient))
+			cfg.Validators.File.Workflow,
+			actionLinter,
+			func() githubpkg.Client { return githubpkg.NewClient() },
+		))
 	}
 
 	if cfg.Validators.File.Gofumpt != nil && cfg.Validators.File.Gofumpt.IsEnabled() &&
@@ -216,7 +217,7 @@ func (f *FileValidatorFactory) createShellScriptValidator(
 func (f *FileValidatorFactory) createWorkflowValidator(
 	cfg *config.WorkflowValidatorConfig,
 	linter linters.ActionLinter,
-	githubClient githubpkg.Client,
+	githubClientFactory func() githubpkg.Client,
 ) ValidatorWithPredicate {
 	var rc validator.RuleChecker
 	if f.ruleEngine != nil {
@@ -230,7 +231,7 @@ func (f *FileValidatorFactory) createWorkflowValidator(
 	return ValidatorWithPredicate{
 		Validator: wrapValidatorWithSeverity(
 			filevalidators.NewWorkflowValidator(
-				linter, githubClient, f.log, cfg, rc,
+				linter, githubClientFactory, f.log, cfg, rc,
 			),
 			cfg,
 		),
