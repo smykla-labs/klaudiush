@@ -55,6 +55,7 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 	ruffChecker := linters.NewRuffChecker(runner)
 	oxlintChecker := linters.NewOxlintChecker(runner)
 	rustfmtChecker := linters.NewRustfmtChecker(runner)
+
 	if cfg.Validators.File.Markdown != nil && cfg.Validators.File.Markdown.IsEnabled() &&
 		!isValidatorOverridden(cfg.Overrides, "file.markdown") {
 		// Create markdown linter with config for rule support
