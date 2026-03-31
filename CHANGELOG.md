@@ -5,6 +5,12 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.1](https://github.com/smykla-skalski/klaudiush/compare/v1.31.0...v1.31.1) (2026-03-31)
+
+### Bug Fixes
+
+* **hooks:** avoid eager GitHub auth on startup ([1bd1fff](https://github.com/smykla-skalski/klaudiush/commit/1bd1fff89bad0ff4572ba044f301c2a59f42ed6a))
+
 ## [1.31.0](https://github.com/smykla-skalski/klaudiush/compare/v1.30.3...v1.31.0) (2026-03-29)
 
 ### Features
