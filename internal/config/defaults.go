@@ -239,6 +239,7 @@ func DefaultPushValidatorConfig() *config.PushValidatorConfig {
 			Severity: config.SeverityError,
 		},
 		BlockedRemotes:  []string{},
+		BlockedBranches: []string{},
 		RequireTracking: &requireTracking,
 	}
 }

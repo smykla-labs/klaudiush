@@ -125,6 +125,14 @@ Suggested alternatives: [{{.SuggestedRemotesStr}}]
 Available remotes: [{{.AvailableRemotesStr}}]
 {{- end}}`,
 	)
+
+	// PushBlockedBranchTemplate formats error for push to blocked branch
+	PushBlockedBranchTemplate = Parse(
+		"push_blocked_branch",
+		`❌ Branch '{{.Branch}}' is blocked for push operations
+
+Blocked branches: [{{.BlockedBranchesStr}}]`,
+	)
 )
 
 // GitAddTmpFilesData holds data for GitAddTmpFilesTemplate
@@ -183,4 +191,10 @@ type PushBlockedRemoteData struct {
 	BlockedRemotesStr   string
 	SuggestedRemotesStr string
 	AvailableRemotesStr string
+}
+
+// PushBlockedBranchData holds data for PushBlockedBranchTemplate
+type PushBlockedBranchData struct {
+	Branch             string
+	BlockedBranchesStr string
 }

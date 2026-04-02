@@ -31,6 +31,7 @@ var DefaultSuggestions = map[Reference]string{
 	RefGitPRValidation:       "Fix the issue and retry gh pr create",
 	RefGitFetchNoRemote:      "Specify valid remote: git fetch <remote> (use 'git remote -v' to list remotes)",
 	RefGitBlockedRemote:      "Use an allowed remote for push",
+	RefGitBlockedBranch:      "Push to a different branch or create a PR",
 
 	// File suggestions
 	RefShellcheck:   "Run 'shellcheck <file>' to see detailed errors",
