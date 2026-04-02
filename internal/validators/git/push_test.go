@@ -401,6 +401,28 @@ var _ = Describe("PushValidator", func() {
 				Expect(result.Passed).To(BeTrue())
 			})
 
+			It("blocks when blocked branch is second refspec", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin feature main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("Branch 'main' is blocked"))
+			})
+
+			It("blocks refspec with refs/heads/ prefix", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin HEAD:refs/heads/main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("Branch 'main' is blocked"))
+			})
+
 			It("passes when no blocked branches configured", func() {
 				cfg := &config.PushValidatorConfig{}
 				validator = git.NewPushValidator(log, fakeGit, cfg, nil)

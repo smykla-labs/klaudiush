@@ -90,9 +90,11 @@ func (v *PushValidator) validatePushCommand(
 	}
 
 	// Check if branch is blocked
-	branch := v.extractBranch(gitCmd, runner)
-	if result := v.validateNotBlockedBranch(branch); !result.Passed {
-		return result
+	if v.config != nil && len(v.config.BlockedBranches) > 0 {
+		branch := v.extractBranch(gitCmd, runner)
+		if result := v.validateNotBlockedBranch(branch); !result.Passed {
+			return result
+		}
 	}
 
 	// Skip remote existence check if a preceding command adds this remote
@@ -232,25 +234,47 @@ func (v *PushValidator) validateNotBlockedRemote(
 	return result
 }
 
-// extractBranch extracts the target branch name from a git push command
-func (*PushValidator) extractBranch(gitCmd *parser.GitCommand, runner GitRunner) string {
-	if len(gitCmd.Args) > 1 {
-		branch := gitCmd.Args[1]
-		// Handle refspec: src:dst → use dst (target branch)
-		if idx := strings.Index(branch, ":"); idx >= 0 {
-			branch = branch[idx+1:]
+// parseBranchFromRefspec extracts and normalizes the target branch from a refspec.
+func parseBranchFromRefspec(refspec string) string {
+	branch := refspec
+	if _, dst, ok := strings.Cut(refspec, ":"); ok {
+		branch = dst
+	}
+
+	return strings.TrimPrefix(branch, "refs/heads/")
+}
+
+// extractBranch extracts the target branch name from a git push command.
+// When multiple refspecs are provided, returns a blocked branch first
+// so downstream validation can deny the push.
+func (v *PushValidator) extractBranch(gitCmd *parser.GitCommand, runner GitRunner) string {
+	if len(gitCmd.Args) <= 1 {
+		branch, err := runner.GetCurrentBranch()
+		if err != nil {
+			return ""
 		}
 
 		return branch
 	}
 
-	// No branch arg → use current branch
-	branch, err := runner.GetCurrentBranch()
-	if err != nil {
-		return ""
+	var firstBranch string
+
+	for _, refspec := range gitCmd.Args[1:] {
+		branch := parseBranchFromRefspec(refspec)
+		if branch == "" {
+			continue
+		}
+
+		if firstBranch == "" {
+			firstBranch = branch
+		}
+
+		if v.config != nil && slices.Contains(v.config.BlockedBranches, branch) {
+			return branch
+		}
 	}
 
-	return branch
+	return firstBranch
 }
 
 // validateNotBlockedBranch checks if the branch is blocked
