@@ -85,6 +85,9 @@ const (
 
 	// RefGitBlockedRemote indicates push to a blocked remote.
 	RefGitBlockedRemote Reference = ReferenceBaseURL + "/GIT025"
+
+	// RefGitBlockedBranch indicates push to a blocked branch.
+	RefGitBlockedBranch Reference = ReferenceBaseURL + "/GIT026"
 )
 
 // File-related references (FILE001-FILE009).
