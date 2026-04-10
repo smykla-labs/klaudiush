@@ -137,6 +137,11 @@ type PushValidatorConfig struct {
 	// Default: ["origin", "upstream"]
 	AllowedRemotePriority []string `json:"allowed_remote_priority,omitempty" koanf:"allowed_remote_priority" toml:"allowed_remote_priority,omitempty"`
 
+	// BlockedBranches is a list of branch names that are not allowed for push operations.
+	// When Claude Code tries to push to a blocked branch, the operation will be rejected.
+	// Default: []
+	BlockedBranches []string `json:"blocked_branches,omitempty" koanf:"blocked_branches" toml:"blocked_branches,omitempty"`
+
 	// RequireTracking requires branches to have remote tracking configured before push.
 	// Default: true
 	RequireTracking *bool `json:"require_tracking,omitempty" koanf:"require_tracking" toml:"require_tracking,omitempty"`

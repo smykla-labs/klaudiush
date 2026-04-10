@@ -345,6 +345,102 @@ var _ = Describe("PushValidator", func() {
 			})
 		})
 
+		Context("blocked branches", func() {
+			It("blocks push to configured blocked branch", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main", "master"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("Branch 'main' is blocked"))
+				Expect(result.Message).To(ContainSubstring("Blocked branches: [main, master]"))
+			})
+
+			It("allows push to non-blocked branch", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main", "master"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin feature/my-branch")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("detects branch from current branch when no args", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main"}
+				fakeGit.CurrentBranch = "main"
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("Branch 'main' is blocked"))
+			})
+
+			It("handles refspec format src:dst", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin HEAD:main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("Branch 'main' is blocked"))
+			})
+
+			It("allows refspec when target branch is not blocked", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin main:feature")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("blocks when blocked branch is second refspec", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin feature main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("Branch 'main' is blocked"))
+			})
+
+			It("blocks refspec with refs/heads/ prefix", func() {
+				cfg := &config.PushValidatorConfig{}
+				cfg.BlockedBranches = []string{"main"}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin HEAD:refs/heads/main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("Branch 'main' is blocked"))
+			})
+
+			It("passes when no blocked branches configured", func() {
+				cfg := &config.PushValidatorConfig{}
+				validator = git.NewPushValidator(log, fakeGit, cfg, nil)
+
+				ctx := createContext("git push origin main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("passes when config is nil", func() {
+				validator = git.NewPushValidator(log, fakeGit, nil, nil)
+
+				ctx := createContext("git push origin main")
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+		})
+
 		Context("compound commands with git remote add", func() {
 			It("passes when remote is added in a preceding command", func() {
 				ctx := createContext(

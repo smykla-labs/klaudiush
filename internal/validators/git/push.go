@@ -89,6 +89,14 @@ func (v *PushValidator) validatePushCommand(
 		return result
 	}
 
+	// Check if branch is blocked
+	if v.config != nil && len(v.config.BlockedBranches) > 0 {
+		branch := v.extractBranch(gitCmd, runner)
+		if result := v.validateNotBlockedBranch(branch); !result.Passed {
+			return result
+		}
+	}
+
 	// Skip remote existence check if a preceding command adds this remote
 	if pendingRemotes[remote] {
 		v.Logger().
@@ -224,6 +232,73 @@ func (v *PushValidator) validateNotBlockedRemote(
 	}
 
 	return result
+}
+
+// parseBranchFromRefspec extracts and normalizes the target branch from a refspec.
+func parseBranchFromRefspec(refspec string) string {
+	branch := refspec
+	if _, dst, ok := strings.Cut(refspec, ":"); ok {
+		branch = dst
+	}
+
+	return strings.TrimPrefix(branch, "refs/heads/")
+}
+
+// extractBranch extracts the target branch name from a git push command.
+// When multiple refspecs are provided, returns a blocked branch first
+// so downstream validation can deny the push.
+func (v *PushValidator) extractBranch(gitCmd *parser.GitCommand, runner GitRunner) string {
+	if len(gitCmd.Args) <= 1 {
+		branch, err := runner.GetCurrentBranch()
+		if err != nil {
+			return ""
+		}
+
+		return branch
+	}
+
+	var firstBranch string
+
+	for _, refspec := range gitCmd.Args[1:] {
+		branch := parseBranchFromRefspec(refspec)
+		if branch == "" {
+			continue
+		}
+
+		if firstBranch == "" {
+			firstBranch = branch
+		}
+
+		if v.config != nil && slices.Contains(v.config.BlockedBranches, branch) {
+			return branch
+		}
+	}
+
+	return firstBranch
+}
+
+// validateNotBlockedBranch checks if the branch is blocked
+func (v *PushValidator) validateNotBlockedBranch(branch string) *validator.Result {
+	if v.config == nil || len(v.config.BlockedBranches) == 0 || branch == "" {
+		return validator.Pass()
+	}
+
+	if !slices.Contains(v.config.BlockedBranches, branch) {
+		return validator.Pass()
+	}
+
+	blockedBranchesStr := strings.Join(v.config.BlockedBranches, ", ")
+
+	return validator.FailWithRef(
+		validator.RefGitBlockedBranch,
+		templates.MustExecute(
+			templates.PushBlockedBranchTemplate,
+			templates.PushBlockedBranchData{
+				Branch:             branch,
+				BlockedBranchesStr: blockedBranchesStr,
+			},
+		),
+	)
 }
 
 // validateRemoteExists checks if the remote exists
