@@ -195,6 +195,17 @@ func (v *CommitValidator) checkFlags(gitCmd *parser.GitCommand) *validator.Resul
 	return validator.Pass()
 }
 
+// gitRunnerFor returns a runner scoped to the git command's working directory.
+// When the command has an explicit path (via -C flag or preceding cd), staging
+// checks must run against that directory, not the hook's cwd.
+func (v *CommitValidator) gitRunnerFor(gitCmd *parser.GitCommand) GitRunner {
+	if workDir := gitCmd.GetWorkingDirectory(); workDir != "" {
+		return NewGitRunnerForPath(workDir)
+	}
+
+	return v.gitRunner
+}
+
 // checkStagingArea validates that there are files staged or -a/-A/--all flag is present
 func (v *CommitValidator) checkStagingArea(gitCmd *parser.GitCommand) *validator.Result {
 	// Check if staging area validation is enabled (default: true)
@@ -208,15 +219,17 @@ func (v *CommitValidator) checkStagingArea(gitCmd *parser.GitCommand) *validator
 		return validator.Pass()
 	}
 
+	runner := v.gitRunnerFor(gitCmd)
+
 	// Check if we're in a git repository first
-	if !v.gitRunner.IsInRepo() {
+	if !runner.IsInRepo() {
 		// Not in a git repo or git not available, skip check
 		v.Logger().Debug("Not in git repository, skipping staging check")
 		return validator.Pass()
 	}
 
 	// Check if staging area has files
-	stagedFiles, err := v.gitRunner.GetStagedFiles()
+	stagedFiles, err := runner.GetStagedFiles()
 	if err != nil {
 		v.Logger().Debug("Failed to check staging area", "error", err)
 		return validator.Pass() // Don't block if we can't check
@@ -224,7 +237,7 @@ func (v *CommitValidator) checkStagingArea(gitCmd *parser.GitCommand) *validator
 
 	if len(stagedFiles) == 0 {
 		// No files staged, get status info
-		modifiedCount, untrackedCount := v.getStatusCounts()
+		modifiedCount, untrackedCount := v.getStatusCounts(runner)
 
 		message := templates.MustExecute(
 			templates.GitCommitNoStagedTemplate,
@@ -244,15 +257,15 @@ func (v *CommitValidator) checkStagingArea(gitCmd *parser.GitCommand) *validator
 }
 
 // getStatusCounts returns the count of modified and untracked files
-func (v *CommitValidator) getStatusCounts() (modified, untracked int) {
+func (*CommitValidator) getStatusCounts(runner GitRunner) (modified, untracked int) {
 	// Get modified files
-	modifiedFiles, err := v.gitRunner.GetModifiedFiles()
+	modifiedFiles, err := runner.GetModifiedFiles()
 	if err == nil {
 		modified = len(modifiedFiles)
 	}
 
 	// Get untracked files
-	untrackedFiles, err2 := v.gitRunner.GetUntrackedFiles()
+	untrackedFiles, err2 := runner.GetUntrackedFiles()
 	if err2 == nil {
 		untracked = len(untrackedFiles)
 	}
