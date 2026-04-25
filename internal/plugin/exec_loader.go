@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -16,6 +17,13 @@ import (
 const (
 	// defaultExecPluginTimeout is the default timeout for exec plugin operations.
 	defaultExecPluginTimeout = 5 * time.Second
+
+	// verifyRetryMax is the number of extra attempts for verifyExecutable when
+	// the process is killed by the OS (e.g. antivirus scanning a new file).
+	verifyRetryMax = 2
+
+	// verifyRetryDelay is the wait between retries.
+	verifyRetryDelay = 200 * time.Millisecond
 )
 
 var (
@@ -95,26 +103,47 @@ func (*ExecLoader) Close() error {
 }
 
 // verifyExecutable checks if the plugin path exists and is executable.
+// Retries on signal: killed to tolerate transient OS process scans (e.g. antivirus).
 func (l *ExecLoader) verifyExecutable(path string) error {
-	// Try to execute with --version to verify it's executable
-	ctx, cancel := context.WithTimeout(context.Background(), defaultExecPluginTimeout)
-	defer cancel()
+	var lastErr error
 
-	result := l.runner.Run(ctx, path, "--version")
-	if result.Err != nil {
-		return errors.Wrapf(result.Err, "failed to execute plugin at path %q with --version", path)
+	for attempt := range verifyRetryMax + 1 {
+		if attempt > 0 {
+			time.Sleep(verifyRetryDelay)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultExecPluginTimeout)
+		result := l.runner.Run(ctx, path, "--version")
+
+		cancel()
+
+		if result.Err != nil {
+			lastErr = errors.Wrapf(
+				result.Err,
+				"failed to execute plugin at path %q with --version",
+				path,
+			)
+
+			if strings.Contains(result.Err.Error(), "signal: killed") {
+				continue
+			}
+
+			return lastErr
+		}
+
+		if result.ExitCode != 0 {
+			return errors.Errorf(
+				"plugin at path %q --version exited with code %d: %s",
+				path,
+				result.ExitCode,
+				result.Stderr,
+			)
+		}
+
+		return nil
 	}
 
-	if result.ExitCode != 0 {
-		return errors.Errorf(
-			"plugin at path %q --version exited with code %d: %s",
-			path,
-			result.ExitCode,
-			result.Stderr,
-		)
-	}
-
-	return nil
+	return lastErr
 }
 
 // fetchInfo fetches plugin metadata by executing with --info flag.
