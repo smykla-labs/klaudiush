@@ -5,6 +5,13 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.1](https://github.com/smykla-skalski/klaudiush/compare/v1.32.0...v1.32.1) (2026-04-26)
+
+### Bug Fixes
+
+* **commit:** use scoped runner when cd or -C path present ([318f319](https://github.com/smykla-skalski/klaudiush/commit/318f319fa39af01eee0d5cc3be35edfbc32a0cb1))
+* **plugin:** retry verify on signal: killed ([9e06d6a](https://github.com/smykla-skalski/klaudiush/commit/9e06d6ae1a9aa1acbd04569430663789ffb9ff16))
+
 ## [1.32.0](https://github.com/smykla-skalski/klaudiush/compare/v1.31.1...v1.32.0) (2026-04-11)
 
 ### Features
