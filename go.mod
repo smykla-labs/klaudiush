@@ -9,7 +9,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/x/ansi v0.11.7
-	github.com/cockroachdb/errors v1.12.0
+	github.com/cockroachdb/errors v1.13.0
 	github.com/dmarkham/enumer v1.6.3
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-git/go-git/v6 v6.0.0-20260324221343-cd85c8c75d34
@@ -66,7 +66,7 @@ require (
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/getsentry/sentry-go v0.27.0 // indirect
+	github.com/getsentry/sentry-go v0.46.0 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
 	github.com/go-git/go-billy/v6 v6.0.0-20260226131633-45bd0956d66f // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
