@@ -18,7 +18,7 @@ require (
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
 	github.com/invopop/jsonschema v0.13.0
 	github.com/knadh/koanf/maps v0.1.2
-	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
+	github.com/knadh/koanf/parsers/toml/v2 v2.2.1
 	github.com/knadh/koanf/providers/confmap v1.0.0
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
 	github.com/knadh/koanf/providers/file v1.2.1
@@ -27,7 +27,7 @@ require (
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.40.0
-	github.com/pelletier/go-toml/v2 v2.3.0
+	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/spf13/cobra v1.10.2
