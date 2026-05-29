@@ -8,7 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.2
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
-	github.com/charmbracelet/x/ansi v0.11.6
+	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/cockroachdb/errors v1.12.0
 	github.com/dmarkham/enumer v1.6.3
 	github.com/dustin/go-humanize v1.0.1
@@ -81,7 +81,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
+	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
