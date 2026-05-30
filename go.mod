@@ -16,7 +16,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/go-github/v84 v84.0.0
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
-	github.com/invopop/jsonschema v0.13.0
+	github.com/invopop/jsonschema v0.14.0
 	github.com/knadh/koanf/maps v0.1.2
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.1
 	github.com/knadh/koanf/providers/confmap v1.0.0
@@ -43,6 +43,8 @@ require (
 	github.com/charmbracelet/x/exp/ordered v0.1.0 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
+	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
+	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 )
 
 require (
