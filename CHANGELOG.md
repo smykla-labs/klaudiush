@@ -5,6 +5,16 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.3](https://github.com/smykla-skalski/klaudiush/compare/v1.32.2...v1.32.3) (2026-05-31)
+
+### Bug Fixes
+
+* **deps:** update module github.com/google/go-github/v84 to v88 ([#470](https://github.com/smykla-skalski/klaudiush/issues/470)) ([dd7b4dd](https://github.com/smykla-skalski/klaudiush/commit/dd7b4dd4e71f6ec79bccace3afb821fdb827fd16))
+* **deps:** update module github.com/invopop/jsonschema to v0.14.0 ([#464](https://github.com/smykla-skalski/klaudiush/issues/464)) ([765916c](https://github.com/smykla-skalski/klaudiush/commit/765916c8fea0ea3299dd6c05e7adef99bf1d6e47))
+* **deps:** update module github.com/masterminds/semver/v3 to v3.5.0 ([#465](https://github.com/smykla-skalski/klaudiush/issues/465)) ([43bd68e](https://github.com/smykla-skalski/klaudiush/commit/43bd68e9df91ef9f81c04b41ac3978ab24197a85))
+* **deps:** update module github.com/onsi/gomega to v1.41.0 ([#467](https://github.com/smykla-skalski/klaudiush/issues/467)) ([5feeda9](https://github.com/smykla-skalski/klaudiush/commit/5feeda9d0a9d7611fe388dc4b7106c1d95a313d6))
+* **deps:** update module github.com/rogpeppe/go-internal to v1.15.0 ([#468](https://github.com/smykla-skalski/klaudiush/issues/468)) ([79f3529](https://github.com/smykla-skalski/klaudiush/commit/79f3529f846de19db1fd7846656180707a0f4241))
+
 ## [1.32.2](https://github.com/smykla-skalski/klaudiush/compare/v1.32.1...v1.32.2) (2026-05-30)
 
 ### Bug Fixes
