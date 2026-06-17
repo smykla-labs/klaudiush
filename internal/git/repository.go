@@ -153,7 +153,7 @@ func (r *SDKRepository) GetRoot() (string, error) {
 		return "", errors.Wrap(err, "failed to get worktree")
 	}
 
-	return worktree.Filesystem.Root(), nil
+	return worktree.Filesystem().Root(), nil
 }
 
 // getStatus returns the worktree status, calling worktree.Status() at most once.

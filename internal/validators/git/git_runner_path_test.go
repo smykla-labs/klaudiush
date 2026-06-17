@@ -69,6 +69,10 @@ var _ = Describe("CLIGitRunnerWithPath", func() {
 
 		cfg.User.Name = testAuthor.Name
 		cfg.User.Email = testAuthor.Email
+		// Disable commit signing in the test repo so go-git does not try to
+		// auto-sign commits based on a host-level commit.gpgSign=true setting,
+		// which would fail without a registered ObjectSigner plugin.
+		cfg.Commit.GpgSign = config.NewOptBool(false)
 		err = repo.SetConfig(cfg)
 		Expect(err).NotTo(HaveOccurred())
 
