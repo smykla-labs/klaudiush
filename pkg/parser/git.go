@@ -21,6 +21,7 @@ type GitCommand struct {
 	FlagMap          map[string]string // Flag values (e.g., "-m" -> "commit message")
 	GlobalOptions    map[string]string // Global git options (e.g., "-C" -> "/path/to/repo")
 	WorkingDirectory string            // Working directory from preceding cd commands
+	Stdin            string            // Content fed to stdin (heredoc or piped echo/printf)
 }
 
 // Global git options that take a value.
@@ -77,6 +78,7 @@ func ParseGitCommand(cmd Command) (*GitCommand, error) {
 		FlagMap:          make(map[string]string),
 		GlobalOptions:    make(map[string]string),
 		WorkingDirectory: cmd.WorkingDirectory,
+		Stdin:            cmd.Stdin,
 	}
 
 	// First, parse global options and find the subcommand

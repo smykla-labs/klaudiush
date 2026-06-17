@@ -1125,6 +1125,149 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			Expect(result.Message).To(ContainSubstring("Failed to read commit message"))
 		})
 
+		It("should not warn when -F - has no stdin (message from editor)", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+			Expect(result.ShouldBlock).To(BeFalse())
+			Expect(result.Message).ToNot(ContainSubstring("Failed to read commit message"))
+		})
+
+		It("should validate message from a heredoc fed to -F -", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: "git commit -sS -a -F - <<'EOF'\nthis is not conventional\nEOF",
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("should validate a heredoc message even with an output redirect", func() {
+			// An output redirect must not let -F - bypass message validation.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: "git commit -sS -a -F - <<'EOF' >/dev/null\nthis is not conventional\nEOF",
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("should pass a valid message from a heredoc fed to -F -", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: "git commit -sS -a -F - <<'EOF'\nfix(parser): handle stdin commit messages\nEOF",
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should validate message piped to -F - via echo", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo "this is not conventional" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("should validate message piped to -F - via printf %s", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `printf '%s' "this is not conventional" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("should keep dash-prefixed words when echo feeds -F -", func() {
+			// echo only treats the leading -n/-e/-E run as flags; a -prefixed
+			// word appearing after a non-flag arg is literal and must survive.
+			// "-dash" is its own echo argument here, so it exercises the
+			// flag-stripping boundary rather than a quoted substring.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo "fix(parser): handle" -dash words | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should not capture echo output containing an expansion", func() {
+			// "$VAR" cannot be resolved by the parser, so the message must be
+			// treated as uncaptured rather than validated against partial text.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo "this is not conventional $VAR" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+			Expect(result.Message).ToNot(ContainSubstring("conventional commits format"))
+		})
+
+		It("should not capture echo -e output (escape interpretation)", func() {
+			// echo -e interprets backslash escapes, which the parser does not
+			// replicate, so the message is treated as uncaptured (editor case)
+			// rather than validated against raw text.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo -e "this is not conventional" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+			Expect(result.Message).ToNot(ContainSubstring("conventional commits format"))
+		})
+
 		It("should pass with empty file (message from editor)", func() {
 			file, err := os.CreateTemp("", "commit-msg-*.txt")
 			Expect(err).ToNot(HaveOccurred())

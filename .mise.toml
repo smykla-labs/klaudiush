@@ -3,7 +3,7 @@
 
 [tools]
 # Go language
-go = "1.26.1"
+go = "1.26.4"
 
 # Go linting tool with comprehensive checks
 # https://golangci-lint.run/
@@ -11,11 +11,11 @@ golangci-lint = "2.11.4"
 
 # Markdown linter
 # https://github.com/DavidAnson/markdownlint-cli2
-markdownlint-cli2 = "0.22.0"
+markdownlint-cli2 = "0.22.1"
 
 # Ginkgo BDD test framework CLI
 # https://onsi.github.io/ginkgo/
-ginkgo = "2.28.1"
+ginkgo = "2.29.0"
 
 # Enum code generator
 # https://github.com/dmarkham/enumer
@@ -27,7 +27,7 @@ ginkgo = "2.28.1"
 
 # Git hooks manager
 # https://github.com/evilmartians/lefthook
-lefthook = "2.1.4"
+lefthook = "2.1.9"
 
 [env]
 # Ensure Go binaries are in PATH

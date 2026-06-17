@@ -5,6 +5,36 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.4](https://github.com/smykla-skalski/klaudiush/compare/v1.32.3...v1.32.4) (2026-06-01)
+
+### Bug Fixes
+
+* **deps:** update module github.com/knadh/koanf/v2 to v2.3.5 ([#472](https://github.com/smykla-skalski/klaudiush/issues/472)) ([9a5c9a1](https://github.com/smykla-skalski/klaudiush/commit/9a5c9a13107e4382ec89520091dcd46be388d201))
+
+## [1.32.3](https://github.com/smykla-skalski/klaudiush/compare/v1.32.2...v1.32.3) (2026-05-31)
+
+### Bug Fixes
+
+* **deps:** update module github.com/google/go-github/v84 to v88 ([#470](https://github.com/smykla-skalski/klaudiush/issues/470)) ([dd7b4dd](https://github.com/smykla-skalski/klaudiush/commit/dd7b4dd4e71f6ec79bccace3afb821fdb827fd16))
+* **deps:** update module github.com/invopop/jsonschema to v0.14.0 ([#464](https://github.com/smykla-skalski/klaudiush/issues/464)) ([765916c](https://github.com/smykla-skalski/klaudiush/commit/765916c8fea0ea3299dd6c05e7adef99bf1d6e47))
+* **deps:** update module github.com/masterminds/semver/v3 to v3.5.0 ([#465](https://github.com/smykla-skalski/klaudiush/issues/465)) ([43bd68e](https://github.com/smykla-skalski/klaudiush/commit/43bd68e9df91ef9f81c04b41ac3978ab24197a85))
+* **deps:** update module github.com/onsi/gomega to v1.41.0 ([#467](https://github.com/smykla-skalski/klaudiush/issues/467)) ([5feeda9](https://github.com/smykla-skalski/klaudiush/commit/5feeda9d0a9d7611fe388dc4b7106c1d95a313d6))
+* **deps:** update module github.com/rogpeppe/go-internal to v1.15.0 ([#468](https://github.com/smykla-skalski/klaudiush/issues/468)) ([79f3529](https://github.com/smykla-skalski/klaudiush/commit/79f3529f846de19db1fd7846656180707a0f4241))
+
+## [1.32.2](https://github.com/smykla-skalski/klaudiush/compare/v1.32.1...v1.32.2) (2026-05-30)
+
+### Bug Fixes
+
+* **deps:** update ginkgo to v2.29.0 ([#451](https://github.com/smykla-skalski/klaudiush/issues/451)) ([38f204b](https://github.com/smykla-skalski/klaudiush/commit/38f204ba6094f0bf5719ab5fe94f1c3bd30f509d))
+* **deps:** update module charm.land/bubbletea/v2 to v2.0.6 ([#442](https://github.com/smykla-skalski/klaudiush/issues/442)) ([cb745c7](https://github.com/smykla-skalski/klaudiush/commit/cb745c7436faccc0d2e71fa9dd0443a8b17368f0))
+* **deps:** update module charm.land/lipgloss/v2 to v2.0.3 ([#443](https://github.com/smykla-skalski/klaudiush/issues/443)) ([5bec03f](https://github.com/smykla-skalski/klaudiush/commit/5bec03f452572691777c39f92dd3d56e38a843ba))
+* **deps:** update module github.com/charmbracelet/x/ansi to v0.11.7 ([#444](https://github.com/smykla-skalski/klaudiush/issues/444)) ([c229c65](https://github.com/smykla-skalski/klaudiush/commit/c229c65574c9521eec03f21f8e5dced805395f53))
+* **deps:** update module github.com/cockroachdb/errors to v1.13.0 ([#463](https://github.com/smykla-skalski/klaudiush/issues/463)) ([896a79d](https://github.com/smykla-skalski/klaudiush/commit/896a79d2100f05e15a6b518ea8ddbb6a5fdb073b))
+* **deps:** update module github.com/knadh/koanf/parsers/toml/v2 to v2.2.1 ([#460](https://github.com/smykla-skalski/klaudiush/issues/460)) ([1bcacc8](https://github.com/smykla-skalski/klaudiush/commit/1bcacc833dec2682f66428320287457fb5703631))
+* **deps:** update module github.com/mattn/go-runewidth to v0.0.24 ([#429](https://github.com/smykla-skalski/klaudiush/issues/429)) ([2765ec9](https://github.com/smykla-skalski/klaudiush/commit/2765ec933e5cc653111bd7137a51132edfe30e28))
+* **deps:** update module github.com/pelletier/go-toml/v2 to v2.3.1 ([#461](https://github.com/smykla-skalski/klaudiush/issues/461)) ([f0a2305](https://github.com/smykla-skalski/klaudiush/commit/f0a230563eaa74957113d341de1116ea61f1bc13))
+* **deps:** update module mvdan.cc/sh/v3 to v3.13.1 ([#431](https://github.com/smykla-skalski/klaudiush/issues/431)) ([652bb3b](https://github.com/smykla-skalski/klaudiush/commit/652bb3bc37c54073384cda3e63b983d4036d84f2))
+
 ## [1.32.1](https://github.com/smykla-skalski/klaudiush/compare/v1.32.0...v1.32.1) (2026-04-26)
 
 ### Bug Fixes

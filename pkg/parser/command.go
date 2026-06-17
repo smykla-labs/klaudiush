@@ -56,6 +56,7 @@ type Command struct {
 	Type             CmdType  // Command type
 	Raw              string   // Raw command string
 	WorkingDirectory string   // Effective working directory from preceding cd commands
+	Stdin            string   // Content fed to stdin via heredoc or a piped echo/printf
 }
 
 // String returns a string representation of the command.

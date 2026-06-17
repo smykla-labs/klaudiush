@@ -329,6 +329,102 @@ EOF`
 		})
 	})
 
+	Describe("stdin capture", func() {
+		// gitStdin parses cmd and returns the Stdin captured for the git command.
+		gitStdin := func(cmd string) string {
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, c := range result.Commands {
+				if c.Name == "git" {
+					return c.Stdin
+				}
+			}
+
+			Fail("no git command found in: " + cmd)
+
+			return ""
+		}
+
+		Context("heredoc", func() {
+			It("records heredoc content as stdin", func() {
+				cmd := "git commit -F - <<'EOF'\nfix(x): message\nEOF"
+				Expect(gitStdin(cmd)).To(Equal("fix(x): message\n"))
+			})
+
+			It("records heredoc stdin even with an output redirect", func() {
+				cmd := "git commit -F - <<'EOF' >/dev/null\nfix(x): message\nEOF"
+				Expect(gitStdin(cmd)).To(Equal("fix(x): message\n"))
+			})
+		})
+
+		Context("piped producers", func() {
+			It("captures echo output", func() {
+				Expect(gitStdin(`echo "fix(x): message" | git commit -F -`)).
+					To(Equal("fix(x): message"))
+			})
+
+			It("strips only the leading -n/-e/-E flag run from echo", func() {
+				Expect(gitStdin(`echo -n "fix(x): message" | git commit -F -`)).
+					To(Equal("fix(x): message"))
+			})
+
+			It("keeps dash-prefixed words that are not leading flags", func() {
+				Expect(gitStdin(`echo "fix(x):" handle -dash words | git commit -F -`)).
+					To(Equal("fix(x): handle -dash words"))
+			})
+
+			It("does not capture echo -e (escape interpretation)", func() {
+				Expect(gitStdin(`echo -e "fix(x): message" | git commit -F -`)).
+					To(BeEmpty())
+			})
+
+			It("captures printf with a bare literal format", func() {
+				Expect(gitStdin(`printf "fix(x): message" | git commit -F -`)).
+					To(Equal("fix(x): message"))
+			})
+
+			It("captures printf %s with a single argument", func() {
+				Expect(gitStdin(`printf '%s' "fix(x): message" | git commit -F -`)).
+					To(Equal("fix(x): message"))
+			})
+
+			It("captures printf %s\\n with a single argument", func() {
+				Expect(gitStdin(`printf '%s\n' "fix(x): message" | git commit -F -`)).
+					To(Equal("fix(x): message"))
+			})
+
+			It("does not capture printf with unsupported directives", func() {
+				Expect(gitStdin(`printf '%d' 42 | git commit -F -`)).To(BeEmpty())
+			})
+
+			It("does not capture output containing a parameter expansion", func() {
+				Expect(gitStdin(`echo "fix(x): $VAR" | git commit -F -`)).To(BeEmpty())
+			})
+
+			It("does not capture an unquoted parameter expansion", func() {
+				Expect(gitStdin(`echo $VAR | git commit -F -`)).To(BeEmpty())
+			})
+
+			It("treats an unknown dash option as literal echo text", func() {
+				Expect(gitStdin(`echo -x "fix(x): message" | git commit -F -`)).
+					To(Equal("-x fix(x): message"))
+			})
+
+			It("captures empty stdin from a flagless printf", func() {
+				Expect(gitStdin(`printf | git commit -F -`)).To(BeEmpty())
+			})
+
+			It("does not capture output containing a command substitution", func() {
+				Expect(gitStdin("echo \"fix(x): $(date)\" | git commit -F -")).To(BeEmpty())
+			})
+
+			It("does not capture non-echo/printf producers", func() {
+				Expect(gitStdin(`cat msg.txt | git commit -F -`)).To(BeEmpty())
+			})
+		})
+	})
+
 	Describe("ParseResult methods", func() {
 		It("HasCommand checks command existence", func() {
 			result, err := p.Parse("git status && echo done")
