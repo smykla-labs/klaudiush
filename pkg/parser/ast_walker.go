@@ -105,14 +105,11 @@ func literalCommandOutput(call *syntax.CallExpr) (string, bool) {
 		return "", false
 	}
 
-	switch name {
-	case "echo":
+	if name == "echo" {
 		return echoOutput(args)
-	case "printf":
-		return printfOutput(args)
-	default:
-		return "", false
 	}
+
+	return printfOutput(args) // name == "printf"
 }
 
 // literalArgs converts words to strings only when every word is strictly
