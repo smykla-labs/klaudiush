@@ -3,7 +3,7 @@
 
 [tools]
 # Go language
-go = "1.26.3"
+go = "1.26.4"
 
 # Go linting tool with comprehensive checks
 # https://golangci-lint.run/
