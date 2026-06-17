@@ -300,6 +300,14 @@ func (*CommitValidator) hasGitAddInChain(commands []parser.Command) bool {
 func (v *CommitValidator) extractCommitMessage(gitCmd *parser.GitCommand) (string, error) {
 	// Check for file flags first (-F/--file)
 	if filePath := v.getFlagValue(gitCmd, commitFileFlags); filePath != "" {
+		// "-" means read from stdin. The parser captures stdin fed via a
+		// heredoc or a piped echo/printf, so validate that when available.
+		if filePath == "-" {
+			v.Logger().Debug("Reading commit message from stdin (-F -)")
+
+			return strings.TrimSpace(gitCmd.Stdin), nil
+		}
+
 		v.Logger().Debug("Reading commit message from file", "path", filePath)
 
 		content, err := os.ReadFile(

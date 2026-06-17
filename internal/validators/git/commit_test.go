@@ -1125,6 +1125,66 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			Expect(result.Message).To(ContainSubstring("Failed to read commit message"))
 		})
 
+		It("should not warn when -F - has no stdin (message from editor)", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+			Expect(result.ShouldBlock).To(BeFalse())
+			Expect(result.Message).ToNot(ContainSubstring("Failed to read commit message"))
+		})
+
+		It("should validate message from a heredoc fed to -F -", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: "git commit -sS -a -F - <<'EOF'\nthis is not conventional\nEOF",
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("should pass a valid message from a heredoc fed to -F -", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: "git commit -sS -a -F - <<'EOF'\nfix(parser): handle stdin commit messages\nEOF",
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should validate message piped to -F - via echo", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo "this is not conventional" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
 		It("should pass with empty file (message from editor)", func() {
 			file, err := os.CreateTemp("", "commit-msg-*.txt")
 			Expect(err).ToNot(HaveOccurred())
