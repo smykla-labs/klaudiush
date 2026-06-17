@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"strings"
+
 	"mvdan.cc/sh/v3/syntax"
 )
 
@@ -9,11 +11,17 @@ type astWalker struct {
 	commands   []Command
 	fileWrites []FileWrite
 	currentDir string // Tracks the effective working directory from cd commands
+	// stdinByCall maps a CallExpr to the content fed to its stdin (heredoc or
+	// piped echo/printf). Populated when a Stmt or pipeline is visited, then
+	// consumed when the corresponding CallExpr is extracted into a Command.
+	stdinByCall map[*syntax.CallExpr]string
 }
 
 // visit is called for each node in the AST.
 func (w *astWalker) visit(node syntax.Node) bool {
 	switch n := node.(type) {
+	case *syntax.BinaryCmd:
+		w.extractPipedStdin(n)
 	case *syntax.CallExpr:
 		w.extractCommand(n)
 	case *syntax.Stmt:
@@ -27,6 +35,202 @@ func (w *astWalker) visit(node syntax.Node) bool {
 	}
 
 	return true
+}
+
+// recordStdin associates stdin content with a CallExpr so it can be attached
+// to the Command when that CallExpr is later extracted.
+func (w *astWalker) recordStdin(call *syntax.CallExpr, content string) {
+	if w.stdinByCall == nil {
+		w.stdinByCall = make(map[*syntax.CallExpr]string)
+	}
+
+	w.stdinByCall[call] = content
+}
+
+// extractPipedStdin handles "producer | consumer" pipelines, capturing the
+// producer's literal output (echo/printf) as the consumer's stdin. This lets
+// validators inspect messages fed via "git commit -F -".
+func (w *astWalker) extractPipedStdin(bin *syntax.BinaryCmd) {
+	if bin.Op != syntax.Pipe && bin.Op != syntax.PipeAll {
+		return
+	}
+
+	producer := callExprOf(bin.X)
+	consumer := callExprOf(bin.Y)
+
+	if producer == nil || consumer == nil {
+		return
+	}
+
+	content, ok := literalCommandOutput(producer)
+	if !ok {
+		return
+	}
+
+	w.recordStdin(consumer, content)
+}
+
+// callExprOf returns the CallExpr a statement runs, or nil if the statement is
+// not a simple command.
+func callExprOf(stmt *syntax.Stmt) *syntax.CallExpr {
+	if stmt == nil {
+		return nil
+	}
+
+	if call, ok := stmt.Cmd.(*syntax.CallExpr); ok {
+		return call
+	}
+
+	return nil
+}
+
+// literalCommandOutput returns the text a simple echo/printf command writes to
+// stdout, when it can be determined from literal arguments alone.
+func literalCommandOutput(call *syntax.CallExpr) (string, bool) {
+	if len(call.Args) == 0 {
+		return "", false
+	}
+
+	name := wordToString(call.Args[0])
+	if name != "echo" && name != "printf" {
+		return "", false
+	}
+
+	// Only capture when every argument is strictly literal. Expansions
+	// (parameters, command/arithmetic substitution, globs) cannot be
+	// reproduced here, so capturing would yield a message different from what
+	// the command actually emits.
+	args, ok := literalArgs(call.Args[1:])
+	if !ok {
+		return "", false
+	}
+
+	if name == "echo" {
+		return echoOutput(args)
+	}
+
+	return printfOutput(args) // name == "printf"
+}
+
+// literalArgs converts words to strings only when every word is strictly
+// literal. It returns false as soon as any word contains a shell expansion.
+func literalArgs(words []*syntax.Word) ([]string, bool) {
+	args := make([]string, 0, len(words))
+
+	for _, word := range words {
+		if !isLiteralWord(word) {
+			return nil, false
+		}
+
+		args = append(args, wordToString(word))
+	}
+
+	return args, true
+}
+
+// isLiteralWord reports whether a word consists solely of literal text - plain
+// literals and single/double-quoted literals - with no shell expansions such as
+// parameters, command/arithmetic substitution, or globbing.
+func isLiteralWord(word *syntax.Word) bool {
+	if word == nil {
+		return false
+	}
+
+	for _, part := range word.Parts {
+		switch p := part.(type) {
+		case *syntax.Lit, *syntax.SglQuoted:
+			// Literal text, no expansion.
+		case *syntax.DblQuoted:
+			if !allLiteralParts(p.Parts) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
+// allLiteralParts reports whether every part is a plain literal (no expansions),
+// as found inside a double-quoted string.
+func allLiteralParts(parts []syntax.WordPart) bool {
+	for _, p := range parts {
+		if _, ok := p.(*syntax.Lit); !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+// echoOutput returns the literal text content of an "echo args..." call. Only
+// the leading run of echo flags (-n, -e, -E and combinations) is stripped; once
+// a non-flag word appears, every remaining argument is literal, even if it
+// starts with "-". It returns false when -e is present, since that enables
+// backslash-escape interpretation which this helper does not perform - capturing
+// the raw text would mis-validate the message. This is a best-effort capture for
+// validation: it joins the arguments with spaces and omits the trailing newline
+// echo would normally emit (callers trim surrounding whitespace anyway).
+func echoOutput(args []string) (string, bool) {
+	i := 0
+
+	for i < len(args) {
+		flag, ok := echoFlag(args[i])
+		if !ok {
+			break
+		}
+
+		if strings.ContainsRune(flag, 'e') {
+			return "", false
+		}
+
+		i++
+	}
+
+	return strings.Join(args[i:], " "), true
+}
+
+// echoFlag reports whether arg is an echo option like -n, -e, -E, or -ne and
+// returns its letters (without the leading dash) when so.
+func echoFlag(arg string) (string, bool) {
+	if len(arg) < 2 || arg[0] != '-' {
+		return "", false
+	}
+
+	for _, c := range arg[1:] {
+		if c != 'n' && c != 'e' && c != 'E' {
+			return "", false
+		}
+	}
+
+	return arg[1:], true
+}
+
+// printfOutput returns the literal text content of a simple "printf" call, for
+// the forms commonly used to feed a commit message: a bare literal format with
+// no directives, or "%s"/"%s\n" with a single string argument. This is a
+// best-effort capture for validation: it returns the argument text itself and
+// does not apply any newline implied by the format string (callers trim
+// surrounding whitespace anyway).
+func printfOutput(args []string) (string, bool) {
+	if len(args) == 0 {
+		return "", false
+	}
+
+	format := args[0]
+
+	// "printf <literal>" with no format directives.
+	if len(args) == 1 && !strings.Contains(format, "%") {
+		return format, true
+	}
+
+	// "printf %s msg" / "printf '%s\n' msg" with a single argument.
+	if len(args) == 2 && (format == "%s" || format == "%s\n" || format == `%s\n`) {
+		return args[1], true
+	}
+
+	return "", false
 }
 
 // extractCommand extracts a command from a CallExpr node.
@@ -59,6 +263,7 @@ func (w *astWalker) extractCommand(call *syntax.CallExpr) {
 		Location:         loc,
 		Type:             cmdType,
 		WorkingDirectory: w.currentDir,
+		Stdin:            w.stdinByCall[call],
 	}
 
 	w.commands = append(w.commands, cmd)
@@ -72,83 +277,88 @@ func (w *astWalker) extractCommand(call *syntax.CallExpr) {
 	w.extractFileWriteCommand(cmd)
 }
 
-// extractRedirect extracts file write operations from redirections.
-func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
-	if stmt.Redirs == nil {
-		return
-	}
+// redirInfo holds the output redirection and heredoc found on a statement.
+type redirInfo struct {
+	outputPath     string
+	outputOp       WriteOp
+	outputLoc      Location
+	heredocContent string
+	heredocLoc     Location
+	hasOutput      bool
+	hasHeredoc     bool
+}
 
-	// First pass: collect output redirections and heredocs separately
-	var outputPath string
-
-	var outputOp WriteOp
-
-	var outputLoc Location
-
-	var heredocContent string
-
-	var heredocLoc Location
-
-	hasOutput := false
-	hasHeredoc := false
+// collectRedirs gathers output redirection and heredoc details from a statement.
+func collectRedirs(stmt *syntax.Stmt) redirInfo {
+	var info redirInfo
 
 	for _, redir := range stmt.Redirs {
-		if redir.Op == syntax.RdrOut || redir.Op == syntax.AppOut {
+		switch redir.Op {
+		case syntax.RdrOut, syntax.AppOut:
 			path := wordToString(redir.Word)
 			if path == "" {
 				continue
 			}
 
-			outputPath = path
+			info.outputPath = path
 
-			outputOp = WriteOpRedirect
+			info.outputOp = WriteOpRedirect
 			if redir.Op == syntax.AppOut {
-				outputOp = WriteOpAppend
+				info.outputOp = WriteOpAppend
 			}
 
-			outputLoc = Location{
-				Line:   redir.Pos().Line(),
-				Column: redir.Pos().Col(),
-			}
-			hasOutput = true
-		}
-
-		// Handle heredocs
-		if redir.Op == syntax.Hdoc || redir.Op == syntax.DashHdoc {
-			// Extract heredoc content from Hdoc field (may be empty)
+			info.outputLoc = Location{Line: redir.Pos().Line(), Column: redir.Pos().Col()}
+			info.hasOutput = true
+		case syntax.Hdoc, syntax.DashHdoc:
+			// Extract heredoc content from Hdoc field (may be empty).
 			if redir.Hdoc != nil {
-				heredocContent = wordToString(redir.Hdoc)
+				info.heredocContent = wordToString(redir.Hdoc)
 			}
-			// Mark as heredoc even if content is empty
-			heredocLoc = Location{
-				Line:   redir.Pos().Line(),
-				Column: redir.Pos().Col(),
-			}
-			hasHeredoc = true
+			// Mark as heredoc even if content is empty.
+			info.heredocLoc = Location{Line: redir.Pos().Line(), Column: redir.Pos().Col()}
+			info.hasHeredoc = true
+		default:
+			// Other redirection operators are not relevant here.
 		}
 	}
 
-	// Second pass: create FileWrite entries
-	// If we have both output redirection and heredoc, combine them
-	if hasOutput && hasHeredoc {
-		fw := FileWrite{
-			Path:      outputPath,
-			Operation: WriteOpHeredoc,
-			Content:   heredocContent,
-			Location:  heredocLoc,
-		}
-		w.fileWrites = append(w.fileWrites, fw)
-	} else if hasOutput {
-		// Just output redirection without heredoc
-		fw := FileWrite{
-			Path:      outputPath,
-			Operation: outputOp,
-			Location:  outputLoc,
-		}
-		w.fileWrites = append(w.fileWrites, fw)
+	return info
+}
+
+// extractRedirect extracts file write operations and stdin content from redirections.
+func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
+	if stmt.Redirs == nil {
+		return
 	}
-	// Note: heredoc without output redirection is rare and not handled
-	// (it would just pipe to stdin of a command)
+
+	info := collectRedirs(stmt)
+
+	// A heredoc always feeds the command's stdin, regardless of any output
+	// redirection on the same statement. Record it so validators can inspect
+	// stdin-fed content (e.g. "git commit -F - <<EOF ... EOF >/dev/null").
+	if info.hasHeredoc {
+		if call := callExprOf(stmt); call != nil {
+			w.recordStdin(call, info.heredocContent)
+		}
+	}
+
+	switch {
+	case info.hasOutput && info.hasHeredoc:
+		// Output redirection combined with a heredoc.
+		w.fileWrites = append(w.fileWrites, FileWrite{
+			Path:      info.outputPath,
+			Operation: WriteOpHeredoc,
+			Content:   info.heredocContent,
+			Location:  info.heredocLoc,
+		})
+	case info.hasOutput:
+		// Just output redirection without heredoc.
+		w.fileWrites = append(w.fileWrites, FileWrite{
+			Path:      info.outputPath,
+			Operation: info.outputOp,
+			Location:  info.outputLoc,
+		})
+	}
 }
 
 // extractFileWriteCommand detects file write commands (tee, cp, mv).
