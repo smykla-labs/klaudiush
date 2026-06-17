@@ -255,6 +255,15 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 
 	info := collectRedirs(stmt)
 
+	// A heredoc always feeds the command's stdin, regardless of any output
+	// redirection on the same statement. Record it so validators can inspect
+	// stdin-fed content (e.g. "git commit -F - <<EOF ... EOF >/dev/null").
+	if info.hasHeredoc {
+		if call := callExprOf(stmt); call != nil {
+			w.recordStdin(call, info.heredocContent)
+		}
+	}
+
 	switch {
 	case info.hasOutput && info.hasHeredoc:
 		// Output redirection combined with a heredoc.
@@ -271,13 +280,6 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 			Operation: info.outputOp,
 			Location:  info.outputLoc,
 		})
-	case info.hasHeredoc:
-		// Heredoc without output redirection feeds the command's stdin
-		// (e.g. "git commit -F - <<EOF ... EOF"). Record it so validators
-		// can inspect the message.
-		if call := callExprOf(stmt); call != nil {
-			w.recordStdin(call, info.heredocContent)
-		}
 	}
 }
 

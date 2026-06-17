@@ -1156,6 +1156,23 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			).To(ContainSubstring("doesn't follow conventional commits format"))
 		})
 
+		It("should validate a heredoc message even with an output redirect", func() {
+			// An output redirect must not let -F - bypass message validation.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: "git commit -sS -a -F - <<'EOF' >/dev/null\nthis is not conventional\nEOF",
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
 		It("should pass a valid message from a heredoc fed to -F -", func() {
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,

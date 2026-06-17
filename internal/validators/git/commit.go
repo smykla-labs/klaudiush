@@ -303,9 +303,18 @@ func (v *CommitValidator) extractCommitMessage(gitCmd *parser.GitCommand) (strin
 		// "-" means read from stdin. The parser captures stdin fed via a
 		// heredoc or a piped echo/printf, so validate that when available.
 		if filePath == "-" {
+			stdin := strings.TrimSpace(gitCmd.Stdin)
+			if stdin == "" {
+				// Stdin wasn't capturable (e.g. message piped from a process
+				// the parser can't read); treat it like no inline message.
+				v.Logger().Debug("Commit message comes from uncaptured stdin (-F -)")
+
+				return "", nil
+			}
+
 			v.Logger().Debug("Reading commit message from stdin (-F -)")
 
-			return strings.TrimSpace(gitCmd.Stdin), nil
+			return stdin, nil
 		}
 
 		v.Logger().Debug("Reading commit message from file", "path", filePath)
