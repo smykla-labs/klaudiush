@@ -31,7 +31,7 @@ var (
 )
 
 var overridesCmd = &cobra.Command{
-	Use:   "overrides",
+	Use:   cmdUseOverrides,
 	Short: "List configured overrides",
 	Long: `List configured overrides.
 

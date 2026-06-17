@@ -14,6 +14,10 @@ const (
 
 	// DefaultGHAPITimeout is the default timeout for GitHub API calls.
 	DefaultGHAPITimeout = 5 * time.Second
+
+	// flagSignoff and flagGPGSign are the default required git commit flags.
+	flagSignoff = "-s"
+	flagGPGSign = "-S"
 )
 
 // DefaultConfig returns a Config with all default values populated.
@@ -144,10 +148,10 @@ func DefaultIssueValidatorConfig() *config.IssueValidatorConfig {
 		},
 		RequireBody: &requireBody,
 		MarkdownDisabledRules: []string{
-			"MD013", // Line length
-			"MD034", // Bare URLs
-			"MD041", // First line heading
-			"MD047", // Trailing newline
+			mdRuleLineLength, // Line length
+			mdRuleBareURLs,   // Bare URLs
+			mdRuleFirstLine,  // First line heading
+			"MD047",          // Trailing newline
 		},
 		Timeout: config.Duration(DefaultTimeout),
 	}
@@ -183,7 +187,7 @@ func DefaultCommitValidatorConfig() *config.CommitValidatorConfig {
 			Enabled:  &enabled,
 			Severity: config.SeverityError,
 		},
-		RequiredFlags:    []string{"-s", "-S"},
+		RequiredFlags:    []string{flagSignoff, flagGPGSign},
 		CheckStagingArea: &checkStagingArea,
 		Message:          DefaultCommitMessageConfig(),
 	}
@@ -212,17 +216,17 @@ func DefaultCommitMessageConfig() *config.CommitMessageConfig {
 		BlockPRReferences:     &blockPRReferences,
 		BlockAIAttribution:    &blockAIAttribution,
 		ValidTypes: []string{
-			"build",
-			"chore",
-			"ci",
-			"docs",
-			"feat",
-			"fix",
-			"perf",
-			"refactor",
-			"revert",
-			"style",
-			"test",
+			commitTypeBuild,
+			commitTypeChore,
+			commitTypeCI,
+			commitTypeDocs,
+			commitTypeFeat,
+			commitTypeFix,
+			commitTypePerf,
+			commitTypeRefactor,
+			commitTypeRevert,
+			commitTypeStyle,
+			commitTypeTest,
 		},
 		ExpectedSignoff: "",
 	}
@@ -289,19 +293,19 @@ func DefaultPRValidatorConfig() *config.PRValidatorConfig {
 		CheckCILabels:            &checkCILabels,
 		RequireBody:              &requireBody,
 		ValidTypes: []string{
-			"build",
-			"chore",
-			"ci",
-			"docs",
-			"feat",
-			"fix",
-			"perf",
-			"refactor",
-			"revert",
-			"style",
-			"test",
+			commitTypeBuild,
+			commitTypeChore,
+			commitTypeCI,
+			commitTypeDocs,
+			commitTypeFeat,
+			commitTypeFix,
+			commitTypePerf,
+			commitTypeRefactor,
+			commitTypeRevert,
+			commitTypeStyle,
+			commitTypeTest,
 		},
-		MarkdownDisabledRules: []string{"MD013", "MD034", "MD041"},
+		MarkdownDisabledRules: []string{mdRuleLineLength, mdRuleBareURLs, mdRuleFirstLine},
 	}
 }
 
@@ -316,20 +320,20 @@ func DefaultBranchValidatorConfig() *config.BranchValidatorConfig {
 			Enabled:  &enabled,
 			Severity: config.SeverityError,
 		},
-		ProtectedBranches: []string{"main", "master"},
+		ProtectedBranches: []string{branchMain, "master"},
 		RequireType:       &requireType,
 		AllowUppercase:    &allowUppercase,
 		ValidTypes: []string{
-			"build",
-			"chore",
-			"ci",
-			"docs",
-			"feat",
-			"fix",
-			"perf",
-			"refactor",
-			"style",
-			"test",
+			commitTypeBuild,
+			commitTypeChore,
+			commitTypeCI,
+			commitTypeDocs,
+			commitTypeFeat,
+			commitTypeFix,
+			commitTypePerf,
+			commitTypeRefactor,
+			commitTypeStyle,
+			commitTypeTest,
 		},
 	}
 }
@@ -387,7 +391,7 @@ func DefaultShellScriptValidatorConfig() *config.ShellScriptValidatorConfig {
 		Timeout:            config.Duration(DefaultTimeout),
 		ContextLines:       &contextLines,
 		UseShellcheck:      &useShellcheck,
-		ShellcheckSeverity: "warning",
+		ShellcheckSeverity: severityWarning,
 		ExcludeRules:       []string{},
 		ShellcheckPath:     "",
 	}
@@ -407,7 +411,7 @@ func DefaultTerraformValidatorConfig() *config.TerraformValidatorConfig {
 		},
 		Timeout:        config.Duration(DefaultTimeout),
 		ContextLines:   &contextLines,
-		ToolPreference: "auto",
+		ToolPreference: valueAuto,
 		CheckFormat:    &checkFormat,
 		UseTflint:      &useTflint,
 		TerraformPath:  "",

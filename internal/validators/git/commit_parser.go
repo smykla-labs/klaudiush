@@ -2,6 +2,7 @@ package git
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/smykla-skalski/klaudiush/pkg/config"
@@ -130,7 +131,7 @@ func (p *CommitParser) Parse(message string) *ParsedCommit {
 	// Check for git revert format first
 	if isRevertCommit(title) {
 		result.Valid = true
-		result.Type = "revert"
+		result.Type = commitTypeRevert
 
 		return result
 	}
@@ -207,8 +208,8 @@ func findFooterStartIndex(bodyLines []string) int {
 	footerStartIdx := len(bodyLines)
 	foundNonFooter := false
 
-	for i := len(bodyLines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(bodyLines[i])
+	for i, bodyLine := range slices.Backward(bodyLines) {
+		line := strings.TrimSpace(bodyLine)
 		if line == "" {
 			// Blank line marks the boundary
 			footerStartIdx = i + 1

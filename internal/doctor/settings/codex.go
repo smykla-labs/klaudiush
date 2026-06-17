@@ -61,7 +61,7 @@ func (p *CodexHooksParser) Parse() (*CodexHooksFile, error) {
 
 // IsDispatcherRegistered checks whether any supported Codex event is configured for klaudiush.
 func (p *CodexHooksParser) IsDispatcherRegistered(dispatcherPath string) (bool, error) {
-	for _, eventName := range []string{"SessionStart", "AfterToolUse", "Stop"} {
+	for _, eventName := range []string{eventSessionStart, "AfterToolUse", "Stop"} {
 		hasHook, err := p.HasEventHook(eventName, dispatcherPath)
 		if err != nil {
 			return false, err

@@ -6,6 +6,9 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+// flagMessage is the short git/gh message flag.
+const flagMessage = "-m"
+
 var (
 	// ErrNotGitCommand is returned when the command is not a git command.
 	ErrNotGitCommand = errors.New("not a git command")
@@ -52,7 +55,7 @@ var globalOptionsWithValue = map[string]bool{
 
 // Flags that take values.
 var flagsWithValues = map[string]bool{
-	"-m":              true,
+	flagMessage:       true,
 	"--message":       true,
 	"-F":              true,
 	"--file":          true,
@@ -270,7 +273,7 @@ func (g *GitCommand) GetFlagValue(flag string) string {
 // ExtractCommitMessage extracts commit message from -m flag or returns empty.
 func (g *GitCommand) ExtractCommitMessage() string {
 	// Try various message flags
-	for _, flag := range []string{"-m", "--message"} {
+	for _, flag := range []string{flagMessage, "--message"} {
 		if msg := g.GetFlagValue(flag); msg != "" {
 			return msg
 		}

@@ -526,7 +526,8 @@ func (*PRValidator) checkCILabelHeuristics(data PRData, prType string) []string 
 	shouldSkipE2E := false
 
 	// Check PR type for non-logic changes
-	if prType == "ci" || prType == "docs" || prType == "chore" || prType == "style" {
+	if prType == commitTypeCI || prType == commitTypeDocs ||
+		prType == commitTypeChore || prType == commitTypeStyle {
 		shouldSkipTests = true
 		shouldSkipE2E = true
 	}

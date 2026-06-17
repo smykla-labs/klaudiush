@@ -270,14 +270,14 @@ func parseCategories(names []string) []doctor.Category {
 	}
 
 	categoryMap := map[string]doctor.Category{
-		"binary":    doctor.CategoryBinary,
-		"hook":      doctor.CategoryHook,
-		"config":    doctor.CategoryConfig,
-		"tools":     doctor.CategoryTools,
-		"patterns":  doctor.CategoryPatterns,
-		"backup":    doctor.CategoryBackup,
-		"overrides": doctor.CategoryOverrides,
-		"xdg":       doctor.CategoryXDG,
+		"binary":        doctor.CategoryBinary,
+		"hook":          doctor.CategoryHook,
+		"config":        doctor.CategoryConfig,
+		"tools":         doctor.CategoryTools,
+		cmdUsePatterns:  doctor.CategoryPatterns,
+		"backup":        doctor.CategoryBackup,
+		cmdUseOverrides: doctor.CategoryOverrides,
+		"xdg":           doctor.CategoryXDG,
 	}
 
 	var categories []doctor.Category

@@ -8,45 +8,56 @@ import (
 	"github.com/smykla-skalski/klaudiush/pkg/config"
 )
 
+// Error codes referenced in more than one place within the package.
+const (
+	codeGIT004   = "GIT004"
+	codeGIT005   = "GIT005"
+	codeGIT010   = "GIT010"
+	codeGIT013   = "GIT013"
+	codeFILE005  = "FILE005"
+	codeFILE010  = "FILE010"
+	codeSHELL001 = "SHELL001"
+)
+
 // codeDescriptions maps error codes to short human-readable labels.
 var codeDescriptions = map[string]string{
 	// Git
-	"GIT001": "missing signoff",
-	"GIT002": "missing GPG sign",
-	"GIT003": "no staged files",
-	"GIT004": "title too long",
-	"GIT005": "body line too long",
-	"GIT006": "infra scope misuse",
-	"GIT007": "missing remote",
-	"GIT008": "missing branch",
-	"GIT009": "file not found",
-	"GIT010": "missing flags",
-	"GIT011": "PR ref in commit",
-	"GIT012": "Claude attribution",
-	"GIT013": "conventional format",
-	"GIT014": "forbidden pattern",
-	"GIT015": "signoff mismatch",
-	"GIT016": "list format",
-	"GIT017": "merge message",
-	"GIT018": "merge signoff",
-	"GIT019": "blocked files",
-	"GIT020": "branch naming",
-	"GIT021": "no-verify flag",
-	"GIT022": "Kong org push",
-	"GIT023": "PR validation",
-	"GIT024": "fetch no remote",
-	"GIT025": "blocked remote",
+	"GIT001":   "missing signoff",
+	"GIT002":   "missing GPG sign",
+	"GIT003":   "no staged files",
+	codeGIT004: "title too long",
+	codeGIT005: "body line too long",
+	"GIT006":   "infra scope misuse",
+	"GIT007":   "missing remote",
+	"GIT008":   "missing branch",
+	"GIT009":   "file not found",
+	codeGIT010: "missing flags",
+	"GIT011":   "PR ref in commit",
+	"GIT012":   "Claude attribution",
+	codeGIT013: "conventional format",
+	"GIT014":   "forbidden pattern",
+	"GIT015":   "signoff mismatch",
+	"GIT016":   "list format",
+	"GIT017":   "merge message",
+	"GIT018":   "merge signoff",
+	"GIT019":   "blocked files",
+	"GIT020":   "branch naming",
+	"GIT021":   "no-verify flag",
+	"GIT022":   "Kong org push",
+	"GIT023":   "PR validation",
+	"GIT024":   "fetch no remote",
+	"GIT025":   "blocked remote",
 	// File
-	"FILE001": "shellcheck",
-	"FILE002": "terraform fmt",
-	"FILE003": "tflint",
-	"FILE004": "actionlint",
-	"FILE005": "markdown lint",
-	"FILE006": "gofumpt",
-	"FILE007": "ruff",
-	"FILE008": "oxlint",
-	"FILE009": "rustfmt",
-	"FILE010": "linter ignore",
+	"FILE001":   "shellcheck",
+	"FILE002":   "terraform fmt",
+	"FILE003":   "tflint",
+	"FILE004":   "actionlint",
+	codeFILE005: "markdown lint",
+	"FILE006":   "gofumpt",
+	"FILE007":   "ruff",
+	"FILE008":   "oxlint",
+	"FILE009":   "rustfmt",
+	codeFILE010: "linter ignore",
 	// Security
 	"SEC001": "API key detected",
 	"SEC002": "password detected",
@@ -54,7 +65,7 @@ var codeDescriptions = map[string]string{
 	"SEC004": "token detected",
 	"SEC005": "connection string",
 	// Shell
-	"SHELL001": "backtick substitution",
+	codeSHELL001: "backtick substitution",
 	// GitHub
 	"GH001": "issue validation",
 	// Plugin

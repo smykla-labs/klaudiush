@@ -22,7 +22,7 @@ const (
 var verbosePatterns bool
 
 var debugPatternsCmd = &cobra.Command{
-	Use:   "patterns",
+	Use:   cmdUsePatterns,
 	Short: "Show pattern learning status",
 	Long: `Show pattern learning status and learned failure patterns.
 

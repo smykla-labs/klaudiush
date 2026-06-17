@@ -10,6 +10,9 @@ import (
 	"github.com/smykla-skalski/klaudiush/pkg/config"
 )
 
+// reasonSystemDisabled is the response reason returned when the exception system is off.
+const reasonSystemDisabled = "exception system is disabled"
+
 // DefaultPolicy provides default policy settings when no explicit policy exists.
 var DefaultPolicy = &config.ExceptionPolicyConfig{}
 
@@ -39,7 +42,7 @@ func (m *PolicyMatcher) Match(req *ExceptionRequest) *PolicyDecision {
 	if m.config != nil && !m.config.IsEnabled() {
 		return &PolicyDecision{
 			Allowed: false,
-			Reason:  "exception system is disabled",
+			Reason:  reasonSystemDisabled,
 		}
 	}
 

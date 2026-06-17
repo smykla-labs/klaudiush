@@ -29,30 +29,38 @@ type OverrideEntry struct {
 	DisabledBy string `json:"disabled_by,omitempty" koanf:"disabled_by" toml:"disabled_by,omitempty"`
 }
 
+// Validator names referenced by multiple error codes.
+const (
+	validatorGitCommit = "git.commit"
+	validatorGitPush   = "git.push"
+	validatorSecrets   = "secrets"
+	validatorPlugins   = "plugins"
+)
+
 // CodeToValidator maps error codes to their parent validator names.
 // Used for (1) validating known codes and (2) checking validator-level overrides
 // when a code-level override doesn't exist.
 var CodeToValidator = map[string]string{
 	// Git commit codes
-	"GIT001": "git.commit",
-	"GIT002": "git.commit",
-	"GIT003": "git.commit",
-	"GIT004": "git.commit",
-	"GIT005": "git.commit",
-	"GIT006": "git.commit",
-	"GIT010": "git.commit",
-	"GIT011": "git.commit",
-	"GIT012": "git.commit",
-	"GIT013": "git.commit",
-	"GIT014": "git.commit",
-	"GIT015": "git.commit",
-	"GIT016": "git.commit",
+	"GIT001": validatorGitCommit,
+	"GIT002": validatorGitCommit,
+	"GIT003": validatorGitCommit,
+	"GIT004": validatorGitCommit,
+	"GIT005": validatorGitCommit,
+	"GIT006": validatorGitCommit,
+	"GIT010": validatorGitCommit,
+	"GIT011": validatorGitCommit,
+	"GIT012": validatorGitCommit,
+	"GIT013": validatorGitCommit,
+	"GIT014": validatorGitCommit,
+	"GIT015": validatorGitCommit,
+	"GIT016": validatorGitCommit,
 
 	// Git push codes
-	"GIT007": "git.push",
-	"GIT008": "git.push",
-	"GIT022": "git.push",
-	"GIT025": "git.push",
+	"GIT007": validatorGitPush,
+	"GIT008": validatorGitPush,
+	"GIT022": validatorGitPush,
+	"GIT025": validatorGitPush,
 
 	// Git add codes
 	"GIT009": "git.add",
@@ -87,11 +95,11 @@ var CodeToValidator = map[string]string{
 	"FILE010": "file.linter_ignore",
 
 	// Security codes
-	"SEC001": "secrets",
-	"SEC002": "secrets",
-	"SEC003": "secrets",
-	"SEC004": "secrets",
-	"SEC005": "secrets",
+	"SEC001": validatorSecrets,
+	"SEC002": validatorSecrets,
+	"SEC003": validatorSecrets,
+	"SEC004": validatorSecrets,
+	"SEC005": validatorSecrets,
 
 	// Shell codes
 	"SHELL001": "shell.backtick",
@@ -100,11 +108,11 @@ var CodeToValidator = map[string]string{
 	"GH001": "github.issue",
 
 	// Plugin codes
-	"PLUG001": "plugins",
-	"PLUG002": "plugins",
-	"PLUG003": "plugins",
-	"PLUG004": "plugins",
-	"PLUG005": "plugins",
+	"PLUG001": validatorPlugins,
+	"PLUG002": validatorPlugins,
+	"PLUG003": validatorPlugins,
+	"PLUG004": validatorPlugins,
+	"PLUG005": validatorPlugins,
 }
 
 // IsDisabled checks if a key (error code or validator name) is disabled and not expired.

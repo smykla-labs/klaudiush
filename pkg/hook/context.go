@@ -307,7 +307,7 @@ func (c *Context) EventNames() []string {
 	case CanonicalEventElicitationResult:
 		names = appendUniqueFold(names, "ElicitationResult")
 	case CanonicalEventPostCompact:
-		names = appendUniqueFold(names, "PostCompact")
+		names = appendUniqueFold(names, displayPostCompact)
 		names = appendUniqueFold(names, "PostCompress")
 	}
 

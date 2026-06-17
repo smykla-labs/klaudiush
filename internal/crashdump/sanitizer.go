@@ -24,6 +24,9 @@ var sensitivePatterns = []*regexp.Regexp{
 
 const redactedValue = "[REDACTED]"
 
+// errorKey is the map key used to report sanitization failures.
+const errorKey = "error"
+
 // Sanitizer handles config sanitization for crash dumps.
 type Sanitizer struct{}
 
@@ -41,12 +44,12 @@ func (s *Sanitizer) SanitizeConfig(cfg *config.Config) map[string]any {
 	// Marshal config to JSON, then unmarshal to generic map
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		return map[string]any{"error": "failed to serialize config"}
+		return map[string]any{errorKey: "failed to serialize config"}
 	}
 
 	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
-		return map[string]any{"error": "failed to deserialize config"}
+		return map[string]any{errorKey: "failed to deserialize config"}
 	}
 
 	// Recursively sanitize sensitive fields
