@@ -97,7 +97,7 @@ func literalCommandOutput(call *syntax.CallExpr) (string, bool) {
 
 	switch name {
 	case "echo":
-		return echoOutput(args), true
+		return echoOutput(args)
 	case "printf":
 		return printfOutput(args)
 	}
@@ -108,28 +108,42 @@ func literalCommandOutput(call *syntax.CallExpr) (string, bool) {
 // echoOutput reproduces what "echo args..." writes to stdout. Only the leading
 // run of echo flags (-n, -e, -E and combinations) is stripped; once a non-flag
 // word appears, every remaining argument is literal, even if it starts with "-".
-func echoOutput(args []string) string {
+// It returns false when -e is present, since that enables backslash-escape
+// interpretation which this helper does not perform - capturing the raw text
+// would mis-validate the message.
+func echoOutput(args []string) (string, bool) {
 	i := 0
-	for i < len(args) && isEchoFlag(args[i]) {
+
+	for i < len(args) {
+		flag, ok := echoFlag(args[i])
+		if !ok {
+			break
+		}
+
+		if strings.ContainsRune(flag, 'e') {
+			return "", false
+		}
+
 		i++
 	}
 
-	return strings.Join(args[i:], " ")
+	return strings.Join(args[i:], " "), true
 }
 
-// isEchoFlag reports whether arg is an echo option like -n, -e, -E, or -ne.
-func isEchoFlag(arg string) bool {
+// echoFlag reports whether arg is an echo option like -n, -e, -E, or -ne and
+// returns its letters (without the leading dash) when so.
+func echoFlag(arg string) (string, bool) {
 	if len(arg) < 2 || arg[0] != '-' {
-		return false
+		return "", false
 	}
 
 	for _, c := range arg[1:] {
 		if c != 'n' && c != 'e' && c != 'E' {
-			return false
+			return "", false
 		}
 	}
 
-	return true
+	return arg[1:], true
 }
 
 // printfOutput reproduces what a simple "printf" call writes to stdout, for the

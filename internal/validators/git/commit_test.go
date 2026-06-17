@@ -1219,18 +1219,37 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 		})
 
 		It("should keep dash-prefixed words when echo feeds -F -", func() {
-			// echo only treats the leading -n/-e/-E run as flags; "-prefixed"
-			// here is part of the message and must not be dropped.
+			// echo only treats the leading -n/-e/-E run as flags; a -prefixed
+			// word appearing after a non-flag arg is literal and must survive.
+			// "-dash" is its own echo argument here, so it exercises the
+			// flag-stripping boundary rather than a quoted substring.
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,
 				ToolName:  hook.ToolTypeBash,
 				ToolInput: hook.ToolInput{
-					Command: `echo "fix(parser): handle -prefixed words" | git commit -sS -a -F -`,
+					Command: `echo "fix(parser): handle" -dash words | git commit -sS -a -F -`,
 				},
 			}
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should not capture echo -e output (escape interpretation)", func() {
+			// echo -e interprets backslash escapes, which the parser does not
+			// replicate, so the message is treated as uncaptured (editor case)
+			// rather than validated against raw text.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo -e "this is not conventional" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+			Expect(result.Message).ToNot(ContainSubstring("conventional commits format"))
 		})
 
 		It("should pass with empty file (message from editor)", func() {
