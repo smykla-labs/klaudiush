@@ -92,17 +92,79 @@ func literalCommandOutput(call *syntax.CallExpr) (string, bool) {
 	}
 
 	name := wordToString(call.Args[0])
+	if name != "echo" && name != "printf" {
+		return "", false
+	}
 
-	args := wordsToStrings(call.Args[1:])
+	// Only capture when every argument is strictly literal. Expansions
+	// (parameters, command/arithmetic substitution, globs) cannot be
+	// reproduced here, so capturing would yield a message different from what
+	// the command actually emits.
+	args, ok := literalArgs(call.Args[1:])
+	if !ok {
+		return "", false
+	}
 
 	switch name {
 	case "echo":
 		return echoOutput(args)
 	case "printf":
 		return printfOutput(args)
+	default:
+		return "", false
+	}
+}
+
+// literalArgs converts words to strings only when every word is strictly
+// literal. It returns false as soon as any word contains a shell expansion.
+func literalArgs(words []*syntax.Word) ([]string, bool) {
+	args := make([]string, 0, len(words))
+
+	for _, word := range words {
+		if !isLiteralWord(word) {
+			return nil, false
+		}
+
+		args = append(args, wordToString(word))
 	}
 
-	return "", false
+	return args, true
+}
+
+// isLiteralWord reports whether a word consists solely of literal text - plain
+// literals and single/double-quoted literals - with no shell expansions such as
+// parameters, command/arithmetic substitution, or globbing.
+func isLiteralWord(word *syntax.Word) bool {
+	if word == nil {
+		return false
+	}
+
+	for _, part := range word.Parts {
+		switch p := part.(type) {
+		case *syntax.Lit, *syntax.SglQuoted:
+			// Literal text, no expansion.
+		case *syntax.DblQuoted:
+			if !allLiteralParts(p.Parts) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
+// allLiteralParts reports whether every part is a plain literal (no expansions),
+// as found inside a double-quoted string.
+func allLiteralParts(parts []syntax.WordPart) bool {
+	for _, p := range parts {
+		if _, ok := p.(*syntax.Lit); !ok {
+			return false
+		}
+	}
+
+	return true
 }
 
 // echoOutput reproduces what "echo args..." writes to stdout. Only the leading

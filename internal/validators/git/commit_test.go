@@ -1235,6 +1235,22 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			Expect(result.Passed).To(BeTrue())
 		})
 
+		It("should not capture echo output containing an expansion", func() {
+			// "$VAR" cannot be resolved by the parser, so the message must be
+			// treated as uncaptured rather than validated against partial text.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo "this is not conventional $VAR" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+			Expect(result.Message).ToNot(ContainSubstring("conventional commits format"))
+		})
+
 		It("should not capture echo -e output (escape interpretation)", func() {
 			// echo -e interprets backslash escapes, which the parser does not
 			// replicate, so the message is treated as uncaptured (editor case)
