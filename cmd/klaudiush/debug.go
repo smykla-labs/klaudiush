@@ -96,7 +96,7 @@ Examples:
 }
 
 var debugOverridesCmd = &cobra.Command{
-	Use:   "overrides",
+	Use:   cmdUseOverrides,
 	Short: "Show override entries",
 	Long: `Show all override entries from merged configuration.
 

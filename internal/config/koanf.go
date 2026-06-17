@@ -72,14 +72,23 @@ const (
 
 // defaultValidTypes is the list of valid commit types.
 var defaultValidTypes = []string{
-	"build", "chore", "ci", "docs", "feat",
-	"fix", "perf", "refactor", "revert", "style", "test",
+	commitTypeBuild,
+	commitTypeChore,
+	commitTypeCI,
+	commitTypeDocs,
+	commitTypeFeat,
+	commitTypeFix,
+	commitTypePerf,
+	commitTypeRefactor,
+	commitTypeRevert,
+	commitTypeStyle,
+	commitTypeTest,
 }
 
 // defaultBranchValidTypes is the list of valid branch type prefixes (excludes "revert").
 var defaultBranchValidTypes = []string{
-	"build", "chore", "ci", "docs", "feat",
-	"fix", "perf", "refactor", "style", "test",
+	commitTypeBuild, commitTypeChore, commitTypeCI, commitTypeDocs, commitTypeFeat,
+	commitTypeFix, commitTypePerf, commitTypeRefactor, commitTypeStyle, commitTypeTest,
 }
 
 // KoanfLoader handles configuration loading from multiple sources using koanf.
@@ -237,8 +246,8 @@ func (l *KoanfLoader) extractRules() []config.RuleConfig {
 		rule.Description = ruleK.String("description")
 		rule.Priority = ruleK.Int("priority")
 
-		if ruleK.Exists("enabled") {
-			enabled := ruleK.Bool("enabled")
+		if ruleK.Exists(keyEnabled) {
+			enabled := ruleK.Bool(keyEnabled)
 			rule.Enabled = &enabled
 		}
 
@@ -353,45 +362,45 @@ func (l *KoanfLoader) loadTOMLFile(path string) error {
 // Segments not listed here are treated as leaf field names with underscores preserved.
 var envHierarchy = map[string][]string{
 	"": {
-		"global",
-		"validators",
-		"rules",
-		"exceptions",
+		sectionGlobal,
+		sectionValidators,
+		sectionRules,
+		sectionExceptions,
 		"backup",
-		"crash_dump",
-		"patterns",
+		sectionCrashDump,
+		sectionPatterns,
 		"plugins",
 		"overrides",
 	},
-	"overrides":  {"entries"},
-	"validators": {"git", "file", "notification", "secrets", "shell"},
+	"overrides":       {"entries"},
+	sectionValidators: {sectionGit, sectionFile, sectionNotification, sectionSecrets, sectionShell},
 	"validators.git": {
-		"commit",
-		"push",
-		"fetch",
-		"add",
-		"pr",
-		"branch",
-		"no_verify",
-		"merge",
+		validatorCommit,
+		validatorPush,
+		validatorFetch,
+		validatorAdd,
+		validatorPR,
+		validatorBranch,
+		validatorNoVerify,
+		validatorMerge,
 	},
-	"validators.git.commit": {"message"},
-	"validators.git.merge":  {"message"},
+	"validators.git.commit": {validatorMessage},
+	"validators.git.merge":  {validatorMessage},
 	"validators.file": {
-		"markdown",
-		"shellscript",
-		"terraform",
-		"workflow",
-		"gofumpt",
-		"python",
-		"javascript",
-		"rust",
-		"linter_ignore",
+		validatorMarkdown,
+		validatorShellScript,
+		validatorTerraform,
+		validatorWorkflow,
+		validatorGofumpt,
+		validatorPython,
+		validatorJavaScript,
+		validatorRust,
+		validatorLinterIgnore,
 	},
-	"validators.notification": {"bell"},
-	"validators.secrets":      {"secrets"},
-	"validators.shell":        {"backtick"},
-	"exceptions":              {"rate_limit", "audit", "policies"},
+	"validators.notification": {validatorBell},
+	"validators.secrets":      {sectionSecrets},
+	"validators.shell":        {validatorBacktick},
+	sectionExceptions:         {"rate_limit", "audit", "policies"},
 	"backup":                  {"delta"},
 }
 
@@ -595,13 +604,13 @@ func (*KoanfLoader) flagsToConfig(flags map[string]any) map[string]any {
 
 		case "use-sdk-git":
 			if boolVal, ok := value.(bool); ok {
-				globalMap := ensureMapKey(result, "global")
+				globalMap := ensureMapKey(result, sectionGlobal)
 				globalMap["use_sdk_git"] = boolVal
 			}
 
-		case "timeout":
+		case keyTimeout:
 			if strVal, ok := value.(string); ok {
-				globalMap := ensureMapKey(result, "global")
+				globalMap := ensureMapKey(result, sectionGlobal)
 				globalMap["default_timeout"] = strVal
 			}
 		}
@@ -624,27 +633,27 @@ func ensureMapKey(cfg map[string]any, key string) map[string]any {
 // applyDisableFlags applies --disable flags to the config map.
 func applyDisableFlags(cfg map[string]any, validatorNames []string) {
 	validatorPaths := map[string][]string{
-		"commit":        {"git", "commit"},
-		"push":          {"git", "push"},
-		"add":           {"git", "add"},
-		"pr":            {"git", "pr"},
-		"branch":        {"git", "branch"},
-		"no_verify":     {"git", "no_verify"},
-		"merge":         {"git", "merge"},
-		"fetch":         {"git", "fetch"},
-		"markdown":      {"file", "markdown"},
-		"shellscript":   {"file", "shellscript"},
-		"terraform":     {"file", "terraform"},
-		"workflow":      {"file", "workflow"},
-		"gofumpt":       {"file", "gofumpt"},
-		"python":        {"file", "python"},
-		"javascript":    {"file", "javascript"},
-		"rust":          {"file", "rust"},
-		"linter_ignore": {"file", "linter_ignore"},
-		"secrets":       {"secrets", "secrets"},
-		"backtick":      {"shell", "backtick"},
-		"issue":         {"github", "issue"},
-		"bell":          {"notification", "bell"},
+		validatorCommit:       {sectionGit, validatorCommit},
+		validatorPush:         {sectionGit, validatorPush},
+		validatorAdd:          {sectionGit, validatorAdd},
+		validatorPR:           {sectionGit, validatorPR},
+		validatorBranch:       {sectionGit, validatorBranch},
+		validatorNoVerify:     {sectionGit, validatorNoVerify},
+		validatorMerge:        {sectionGit, validatorMerge},
+		validatorFetch:        {sectionGit, validatorFetch},
+		validatorMarkdown:     {sectionFile, validatorMarkdown},
+		validatorShellScript:  {sectionFile, validatorShellScript},
+		validatorTerraform:    {sectionFile, validatorTerraform},
+		validatorWorkflow:     {sectionFile, validatorWorkflow},
+		validatorGofumpt:      {sectionFile, validatorGofumpt},
+		validatorPython:       {sectionFile, validatorPython},
+		validatorJavaScript:   {sectionFile, validatorJavaScript},
+		validatorRust:         {sectionFile, validatorRust},
+		validatorLinterIgnore: {sectionFile, validatorLinterIgnore},
+		sectionSecrets:        {sectionSecrets, sectionSecrets},
+		validatorBacktick:     {sectionShell, validatorBacktick},
+		"issue":               {"github", "issue"},
+		validatorBell:         {sectionNotification, validatorBell},
 	}
 
 	for _, name := range validatorNames {
@@ -665,35 +674,35 @@ func applyDisableFlags(cfg map[string]any, validatorNames []string) {
 
 		// Set enabled = false on the final level
 		finalMap := ensureMapKey(current, path[len(path)-1])
-		finalMap["enabled"] = false
+		finalMap[keyEnabled] = false
 	}
 }
 
 // defaultsToMap converts DefaultConfig to a map for koanf loading.
 func defaultsToMap() map[string]any {
 	return map[string]any{
-		"version":    config.CurrentConfigVersion,
-		"global":     defaultGlobalMap(),
-		"providers":  defaultProvidersMap(),
-		"validators": defaultValidatorsMap(),
-		"rules":      defaultRulesMap(),
-		"exceptions": defaultExceptionsMap(),
-		"patterns":   defaultPatternsMap(),
+		"version":     config.CurrentConfigVersion,
+		sectionGlobal: defaultGlobalMap(),
+		"providers":   defaultProvidersMap(),
+		"validators":  defaultValidatorsMap(),
+		"rules":       defaultRulesMap(),
+		"exceptions":  defaultExceptionsMap(),
+		"patterns":    defaultPatternsMap(),
 	}
 }
 
 func defaultProvidersMap() map[string]any {
 	return map[string]any{
 		"claude": map[string]any{
-			"enabled": true,
+			keyEnabled: true,
 		},
 		"codex": map[string]any{
-			"enabled":           false,
+			keyEnabled:          false,
 			"experimental":      false,
 			"hooks_config_path": "",
 		},
 		"gemini": map[string]any{
-			"enabled":       false,
+			keyEnabled:      false,
 			"settings_path": "~/.gemini/settings.json",
 		},
 	}
@@ -701,7 +710,7 @@ func defaultProvidersMap() map[string]any {
 
 func defaultRulesMap() map[string]any {
 	return map[string]any{
-		"enabled":             true,
+		keyEnabled:            true,
 		"stop_on_first_match": true,
 		"rules":               []any{},
 	}
@@ -709,17 +718,17 @@ func defaultRulesMap() map[string]any {
 
 func defaultExceptionsMap() map[string]any {
 	return map[string]any{
-		"enabled":      true,
+		keyEnabled:     true,
 		"token_prefix": defaultExceptionTokenPrefix,
 		"policies":     map[string]any{},
 		"rate_limit": map[string]any{
-			"enabled":      true,
+			keyEnabled:     true,
 			"max_per_hour": defaultExceptionRateLimitPerH,
 			"max_per_day":  defaultExceptionRateLimitPerD,
 			"state_file":   xdg.ExceptionStateFile(),
 		},
 		"audit": map[string]any{
-			"enabled":      true,
+			keyEnabled:     true,
 			"log_file":     xdg.ExceptionAuditFile(),
 			"max_size_mb":  defaultExceptionAuditMaxSizeMB,
 			"max_age_days": defaultExceptionAuditMaxAgeDays,
@@ -737,7 +746,7 @@ func defaultGlobalMap() map[string]any {
 
 func defaultPatternsMap() map[string]any {
 	return map[string]any{
-		"enabled":                true,
+		keyEnabled:               true,
 		"min_count":              config.DefaultPatternsMinCount,
 		"max_age":                config.DefaultPatternsMaxAge.String(),
 		"max_warnings_per_error": config.DefaultPatternsMaxWarningsPerError,
@@ -753,32 +762,32 @@ func defaultPatternsMap() map[string]any {
 
 func defaultValidatorsMap() map[string]any {
 	return map[string]any{
-		"git":          defaultGitValidatorsMap(),
-		"file":         defaultFileValidatorsMap(),
-		"notification": defaultNotificationValidatorsMap(),
+		sectionGit:          defaultGitValidatorsMap(),
+		sectionFile:         defaultFileValidatorsMap(),
+		sectionNotification: defaultNotificationValidatorsMap(),
 	}
 }
 
 func defaultGitValidatorsMap() map[string]any {
 	return map[string]any{
-		"commit":    defaultCommitMap(),
-		"push":      defaultPushMap(),
-		"fetch":     defaultFetchMap(),
-		"add":       defaultAddMap(),
-		"pr":        defaultPRMap(),
-		"branch":    defaultBranchMap(),
-		"no_verify": defaultNoVerifyMap(),
+		validatorCommit:   defaultCommitMap(),
+		validatorPush:     defaultPushMap(),
+		validatorFetch:    defaultFetchMap(),
+		validatorAdd:      defaultAddMap(),
+		validatorPR:       defaultPRMap(),
+		validatorBranch:   defaultBranchMap(),
+		validatorNoVerify: defaultNoVerifyMap(),
 	}
 }
 
 func defaultCommitMap() map[string]any {
 	return map[string]any{
-		"enabled":            true,
-		"severity":           "error",
-		"required_flags":     []string{"-s", "-S"},
+		keyEnabled:           true,
+		keySeverity:          severityError,
+		"required_flags":     []string{flagSignoff, flagGPGSign},
 		"check_staging_area": true,
-		"message": map[string]any{
-			"enabled":                  true,
+		validatorMessage: map[string]any{
+			keyEnabled:                 true,
 			"title_max_length":         config.DefaultTitleMaxLength,
 			"body_max_line_length":     config.DefaultBodyMaxLineLength,
 			"body_line_tolerance":      config.DefaultBodyLineTolerance,
@@ -787,7 +796,7 @@ func defaultCommitMap() map[string]any {
 			"block_infra_scope_misuse": true,
 			"block_pr_references":      true,
 			"block_ai_attribution":     true,
-			"valid_types":              defaultValidTypes,
+			keyValidTypes:              defaultValidTypes,
 			"expected_signoff":         "",
 		},
 	}
@@ -795,8 +804,8 @@ func defaultCommitMap() map[string]any {
 
 func defaultPushMap() map[string]any {
 	return map[string]any{
-		"enabled":          true,
-		"severity":         "error",
+		keyEnabled:         true,
+		keySeverity:        severityError,
 		"blocked_remotes":  []string{},
 		"require_tracking": true,
 	}
@@ -804,66 +813,66 @@ func defaultPushMap() map[string]any {
 
 func defaultFetchMap() map[string]any {
 	return map[string]any{
-		"enabled":  true,
-		"severity": "error",
+		keyEnabled:  true,
+		keySeverity: severityError,
 	}
 }
 
 func defaultAddMap() map[string]any {
 	return map[string]any{
-		"enabled":          true,
-		"severity":         "error",
+		keyEnabled:         true,
+		keySeverity:        severityError,
 		"blocked_patterns": []string{"tmp/*"},
 	}
 }
 
 func defaultPRMap() map[string]any {
 	return map[string]any{
-		"enabled":                    true,
-		"severity":                   "error",
+		keyEnabled:                   true,
+		keySeverity:                  severityError,
 		"title_max_length":           config.DefaultTitleMaxLength,
 		"title_conventional_commits": true,
 		"require_changelog":          false,
 		"check_ci_labels":            true,
 		"require_body":               true,
-		"valid_types":                defaultValidTypes,
-		"markdown_disabled_rules":    []string{"MD013", "MD034", "MD041"},
+		keyValidTypes:                defaultValidTypes,
+		"markdown_disabled_rules":    []string{mdRuleLineLength, mdRuleBareURLs, mdRuleFirstLine},
 	}
 }
 
 func defaultBranchMap() map[string]any {
 	return map[string]any{
-		"enabled":            true,
-		"severity":           "error",
-		"protected_branches": []string{"main", "master"},
+		keyEnabled:           true,
+		keySeverity:          severityError,
+		"protected_branches": []string{branchMain, "master"},
 		"require_type":       true,
 		"allow_uppercase":    false,
-		"valid_types":        defaultBranchValidTypes,
+		keyValidTypes:        defaultBranchValidTypes,
 	}
 }
 
 func defaultNoVerifyMap() map[string]any {
 	return map[string]any{
-		"enabled":  true,
-		"severity": "error",
+		keyEnabled:  true,
+		keySeverity: severityError,
 	}
 }
 
 func defaultFileValidatorsMap() map[string]any {
 	return map[string]any{
-		"markdown":    defaultMarkdownMap(),
-		"shellscript": defaultShellscriptMap(),
-		"terraform":   defaultTerraformMap(),
-		"workflow":    defaultWorkflowMap(),
+		validatorMarkdown:    defaultMarkdownMap(),
+		validatorShellScript: defaultShellscriptMap(),
+		validatorTerraform:   defaultTerraformMap(),
+		validatorWorkflow:    defaultWorkflowMap(),
 	}
 }
 
 func defaultMarkdownMap() map[string]any {
 	return map[string]any{
-		"enabled":               true,
-		"severity":              "error",
-		"timeout":               defaultTimeoutStr,
-		"context_lines":         defaultContextLines,
+		keyEnabled:              true,
+		keySeverity:             severityError,
+		keyTimeout:              defaultTimeoutStr,
+		keyContextLines:         defaultContextLines,
 		"heading_spacing":       true,
 		"code_block_formatting": true,
 		"list_formatting":       true,
@@ -873,22 +882,22 @@ func defaultMarkdownMap() map[string]any {
 
 func defaultShellscriptMap() map[string]any {
 	return map[string]any{
-		"enabled":             true,
-		"severity":            "error",
-		"timeout":             defaultTimeoutStr,
-		"context_lines":       defaultContextLines,
+		keyEnabled:            true,
+		keySeverity:           severityError,
+		keyTimeout:            defaultTimeoutStr,
+		keyContextLines:       defaultContextLines,
 		"use_shellcheck":      true,
-		"shellcheck_severity": "warning",
+		"shellcheck_severity": severityWarning,
 		"exclude_rules":       []string{},
 	}
 }
 
 func defaultTerraformMap() map[string]any {
 	return map[string]any{
-		"enabled":         true,
-		"severity":        "error",
-		"timeout":         defaultTimeoutStr,
-		"context_lines":   defaultContextLines,
+		keyEnabled:        true,
+		keySeverity:       severityError,
+		keyTimeout:        defaultTimeoutStr,
+		keyContextLines:   defaultContextLines,
 		"tool_preference": "auto",
 		"check_format":    true,
 		"use_tflint":      true,
@@ -897,9 +906,9 @@ func defaultTerraformMap() map[string]any {
 
 func defaultWorkflowMap() map[string]any {
 	return map[string]any{
-		"enabled":                 true,
-		"severity":                "error",
-		"timeout":                 defaultTimeoutStr,
+		keyEnabled:                true,
+		keySeverity:               severityError,
+		keyTimeout:                defaultTimeoutStr,
 		"gh_api_timeout":          defaultGHAPITimeoutStr,
 		"enforce_digest_pinning":  true,
 		"require_version_comment": true,
@@ -911,8 +920,8 @@ func defaultWorkflowMap() map[string]any {
 func defaultNotificationValidatorsMap() map[string]any {
 	return map[string]any{
 		"bell": map[string]any{
-			"enabled":  true,
-			"severity": "error",
+			keyEnabled:  true,
+			keySeverity: severityError,
 		},
 	}
 }

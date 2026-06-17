@@ -5,6 +5,12 @@ import (
 	"github.com/smykla-skalski/klaudiush/pkg/hook"
 )
 
+// Permission decision values emitted in hook responses.
+const (
+	decisionAllow = "allow"
+	decisionDeny  = "deny"
+)
+
 // Build constructs a HookResponse from validation errors.
 // Returns nil when there are no errors (clean pass, no output needed).
 func Build(eventName string, errs []*dispatcher.ValidationError) *HookResponse {
@@ -32,7 +38,7 @@ func BuildWithPatterns(
 	case len(blocking) > 0:
 		resp.HookSpecificOutput = &HookSpecificOutput{
 			HookEventName:            eventName,
-			PermissionDecision:       "deny",
+			PermissionDecision:       decisionDeny,
 			PermissionDecisionReason: formatDecisionReason(blocking),
 			AdditionalContext: formatAdditionalContext(
 				blocking,
@@ -44,13 +50,13 @@ func BuildWithPatterns(
 	case len(bypassed) > 0:
 		resp.HookSpecificOutput = &HookSpecificOutput{
 			HookEventName:      eventName,
-			PermissionDecision: "allow",
+			PermissionDecision: decisionAllow,
 			AdditionalContext:  formatAdditionalContext(nil, warnings, bypassed, nil),
 		}
 	case len(warnings) > 0:
 		resp.HookSpecificOutput = &HookSpecificOutput{
 			HookEventName:      eventName,
-			PermissionDecision: "allow",
+			PermissionDecision: decisionAllow,
 			AdditionalContext:  formatAdditionalContext(nil, warnings, nil, nil),
 		}
 	}
@@ -211,7 +217,7 @@ func BuildGemini(
 	switch hookCtx.Event {
 	case hook.CanonicalEventBeforeTool:
 		if len(blocking) > 0 {
-			resp.Decision = "deny"
+			resp.Decision = decisionDeny
 			resp.Reason = formatDecisionReason(blocking)
 
 			return resp
@@ -234,7 +240,7 @@ func BuildGemini(
 		hook.CanonicalEventPreCompress, hook.CanonicalEventPostCompact:
 	default:
 		if len(blocking) > 0 {
-			resp.Decision = "deny"
+			resp.Decision = decisionDeny
 			resp.Reason = formatDecisionReason(blocking)
 
 			return resp

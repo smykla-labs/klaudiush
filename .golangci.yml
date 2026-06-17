@@ -147,6 +147,10 @@ linters:
     goconst:
       min-len: 2
       min-occurrences: 3
+      # Don't count occurrences in test files toward the threshold.
+      # Test files are already excluded from goconst findings (see exclusions),
+      # so counting their strings would flag production code for test-only repetition.
+      ignore-tests: true
 
     dupl:
       threshold: 100

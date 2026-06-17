@@ -35,7 +35,7 @@ Subcommands:
 }
 
 var debugCrashListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   cmdUseList,
 	Short: "List crash dumps",
 	Long: `List all crash dumps with timestamps and panic values.
 

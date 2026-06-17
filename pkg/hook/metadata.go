@@ -91,6 +91,13 @@ const (
 const (
 	displayElicitation       = "Elicitation"
 	displayElicitationResult = "ElicitationResult"
+	displayPostCompact       = "PostCompact"
+)
+
+// Normalized event-name tokens accepted by NormalizeEventName.
+const (
+	tokenElicitation  = "elicitation"
+	tokenPostCompress = "postcompress"
 )
 
 // ParseProvider parses a provider string.
@@ -122,11 +129,11 @@ func NormalizeEventName(name string) CanonicalEvent {
 		return CanonicalEventNotification
 	case "precompress":
 		return CanonicalEventPreCompress
-	case "elicitation":
+	case tokenElicitation:
 		return CanonicalEventElicitation
 	case "elicitationresult":
 		return CanonicalEventElicitationResult
-	case "postcompact", "postcompress":
+	case "postcompact", tokenPostCompress:
 		return CanonicalEventPostCompact
 	default:
 		return CanonicalEventUnknown
@@ -231,7 +238,7 @@ func displayGeminiEvent(canonical CanonicalEvent) string {
 	case CanonicalEventElicitationResult:
 		return displayElicitationResult
 	case CanonicalEventPostCompact:
-		return "PostCompact"
+		return displayPostCompact
 	case CanonicalEventBeforeTool:
 		return "BeforeTool"
 	case CanonicalEventAfterTool:

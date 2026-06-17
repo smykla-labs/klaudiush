@@ -25,21 +25,36 @@ const (
 	detectTimeout = 5 * time.Second
 )
 
+// Conventional commit type names used across the git validators.
+const (
+	commitTypeBuild    = "build"
+	commitTypeChore    = "chore"
+	commitTypeCI       = "ci"
+	commitTypeDocs     = "docs"
+	commitTypeFeat     = "feat"
+	commitTypeFix      = "fix"
+	commitTypePerf     = "perf"
+	commitTypeRefactor = "refactor"
+	commitTypeRevert   = "revert"
+	commitTypeStyle    = "style"
+	commitTypeTest     = "test"
+)
+
 // conventionalTypeSet is the set of standard conventional commit types.
 // A commit matching "type: desc" or "type(scope): desc" where type is in
 // this set is treated as conventional.
 var conventionalTypeSet = map[string]bool{
-	"build":    true,
-	"chore":    true,
-	"ci":       true,
-	"docs":     true,
-	"feat":     true,
-	"fix":      true,
-	"perf":     true,
-	"refactor": true,
-	"revert":   true,
-	"style":    true,
-	"test":     true,
+	commitTypeBuild:    true,
+	commitTypeChore:    true,
+	commitTypeCI:       true,
+	commitTypeDocs:     true,
+	commitTypeFeat:     true,
+	commitTypeFix:      true,
+	commitTypePerf:     true,
+	commitTypeRefactor: true,
+	commitTypeRevert:   true,
+	commitTypeStyle:    true,
+	commitTypeTest:     true,
 }
 
 // conventionalSubjectRegex matches "type: desc" or "type(scope): desc" (conventional).

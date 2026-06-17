@@ -1,6 +1,7 @@
 package file
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/smykla-skalski/klaudiush/internal/validators"
@@ -104,8 +105,8 @@ func trimTrailingEmptyLines(lines []string) []string {
 	// Count trailing empty lines
 	trailingCount := 0
 
-	for i := len(lines) - 1; i >= 0; i-- {
-		if lines[i] != "" {
+	for _, line := range slices.Backward(lines) {
+		if line != "" {
 			break
 		}
 

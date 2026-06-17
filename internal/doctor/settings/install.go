@@ -19,6 +19,21 @@ const (
 	defaultFilePermissions = 0o600
 )
 
+// Hook event names shared across providers.
+const (
+	eventSessionStart = "SessionStart"
+)
+
+// Gemini hook event names.
+const (
+	geminiEventBeforeTool   = "BeforeTool"
+	geminiEventAfterTool    = "AfterTool"
+	geminiEventSessionStart = eventSessionStart
+	geminiEventSessionEnd   = "SessionEnd"
+	geminiEventNotification = "Notification"
+	geminiEventPreCompress  = "PreCompress"
+)
+
 // LoadRawJSONFile reads and parses a JSON file into a raw map.
 func LoadRawJSONFile(path string) (map[string]any, error) {
 	resolvedPath, err := resolveSettingsPath(path)
@@ -86,7 +101,7 @@ func InstallClaudeDispatcher(settingsPath, binaryPath string) (bool, error) {
 func InstallCodexDispatcher(hooksPath, binaryPath string) (bool, error) {
 	parser := NewCodexHooksParser(hooksPath)
 
-	hasSessionStart, err := parser.HasEventHook("SessionStart", binaryPath)
+	hasSessionStart, err := parser.HasEventHook(eventSessionStart, binaryPath)
 	if err != nil {
 		return false, errors.Wrap(err, "failed to check SessionStart hook")
 	}
@@ -125,12 +140,12 @@ func InstallGeminiDispatcher(settingsPath, binaryPath string) (bool, error) {
 	parser := NewGeminiSettingsParser(settingsPath)
 
 	allEvents := []string{
-		"BeforeTool",
-		"AfterTool",
-		"SessionStart",
-		"SessionEnd",
-		"Notification",
-		"PreCompress",
+		geminiEventBeforeTool,
+		geminiEventAfterTool,
+		geminiEventSessionStart,
+		geminiEventSessionEnd,
+		geminiEventNotification,
+		geminiEventPreCompress,
 	}
 
 	missing := make(map[string]bool, len(allEvents))
@@ -203,8 +218,8 @@ func AddCodexDispatcherHooks(
 	hooks := ensureHooksMap(raw)
 
 	if addSessionStart {
-		hooks["SessionStart"] = appendEventHook(
-			hooks["SessionStart"],
+		hooks[eventSessionStart] = appendEventHook(
+			hooks[eventSessionStart],
 			CodexSessionStartCommand(binaryPath),
 		)
 	}
@@ -229,19 +244,19 @@ func AddGeminiDispatcherHooks(raw map[string]any, binaryPath string, missing map
 	hooks := ensureHooksMap(raw)
 
 	for _, eventName := range []string{
-		"BeforeTool",
-		"AfterTool",
-		"SessionStart",
-		"SessionEnd",
-		"Notification",
-		"PreCompress",
+		geminiEventBeforeTool,
+		geminiEventAfterTool,
+		geminiEventSessionStart,
+		geminiEventSessionEnd,
+		geminiEventNotification,
+		geminiEventPreCompress,
 	} {
 		if !missing[eventName] {
 			continue
 		}
 
 		matcher := ""
-		if eventName == "BeforeTool" || eventName == "AfterTool" {
+		if eventName == geminiEventBeforeTool || eventName == geminiEventAfterTool {
 			matcher = geminiDispatcherMatcher()
 		}
 
@@ -276,32 +291,32 @@ func CodexStopCommand(binaryPath string) string {
 
 // GeminiBeforeToolCommand returns the Gemini BeforeTool command string.
 func GeminiBeforeToolCommand(binaryPath string) string {
-	return geminiDispatcherEventCommand(binaryPath, "BeforeTool")
+	return geminiDispatcherEventCommand(binaryPath, geminiEventBeforeTool)
 }
 
 // GeminiAfterToolCommand returns the Gemini AfterTool command string.
 func GeminiAfterToolCommand(binaryPath string) string {
-	return geminiDispatcherEventCommand(binaryPath, "AfterTool")
+	return geminiDispatcherEventCommand(binaryPath, geminiEventAfterTool)
 }
 
 // GeminiSessionStartCommand returns the Gemini SessionStart command string.
 func GeminiSessionStartCommand(binaryPath string) string {
-	return geminiDispatcherEventCommand(binaryPath, "SessionStart")
+	return geminiDispatcherEventCommand(binaryPath, geminiEventSessionStart)
 }
 
 // GeminiSessionEndCommand returns the Gemini SessionEnd command string.
 func GeminiSessionEndCommand(binaryPath string) string {
-	return geminiDispatcherEventCommand(binaryPath, "SessionEnd")
+	return geminiDispatcherEventCommand(binaryPath, geminiEventSessionEnd)
 }
 
 // GeminiNotificationCommand returns the Gemini Notification command string.
 func GeminiNotificationCommand(binaryPath string) string {
-	return geminiDispatcherEventCommand(binaryPath, "Notification")
+	return geminiDispatcherEventCommand(binaryPath, geminiEventNotification)
 }
 
 // GeminiPreCompressCommand returns the Gemini PreCompress command string.
 func GeminiPreCompressCommand(binaryPath string) string {
-	return geminiDispatcherEventCommand(binaryPath, "PreCompress")
+	return geminiDispatcherEventCommand(binaryPath, geminiEventPreCompress)
 }
 
 func claudeDispatcherMatcher() string {

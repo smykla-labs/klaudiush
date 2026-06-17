@@ -104,7 +104,7 @@ func (e *Engine) Evaluate(req *EvaluateRequest) *ExceptionResult {
 
 		return &ExceptionResult{
 			Allowed: false,
-			Reason:  "exception system is disabled",
+			Reason:  reasonSystemDisabled,
 		}
 	}
 

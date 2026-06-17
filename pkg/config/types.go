@@ -11,6 +11,9 @@ import (
 //go:generate enumer -type=Severity -trimprefix=Severity -transform=lower -json -text -yaml -sql
 //go:generate go run github.com/smykla-skalski/klaudiush/tools/enumerfix severity_enumer.go
 
+// jsonSchemaTypeString is the JSON Schema "string" type name.
+const jsonSchemaTypeString = "string"
+
 var (
 	// ErrInvalidSeverity is returned when an invalid severity value is provided.
 	ErrInvalidSeverity = errors.New("invalid severity")
@@ -36,7 +39,7 @@ const (
 // JSONSchema returns the JSON Schema for the Severity type.
 func (Severity) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Type:    "string",
+		Type:    jsonSchemaTypeString,
 		Enum:    []any{"unknown", "error", "warning"},
 		Default: "error",
 	}
@@ -70,7 +73,7 @@ type Duration time.Duration
 // JSONSchema returns the JSON Schema for the Duration type.
 func (Duration) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Type:        "string",
+		Type:        jsonSchemaTypeString,
 		Pattern:     `^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$`,
 		Description: "Go duration string (e.g. \"10s\", \"1h30m\", \"500ms\")",
 		Examples:    []any{"10s", "1h30m", "500ms", "5m"},

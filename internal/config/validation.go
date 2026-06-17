@@ -324,7 +324,7 @@ func (*Validator) validateCommitMessageConfig(cfg *config.CommitMessageConfig) e
 		}
 	}
 
-	validCommitStyles := []string{"", "conventional", "scope-only", "none", "custom", "auto"}
+	validCommitStyles := []string{"", "conventional", "scope-only", "none", valueCustom, valueAuto}
 	if !slices.Contains(validCommitStyles, cfg.CommitStyle) {
 		validationErrors = append(
 			validationErrors,
@@ -336,7 +336,7 @@ func (*Validator) validateCommitMessageConfig(cfg *config.CommitMessageConfig) e
 		)
 	}
 
-	if cfg.CommitStyle == "custom" && cfg.TitlePattern == "" {
+	if cfg.CommitStyle == valueCustom && cfg.TitlePattern == "" {
 		validationErrors = append(
 			validationErrors,
 			errors.New("title_pattern is required when commit_style is \"custom\""),
@@ -397,7 +397,7 @@ func (v *Validator) validatePRConfig(cfg *config.PRValidatorConfig) error {
 		}
 	}
 
-	validTitleStyles := []string{"", "conventional", "scope-only", "none", "custom", "auto"}
+	validTitleStyles := []string{"", "conventional", "scope-only", "none", valueCustom, valueAuto}
 	if !slices.Contains(validTitleStyles, cfg.TitleStyle) {
 		validationErrors = append(
 			validationErrors,
@@ -409,7 +409,7 @@ func (v *Validator) validatePRConfig(cfg *config.PRValidatorConfig) error {
 		)
 	}
 
-	if cfg.TitleStyle == "custom" && cfg.TitlePattern == "" {
+	if cfg.TitleStyle == valueCustom && cfg.TitlePattern == "" {
 		validationErrors = append(
 			validationErrors,
 			errors.New("title_pattern is required when title_style is \"custom\""),
@@ -480,7 +480,7 @@ func (v *Validator) validateShellScriptConfig(cfg *config.ShellScriptValidatorCo
 
 	// Validate shellcheck severity
 	if cfg.ShellcheckSeverity != "" {
-		validSeverities := []string{"error", "warning", "info", "style"}
+		validSeverities := []string{severityError, severityWarning, "info", commitTypeStyle}
 
 		valid := slices.Contains(validSeverities, cfg.ShellcheckSeverity)
 
@@ -513,7 +513,7 @@ func (v *Validator) validateTerraformConfig(cfg *config.TerraformValidatorConfig
 
 	// Validate tool preference
 	if cfg.ToolPreference != "" {
-		validPreferences := []string{"tofu", "terraform", "auto"}
+		validPreferences := []string{"tofu", validatorTerraform, valueAuto}
 
 		valid := slices.Contains(validPreferences, cfg.ToolPreference)
 

@@ -79,7 +79,7 @@ const (
 // JSONSchema returns the JSON Schema for the PluginType type.
 func (PluginType) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Type: "string",
+		Type: jsonSchemaTypeString,
 		Enum: []any{"exec"},
 	}
 }

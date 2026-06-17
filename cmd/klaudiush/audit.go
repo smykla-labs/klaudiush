@@ -49,7 +49,7 @@ Subcommands:
 }
 
 var auditListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   cmdUseList,
 	Short: "List audit log entries",
 	Long: `List audit log entries with optional filtering.
 

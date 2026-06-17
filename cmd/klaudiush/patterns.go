@@ -27,7 +27,7 @@ var (
 )
 
 var patternsCmd = &cobra.Command{
-	Use:   "patterns",
+	Use:   cmdUsePatterns,
 	Short: "Manage failure pattern tracking",
 	Long: `Manage failure pattern tracking data.
 
@@ -41,7 +41,7 @@ Subcommands:
 }
 
 var patternsListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   cmdUseList,
 	Short: "List known failure patterns",
 	Long: `List known failure patterns with optional filtering.
 
@@ -298,7 +298,7 @@ func outputPatternsTable(all []*patterns.FailurePattern) {
 		return
 	}
 
-	noun := "patterns"
+	noun := cmdUsePatterns
 	if len(all) == 1 {
 		noun = "pattern"
 	}

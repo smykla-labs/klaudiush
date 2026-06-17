@@ -48,12 +48,12 @@ func (p *GeminiSettingsParser) Parse() (*GeminiSettingsFile, error) {
 // IsDispatcherRegistered checks whether any supported Gemini hook is configured for klaudiush.
 func (p *GeminiSettingsParser) IsDispatcherRegistered(dispatcherPath string) (bool, error) {
 	for _, eventName := range []string{
-		"BeforeTool",
-		"AfterTool",
-		"SessionStart",
-		"SessionEnd",
-		"Notification",
-		"PreCompress",
+		geminiEventBeforeTool,
+		geminiEventAfterTool,
+		geminiEventSessionStart,
+		geminiEventSessionEnd,
+		geminiEventNotification,
+		geminiEventPreCompress,
 	} {
 		hasHook, err := p.HasEventHook(eventName, dispatcherPath)
 		if err != nil {

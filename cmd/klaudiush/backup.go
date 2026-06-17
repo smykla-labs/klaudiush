@@ -48,7 +48,7 @@ Subcommands:
 }
 
 var backupListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   cmdUseList,
 	Short: "List available backups",
 	Long: `List available configuration backups.
 

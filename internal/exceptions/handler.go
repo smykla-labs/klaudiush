@@ -190,7 +190,7 @@ func (h *Handler) validateRequest(req *CheckRequest) *CheckResponse {
 	if !h.IsEnabled() {
 		h.logger.Debug("exception system disabled")
 
-		return &CheckResponse{Bypassed: false, Reason: "exception system is disabled"}
+		return &CheckResponse{Bypassed: false, Reason: reasonSystemDisabled}
 	}
 
 	return nil
