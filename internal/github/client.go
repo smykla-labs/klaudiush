@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 
 	execpkg "github.com/smykla-skalski/klaudiush/internal/exec"
 )
@@ -108,34 +108,27 @@ func NewClient() *SDKClient {
 		token := getToken()
 		authenticated := token != ""
 
-		var httpClient *http.Client
+		var opts []github.ClientOptionsFunc
 		if authenticated {
-			httpClient = &http.Client{
-				Transport: &authTransport{
-					token: token,
-				},
-			}
+			opts = append(opts, github.WithAuthToken(token))
+		}
+
+		client, err := github.NewClient(opts...)
+		if err != nil {
+			// NewClient only errors on invalid options, which we do not pass.
+			// Fall back to an unauthenticated client constructed without options.
+			client, _ = github.NewClient()
+			authenticated = false
 		}
 
 		clientInstance = &SDKClient{
-			client:        github.NewClient(httpClient),
+			client:        client,
 			authenticated: authenticated,
 			cache:         NewCache(),
 		}
 	})
 
 	return clientInstance
-}
-
-// authTransport adds authentication header to requests
-type authTransport struct {
-	token string
-}
-
-func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+t.token)
-
-	return http.DefaultTransport.RoundTrip(req)
 }
 
 // IsAuthenticated returns whether the client is authenticated
