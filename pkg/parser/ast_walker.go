@@ -164,12 +164,14 @@ func allLiteralParts(parts []syntax.WordPart) bool {
 	return true
 }
 
-// echoOutput reproduces what "echo args..." writes to stdout. Only the leading
-// run of echo flags (-n, -e, -E and combinations) is stripped; once a non-flag
-// word appears, every remaining argument is literal, even if it starts with "-".
-// It returns false when -e is present, since that enables backslash-escape
-// interpretation which this helper does not perform - capturing the raw text
-// would mis-validate the message.
+// echoOutput returns the literal text content of an "echo args..." call. Only
+// the leading run of echo flags (-n, -e, -E and combinations) is stripped; once
+// a non-flag word appears, every remaining argument is literal, even if it
+// starts with "-". It returns false when -e is present, since that enables
+// backslash-escape interpretation which this helper does not perform - capturing
+// the raw text would mis-validate the message. This is a best-effort capture for
+// validation: it joins the arguments with spaces and omits the trailing newline
+// echo would normally emit (callers trim surrounding whitespace anyway).
 func echoOutput(args []string) (string, bool) {
 	i := 0
 
@@ -205,9 +207,12 @@ func echoFlag(arg string) (string, bool) {
 	return arg[1:], true
 }
 
-// printfOutput reproduces what a simple "printf" call writes to stdout, for the
-// forms commonly used to feed a commit message: a bare literal format with no
-// directives, or "%s"/"%s\n" with a single string argument.
+// printfOutput returns the literal text content of a simple "printf" call, for
+// the forms commonly used to feed a commit message: a bare literal format with
+// no directives, or "%s"/"%s\n" with a single string argument. This is a
+// best-effort capture for validation: it returns the argument text itself and
+// does not apply any newline implied by the format string (callers trim
+// surrounding whitespace anyway).
 func printfOutput(args []string) (string, bool) {
 	if len(args) == 0 {
 		return "", false
