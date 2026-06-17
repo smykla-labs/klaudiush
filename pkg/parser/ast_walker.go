@@ -97,23 +97,59 @@ func literalCommandOutput(call *syntax.CallExpr) (string, bool) {
 
 	switch name {
 	case "echo":
-		// Drop echo flags (-n, -e, ...); join remaining args with spaces.
-		var parts []string
-
-		for _, arg := range args {
-			if len(arg) > 0 && arg[0] == '-' {
-				continue
-			}
-
-			parts = append(parts, arg)
-		}
-
-		return strings.Join(parts, " "), true
+		return echoOutput(args), true
 	case "printf":
-		// Only handle the trivial "printf <format>" form with no directives.
-		if len(args) == 1 && !strings.Contains(args[0], "%") {
-			return args[0], true
+		return printfOutput(args)
+	}
+
+	return "", false
+}
+
+// echoOutput reproduces what "echo args..." writes to stdout. Only the leading
+// run of echo flags (-n, -e, -E and combinations) is stripped; once a non-flag
+// word appears, every remaining argument is literal, even if it starts with "-".
+func echoOutput(args []string) string {
+	i := 0
+	for i < len(args) && isEchoFlag(args[i]) {
+		i++
+	}
+
+	return strings.Join(args[i:], " ")
+}
+
+// isEchoFlag reports whether arg is an echo option like -n, -e, -E, or -ne.
+func isEchoFlag(arg string) bool {
+	if len(arg) < 2 || arg[0] != '-' {
+		return false
+	}
+
+	for _, c := range arg[1:] {
+		if c != 'n' && c != 'e' && c != 'E' {
+			return false
 		}
+	}
+
+	return true
+}
+
+// printfOutput reproduces what a simple "printf" call writes to stdout, for the
+// forms commonly used to feed a commit message: a bare literal format with no
+// directives, or "%s"/"%s\n" with a single string argument.
+func printfOutput(args []string) (string, bool) {
+	if len(args) == 0 {
+		return "", false
+	}
+
+	format := args[0]
+
+	// "printf <literal>" with no format directives.
+	if len(args) == 1 && !strings.Contains(format, "%") {
+		return format, true
+	}
+
+	// "printf %s msg" / "printf '%s\n' msg" with a single argument.
+	if len(args) == 2 && (format == "%s" || format == "%s\n" || format == `%s\n`) {
+		return args[1], true
 	}
 
 	return "", false

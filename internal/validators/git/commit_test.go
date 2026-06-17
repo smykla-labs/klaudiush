@@ -1185,6 +1185,37 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			).To(ContainSubstring("doesn't follow conventional commits format"))
 		})
 
+		It("should validate message piped to -F - via printf %s", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `printf '%s' "this is not conventional" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("should keep dash-prefixed words when echo feeds -F -", func() {
+			// echo only treats the leading -n/-e/-E run as flags; "-prefixed"
+			// here is part of the message and must not be dropped.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `echo "fix(parser): handle -prefixed words" | git commit -sS -a -F -`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
 		It("should pass with empty file (message from editor)", func() {
 			file, err := os.CreateTemp("", "commit-msg-*.txt")
 			Expect(err).ToNot(HaveOccurred())
