@@ -5,6 +5,20 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.5](https://github.com/smykla-skalski/klaudiush/compare/v1.32.4...v1.32.5) (2026-06-18)
+
+### Bug Fixes
+
+* **deps:** update ginkgo to v2.30.0 ([#486](https://github.com/smykla-skalski/klaudiush/issues/486)) ([60d5dd7](https://github.com/smykla-skalski/klaudiush/commit/60d5dd74b12ca75f495d0e964b973a3b85fe38d4))
+* **deps:** update module charm.land/bubbletea/v2 to v2.0.7 ([#475](https://github.com/smykla-skalski/klaudiush/issues/475)) ([38ca6b5](https://github.com/smykla-skalski/klaudiush/commit/38ca6b561fc672fc690876de255aee276d2f9243))
+* **deps:** update module charm.land/lipgloss/v2 to v2.0.4 ([#487](https://github.com/smykla-skalski/klaudiush/issues/487)) ([1c846a0](https://github.com/smykla-skalski/klaudiush/commit/1c846a0518621c1b5227bc674866d18ecf2e6df7))
+* **deps:** update module github.com/google/go-github/v84 to v88 ([#471](https://github.com/smykla-skalski/klaudiush/issues/471)) ([d9d7a58](https://github.com/smykla-skalski/klaudiush/commit/d9d7a58773104ce504ef1e16c041514fe4e7964e))
+* **deps:** update module github.com/onsi/gomega to v1.42.0 ([#488](https://github.com/smykla-skalski/klaudiush/issues/488)) ([006f6ba](https://github.com/smykla-skalski/klaudiush/commit/006f6bab7e44a5a4e0f1f657c93fd995daa253eb))
+* **deps:** update module github.com/pelletier/go-toml/v2 to v2.4.0 ([#489](https://github.com/smykla-skalski/klaudiush/issues/489)) ([1f50cd6](https://github.com/smykla-skalski/klaudiush/commit/1f50cd6f1206ed7585d6258194754e5860fdf6d1))
+* **deps:** update module golang.org/x/sync to v0.21.0 ([#484](https://github.com/smykla-skalski/klaudiush/issues/484)) ([63348dc](https://github.com/smykla-skalski/klaudiush/commit/63348dccbcbe482e52647219acc178d6a091e7a4))
+* **deps:** update module golang.org/x/term to v0.44.0 ([#485](https://github.com/smykla-skalski/klaudiush/issues/485)) ([287ea59](https://github.com/smykla-skalski/klaudiush/commit/287ea59cdfdf689196474bd8cd9e176eb8e2e48f))
+* **git:** validate commit messages fed via -F - ([#490](https://github.com/smykla-skalski/klaudiush/issues/490)) ([bb15120](https://github.com/smykla-skalski/klaudiush/commit/bb151208f917bfaf7dbe1bdda3d6b66dac614220))
+
 ## [1.32.4](https://github.com/smykla-skalski/klaudiush/compare/v1.32.3...v1.32.4) (2026-06-01)
 
 ### Bug Fixes
