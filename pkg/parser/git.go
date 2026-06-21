@@ -2,13 +2,31 @@ package parser
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
 )
 
-// flagMessage is the short git/gh message flag.
-const flagMessage = "-m"
+const (
+	// flagMessage is the short git/gh message flag.
+	flagMessage = "-m"
+	// flagUpperC ("-C") and flagLowerC ("-c") are reused with a different meaning
+	// per subcommand, handled per context rather than globally: -C is a repo path
+	// for the top-level git command, --reuse-message for commit, --force-create
+	// for switch, and force-copy for branch; -c is a config override for the
+	// top-level command, --create for switch, and copy for branch.
+	flagUpperC = "-C"
+	flagLowerC = "-c"
+)
+
+// Subcommands whose flag/argument handling needs special-casing.
+const (
+	subcmdCheckout = "checkout"
+	subcmdSwitch   = "switch"
+	subcmdBranch   = "branch"
+	subcmdCommit   = "commit"
+)
 
 var (
 	// ErrNotGitCommand is returned when the command is not a git command.
@@ -31,10 +49,10 @@ type GitCommand struct {
 
 // Global git options that take a value.
 var globalOptionsWithValue = map[string]bool{
-	"-C":                   true,
+	flagUpperC:             true,
 	"--git-dir":            true,
 	"--work-tree":          true,
-	"-c":                   true,
+	flagLowerC:             true,
 	"--namespace":          true,
 	"--super-prefix":       true,
 	"--config-env":         true,
@@ -55,16 +73,73 @@ var globalOptionsWithValue = map[string]bool{
 	"--list-cmds":          true,
 }
 
-// Flags that take values.
+// Flags that take a value regardless of subcommand. Context-dependent flags
+// (-c/-C, and branch's -m) are handled per subcommand in flagTakesValue instead.
 var flagsWithValues = map[string]bool{
-	flagMessage:       true,
-	"--message":       true,
-	"-F":              true,
-	"--file":          true,
-	"-C":              true,
-	"--reuse-message": true,
-	"-c":              false, // -c for switch/checkout is a boolean flag
-	"-b":              false, // -b for checkout is a boolean flag
+	flagMessage: true,
+	"--message": true,
+	"-F":        true,
+	"--file":    true,
+}
+
+// commitReuseFlags reuse another commit's message for "git commit" and consume
+// the commit reference: -c/--reedit-message edits the reused message, -C/
+// --reuse-message keeps it as-is.
+var commitReuseFlags = []string{flagLowerC, "--reedit-message", flagUpperC, "--reuse-message"}
+
+// checkoutCreationFlags and switchCreationFlags consume the following token as
+// the new branch name for their own subcommand ("git checkout -b feat/x",
+// "git switch -C feat/x"), listed in branch-name extraction order. They are kept
+// per subcommand because the letters mean other things elsewhere (e.g. -C is
+// commit's reuse-message, value-taking via flagsWithValues), so only a
+// subcommand's own creation flags capture a branch name.
+var (
+	checkoutCreationFlags = []string{"-b", "--branch"}
+	switchCreationFlags   = []string{flagLowerC, "--create", flagUpperC, "--force-create"}
+)
+
+// branchRenameCopyFlags mark a "git branch" rename or copy, which takes an
+// optional old name followed by the new name - so the new name is the last
+// positional argument rather than the first.
+var branchRenameCopyFlags = []string{"-m", "-M", "--move", flagLowerC, flagUpperC, "--copy"}
+
+// branchCreationFlagsFor returns the branch-creation flags for subcommand, or nil
+// when it has none.
+func branchCreationFlagsFor(subcommand string) []string {
+	switch subcommand {
+	case subcmdCheckout:
+		return checkoutCreationFlags
+	case subcmdSwitch:
+		return switchCreationFlags
+	default:
+		return nil
+	}
+}
+
+// flagTakesValue reports whether flag consumes the next token as its value within
+// the given subcommand. It resolves context-dependent flags (-c/-C, branch's -m)
+// per subcommand before falling back to the subcommand-independent set.
+func flagTakesValue(flag, subcommand string) bool {
+	switch subcommand {
+	case subcmdCheckout, subcmdSwitch:
+		// The creation flag captures the new branch name.
+		if slices.Contains(branchCreationFlagsFor(subcommand), flag) {
+			return true
+		}
+	case subcmdBranch:
+		// Rename/copy mode flags (-m/-M/--move, -c/-C/--copy) are boolean; the
+		// old and new names are positional.
+		if slices.Contains(branchRenameCopyFlags, flag) {
+			return false
+		}
+	case subcmdCommit:
+		// -c/-C reuse another commit's message and consume the commit ref.
+		if slices.Contains(commitReuseFlags, flag) {
+			return true
+		}
+	}
+
+	return flagsWithValues[flag]
 }
 
 // ParseGitCommand parses a Command into a GitCommand.
@@ -188,7 +263,7 @@ func addFlag(flag string, args []string, idx int, gitCmd *GitCommand) int {
 	gitCmd.Flags = append(gitCmd.Flags, flag)
 
 	// Check if this flag takes a value
-	if takesValue, exists := flagsWithValues[flag]; exists && takesValue {
+	if flagTakesValue(flag, gitCmd.Subcommand) {
 		if idx+1 < len(args) {
 			// Only store the first value for flags that can repeat (e.g., -m for title)
 			if _, alreadySet := gitCmd.FlagMap[flag]; !alreadySet {
@@ -221,8 +296,7 @@ func parseCombinedFlags(combined string, args []string, idx int, gitCmd *GitComm
 		gitCmd.Flags = append(gitCmd.Flags, flag)
 
 		// Check if this flag takes a value
-		takesValue, exists := flagsWithValues[flag]
-		if !exists || !takesValue {
+		if !flagTakesValue(flag, gitCmd.Subcommand) {
 			continue
 		}
 
@@ -300,33 +374,49 @@ func (g *GitCommand) ExtractRemote() string {
 // ExtractBranchName extracts branch name from various git commands.
 func (g *GitCommand) ExtractBranchName() string {
 	switch g.Subcommand {
-	case "checkout":
-		// git checkout [-b] <branch>
-		// Branch name is always in Args (first positional arg)
+	case subcmdCheckout, subcmdSwitch:
+		// git checkout -b/--branch <branch>, git switch -c/--create/-C/
+		// --force-create <branch>: the creation flag captures the new branch
+		// name (including a dash-prefixed one). Existing-branch checkout/switch
+		// has no creation flag, so fall back to the first positional argument.
+		if name := g.branchCreationName(); name != "" {
+			return name
+		}
+
 		if len(g.Args) > 0 {
 			return g.Args[0]
 		}
 
-	case "branch":
-		// git branch [-m] <new-branch>
-		// git branch <branch>
-		if len(g.Args) > 0 {
-			// Last arg is the branch name
+	case subcmdBranch:
+		if len(g.Args) == 0 {
+			return ""
+		}
+
+		// Rename/copy (-m/-M/--move, -c/-C/--copy) take an optional old name then
+		// the new name, so the new name is the last positional. Plain creation,
+		// "git branch <new> [start-point]", puts the new name first.
+		if slices.ContainsFunc(branchRenameCopyFlags, g.HasFlag) {
 			return g.Args[len(g.Args)-1]
 		}
 
-	case "switch":
-		// git switch [-c] <branch>
-		// git switch <branch>
-		// Branch name is always in Args (first positional arg)
-		if len(g.Args) > 0 {
-			return g.Args[0]
-		}
+		return g.Args[0]
 
 	case "push", "pull":
 		// git push/pull <remote> <branch>
 		if len(g.Args) > 1 {
 			return g.Args[1]
+		}
+	}
+
+	return ""
+}
+
+// branchCreationName returns the value captured for the subcommand's branch
+// creation flag, or "" when no such flag is present.
+func (g *GitCommand) branchCreationName() string {
+	for _, flag := range branchCreationFlagsFor(g.Subcommand) {
+		if name := g.FlagMap[flag]; name != "" {
+			return name
 		}
 	}
 
@@ -357,7 +447,7 @@ func (g *GitCommand) ExtractFilePaths() []string {
 func (g *GitCommand) GetWorkingDirectory() string {
 	cdDir := g.WorkingDirectory
 
-	cDir, hasC := g.GlobalOptions["-C"]
+	cDir, hasC := g.GlobalOptions[flagUpperC]
 	if !hasC {
 		return cdDir
 	}

@@ -231,61 +231,23 @@ func (*BranchValidator) createSpaceError() *validator.Result {
 	return validator.FailWithRef(validator.RefGitBranchName, message)
 }
 
-// extractBranchName extracts the branch name from a git command.
-func (v *BranchValidator) extractBranchName(gitCmd *parser.GitCommand) string {
+// extractBranchName extracts the new branch name from a branch-creation command.
+//
+// For checkout and switch the parser captures the name as the creation flag's
+// value (-b/--branch, -c/--create, -C/--force-create), so it is read from there
+// - this both ignores trailing options like "--quiet" in
+// "git checkout -b fix/foo main --quiet" and still catches a dash-prefixed name
+// such as "git checkout -b --quiet". For git branch the new name is the first
+// positional argument (any start-point follows it). The bash parser preserves
+// quoted spaces within a single argument.
+func (*BranchValidator) extractBranchName(gitCmd *parser.GitCommand) string {
 	switch gitCmd.Subcommand {
-	case "checkout":
-		return v.extractCheckoutBranchName(gitCmd)
+	case "checkout", "switch":
+		return gitCmd.ExtractBranchName()
 	case "branch":
-		return v.extractBranchCommandName(gitCmd)
-	case "switch":
-		return v.extractSwitchBranchName(gitCmd)
-	default:
-		return ""
-	}
-}
-
-// extractCheckoutBranchName extracts the branch name from git checkout -b <branch> [start-point].
-// The bash parser handles quoted strings, preserving spaces in a single argument.
-func (*BranchValidator) extractCheckoutBranchName(gitCmd *parser.GitCommand) string {
-	for _, flag := range checkoutCreateFlags {
-		for i, f := range gitCmd.Flags {
-			if f == flag && i+1 < len(gitCmd.Flags) {
-				return gitCmd.Flags[i+1]
-			}
+		if len(gitCmd.Args) > 0 {
+			return gitCmd.Args[0]
 		}
-	}
-
-	if len(gitCmd.Args) > 0 {
-		return gitCmd.Args[0]
-	}
-
-	return ""
-}
-
-// extractBranchCommandName extracts the branch name from git branch <branch> [start-point].
-// The bash parser handles quoted strings, preserving spaces in a single argument.
-func (*BranchValidator) extractBranchCommandName(gitCmd *parser.GitCommand) string {
-	if len(gitCmd.Args) > 0 {
-		return gitCmd.Args[0]
-	}
-
-	return ""
-}
-
-// extractSwitchBranchName extracts the branch name from git switch -c <branch> [start-point].
-// The bash parser handles quoted strings, preserving spaces in a single argument.
-func (*BranchValidator) extractSwitchBranchName(gitCmd *parser.GitCommand) string {
-	for _, flag := range switchCreateFlags {
-		for i, f := range gitCmd.Flags {
-			if f == flag && i+1 < len(gitCmd.Flags) {
-				return gitCmd.Flags[i+1]
-			}
-		}
-	}
-
-	if len(gitCmd.Args) > 0 {
-		return gitCmd.Args[0]
 	}
 
 	return ""

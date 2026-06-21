@@ -68,6 +68,30 @@ var _ = Describe("GitCommand", func() {
 				Expect(gitCmd.ExtractCommitMessage()).To(Equal("fix: bug fix"))
 			})
 
+			It("captures the commit ref for -c/-C reuse flags", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"commit", "-c", "HEAD~1"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetFlagValue("-c")).To(Equal("HEAD~1"))
+				Expect(gitCmd.Args).To(BeEmpty())
+			})
+
+			It("captures the commit ref for the --reedit-message long form", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"commit", "--reedit-message", "HEAD~1"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetFlagValue("--reedit-message")).To(Equal("HEAD~1"))
+				Expect(gitCmd.Args).To(BeEmpty())
+			})
+
 			It("uses first -m flag as commit message when multiple -m flags provided", func() {
 				// git commit -m "title" -m "body" should use "title" as the message
 				cmd := parser.Command{
@@ -181,6 +205,18 @@ EOF
 				Expect(gitCmd.HasFlag("-b")).To(BeTrue())
 				Expect(gitCmd.ExtractBranchName()).To(Equal("feat/new-feature"))
 			})
+
+			It("captures the -b branch name despite a trailing flag", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"checkout", "-b", "feat/new-feature", "main", "--quiet"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.HasFlag("--quiet")).To(BeTrue())
+				Expect(gitCmd.ExtractBranchName()).To(Equal("feat/new-feature"))
+			})
 		})
 
 		Context("with git branch command", func() {
@@ -188,6 +224,17 @@ EOF
 				cmd := parser.Command{
 					Name: "git",
 					Args: []string{"branch", "new-branch"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.ExtractBranchName()).To(Equal("new-branch"))
+			})
+
+			It("returns the new branch, not the start-point, on creation", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"branch", "new-branch", "upstream/main"},
 				}
 
 				gitCmd, err := parser.ParseGitCommand(cmd)
@@ -205,6 +252,18 @@ EOF
 				Expect(err).NotTo(HaveOccurred())
 				Expect(gitCmd.HasFlag("-m")).To(BeTrue())
 				Expect(gitCmd.ExtractBranchName()).To(Equal("new-name"))
+			})
+
+			It("parses single-argument branch rename with -m", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"branch", "-m", "renamed-branch"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.HasFlag("-m")).To(BeTrue())
+				Expect(gitCmd.ExtractBranchName()).To(Equal("renamed-branch"))
 			})
 		})
 

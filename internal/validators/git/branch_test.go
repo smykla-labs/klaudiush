@@ -146,6 +146,30 @@ var _ = Describe("BranchValidator", func() {
 				Expect(result.Passed).To(BeFalse())
 			})
 		})
+
+		Context("with trailing flags after the branch name", func() {
+			It("should pass and ignore a trailing --quiet", func() {
+				ctx.ToolInput.Command = "git checkout -b feat/with-flag main --quiet"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should validate the branch name, not the trailing flag", func() {
+				ctx.ToolInput.Command = "git checkout -b add-feature --quiet"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("type/description"))
+				Expect(result.Message).NotTo(ContainSubstring("--quiet"))
+			})
+
+			It("should not be bypassed by a dash-prefixed branch name", func() {
+				// "--quiet" as the branch name is captured as the -b value, so it
+				// is validated (and rejected) rather than silently skipped.
+				ctx.ToolInput.Command = "git checkout -b --quiet"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+			})
+		})
 	})
 
 	Describe("git switch", func() {
@@ -167,6 +191,12 @@ var _ = Describe("BranchValidator", func() {
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeFalse())
 				Expect(result.Message).To(ContainSubstring("spaces"))
+			})
+
+			It("should pass and ignore a trailing --quiet", func() {
+				ctx.ToolInput.Command = "git switch -c feat/new-feature main --quiet"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
 			})
 		})
 
@@ -190,6 +220,15 @@ var _ = Describe("BranchValidator", func() {
 				ctx.ToolInput.Command = "git switch -C feat/force-create"
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should validate the force-created branch name", func() {
+				// -C takes the branch name as its value; the name is validated
+				// rather than skipped.
+				ctx.ToolInput.Command = "git switch -C BadName"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("lowercase"))
 			})
 		})
 
