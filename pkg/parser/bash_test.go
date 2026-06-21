@@ -1096,6 +1096,16 @@ EOF`
 			Expect(content).To(Equal("feat: subject"))
 		})
 
+		It("renders a modified expansion distinctly from the plain name", func() {
+			// "${#MSG}" (length) must not collapse onto "${MSG}", so a redirect to
+			// the length does not satisfy a consumer reading the variable itself.
+			result, err := p.Parse(`printf '%s' 'feat: subject' > "${#MSG}"`)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("${MSG}", "", afterAll)
+			Expect(ok).To(BeFalse())
+		})
+
 		It("is uncertain for a printf with an unsupported directive", func() {
 			result, err := p.Parse(`printf '%d' 42 > msg.txt`)
 			Expect(err).NotTo(HaveOccurred())

@@ -1498,7 +1498,7 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 		It("validates a printf-written message at a variable path (good)", func() {
 			// Screenshot case: a multi-line message is built with printf and
 			// referenced through a variable. Both the redirect target and the -F
-			// path render to "$MSG", so the captured content is validated.
+			// path render to "${MSG}", so the captured content is validated.
 			cmd := `printf '%s\n\n%s\n' 'feat(api): add endpoint' 'Adds the endpoint.' > "$MSG" && ` +
 				`git commit -sS -a -F "$MSG"`
 
@@ -1609,6 +1609,19 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
 			Expect(result.ShouldBlock).To(BeTrue())
+		})
+
+		It("skips a modified -m expansion", func() {
+			// "${MSG:-default}" is still an unresolved expansion (its value depends
+			// on MSG at runtime), so it is skipped rather than validated.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -m "${MSG:-default}"`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
 		})
 
 		It("skips an unresolved -F variable path with no inline write", func() {

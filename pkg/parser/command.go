@@ -124,20 +124,38 @@ func wordToString(word *syntax.Word) string {
 	return result.String()
 }
 
-// paramExpToString renders a parameter expansion as a stable braced token
-// "${NAME}". Both "$MSG" and "${MSG}" canonicalize to "${MSG}" so a write target
-// and a consumer that name the same variable in different forms still match. The
-// braced form is used even for a "$NAME" source so a real expansion stays
-// distinct from a single-quoted literal like '$NAME' (which keeps its source
-// form and is still validated). Operators inside ${...} (e.g. ":-default") are
-// not reproduced; the token only needs to be identical for the same variable and
-// recognizable as an unresolved expansion so message validation can skip it.
+// paramExpToString renders a parameter expansion as a stable token. A simple
+// reference - "$MSG" or "${MSG}" - canonicalizes to the braced form "${MSG}" so
+// a write target and a consumer that name the same variable in different forms
+// match, and so a real expansion stays distinct from a single-quoted literal like
+// '$MSG' (which keeps its source form and is still validated). An expansion
+// carrying an operator or modifier - "${#MSG}", "${MSG:-default}", "${!MSG}" - is
+// printed verbatim so distinct expansions are not collapsed onto "${MSG}".
 func paramExpToString(pe *syntax.ParamExp) string {
 	if pe == nil || pe.Param == nil {
 		return ""
 	}
 
-	return "${" + pe.Param.Value + "}"
+	canonical := "${" + pe.Param.Value + "}"
+
+	// A short reference ("$NAME", "$@") has no braces and so no operator; use the
+	// canonical braced form directly.
+	if pe.Short {
+		return canonical
+	}
+
+	// A braced reference may carry an operator/modifier. Print it and keep that
+	// form only when it differs from the plain "${NAME}".
+	var b strings.Builder
+	if err := syntax.NewPrinter().Print(&b, pe); err != nil {
+		return canonical
+	}
+
+	if printed := b.String(); printed != canonical {
+		return printed
+	}
+
+	return canonical
 }
 
 // extractHeredocFromCmdSubst extracts heredoc content from command substitution.

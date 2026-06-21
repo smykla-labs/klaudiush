@@ -116,18 +116,19 @@ func (r *ParseResult) GetFirstGitWorkingDir() string {
 }
 
 // InlineFileContent returns the content written to path before the consumer at
-// source position "before", and whether that content was reconstructed exactly.
+// source position "before", and whether that content could be reconstructed.
 // workDir is the consumer's effective working directory (from cd or git -C),
 // used to resolve a relative path so writes in a different directory don't match.
 //
 // Only writes preceding that position (in source order, which models shell
 // execution order for sequential commands) are considered, so a write that
 // happens after the consumer - e.g. "git commit -F f && cat > f <<EOF" - is
-// ignored. The only content the parser captures exactly is an overwrite heredoc
-// fed to a verbatim copier (e.g. "cat > f <<EOF ... EOF"); the last such
-// overwrite to the resolved path wins. Appends (">>"), plain redirects, heredocs
-// on transforming commands, and tee/cp/mv leave the result uncertain, so ok is
-// false and callers should fall back to reading the file from disk.
+// ignored. The parser reconstructs two overwrite forms: a heredoc fed to a
+// verbatim copier ("cat > f <<EOF ... EOF"), captured exactly, and a literal
+// echo/printf redirect ("printf '%s' msg > f"), captured best-effort
+// (normalized). The last such overwrite to the resolved path wins. Appends
+// (">>"), heredocs on transforming commands, and tee/cp/mv leave the result
+// uncertain, so ok is false and callers should fall back to reading from disk.
 //
 // This lets validators inspect "git commit -F f" messages when f is created
 // inline (e.g. "cat > f <<EOF ... EOF; git commit -F f"), since f does not
