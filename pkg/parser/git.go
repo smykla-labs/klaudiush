@@ -76,17 +76,16 @@ var globalOptionsWithValue = map[string]bool{
 // Flags that take a value regardless of subcommand. Context-dependent flags
 // (-c/-C, and branch's -m) are handled per subcommand in flagTakesValue instead.
 var flagsWithValues = map[string]bool{
-	flagMessage:       true,
-	"--message":       true,
-	"-F":              true,
-	"--file":          true,
-	"--reuse-message": true,
+	flagMessage: true,
+	"--message": true,
+	"-F":        true,
+	"--file":    true,
 }
 
 // commitReuseFlags reuse another commit's message for "git commit" and consume
 // the commit reference: -c/--reedit-message edits the reused message, -C/
 // --reuse-message keeps it as-is.
-var commitReuseFlags = []string{flagLowerC, flagUpperC}
+var commitReuseFlags = []string{flagLowerC, "--reedit-message", flagUpperC, "--reuse-message"}
 
 // checkoutCreationFlags and switchCreationFlags consume the following token as
 // the new branch name for their own subcommand ("git checkout -b feat/x",

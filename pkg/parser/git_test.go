@@ -80,6 +80,18 @@ var _ = Describe("GitCommand", func() {
 				Expect(gitCmd.Args).To(BeEmpty())
 			})
 
+			It("captures the commit ref for the --reedit-message long form", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"commit", "--reedit-message", "HEAD~1"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetFlagValue("--reedit-message")).To(Equal("HEAD~1"))
+				Expect(gitCmd.Args).To(BeEmpty())
+			})
+
 			It("uses first -m flag as commit message when multiple -m flags provided", func() {
 				// git commit -m "title" -m "body" should use "title" as the message
 				cmd := parser.Command{
