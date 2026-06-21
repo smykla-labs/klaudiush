@@ -231,17 +231,20 @@ func (*BranchValidator) createSpaceError() *validator.Result {
 	return validator.FailWithRef(validator.RefGitBranchName, message)
 }
 
-// extractBranchName extracts the new branch name from a branch-creation command:
-// git checkout -b/--branch <branch>, git switch -c/--create/-C/--force-create
-// <branch>, or git branch <branch>. In each form the new name is the first
-// positional argument (any start-point follows it). The creation flags are
-// boolean in the parser, so the branch name lands in Args rather than next to
-// the flag - reading the token after the flag would instead pick up a trailing
-// option such as "--quiet" in "git checkout -b fix/foo main --quiet". The bash
-// parser preserves quoted spaces within a single argument.
+// extractBranchName extracts the new branch name from a branch-creation command.
+//
+// For checkout and switch the parser captures the name as the creation flag's
+// value (-b/--branch, -c/--create, -C/--force-create), so it is read from there
+// - this both ignores trailing options like "--quiet" in
+// "git checkout -b fix/foo main --quiet" and still catches a dash-prefixed name
+// such as "git checkout -b --quiet". For git branch the new name is the first
+// positional argument (any start-point follows it). The bash parser preserves
+// quoted spaces within a single argument.
 func (*BranchValidator) extractBranchName(gitCmd *parser.GitCommand) string {
 	switch gitCmd.Subcommand {
-	case "checkout", "branch", "switch":
+	case "checkout", "switch":
+		return gitCmd.ExtractBranchName()
+	case "branch":
 		if len(gitCmd.Args) > 0 {
 			return gitCmd.Args[0]
 		}

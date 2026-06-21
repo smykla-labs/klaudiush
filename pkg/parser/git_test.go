@@ -181,6 +181,18 @@ EOF
 				Expect(gitCmd.HasFlag("-b")).To(BeTrue())
 				Expect(gitCmd.ExtractBranchName()).To(Equal("feat/new-feature"))
 			})
+
+			It("captures the -b branch name despite a trailing flag", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"checkout", "-b", "feat/new-feature", "main", "--quiet"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.HasFlag("--quiet")).To(BeTrue())
+				Expect(gitCmd.ExtractBranchName()).To(Equal("feat/new-feature"))
+			})
 		})
 
 		Context("with git branch command", func() {

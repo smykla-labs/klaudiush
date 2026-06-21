@@ -2,13 +2,20 @@ package parser
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
 )
 
-// flagMessage is the short git/gh message flag.
-const flagMessage = "-m"
+const (
+	// flagMessage is the short git/gh message flag.
+	flagMessage = "-m"
+	// flagDashC is the "-C" flag, whose meaning is subcommand-specific: a repo
+	// path for the top-level git command, --reuse-message for commit, and
+	// --force-create for switch.
+	flagDashC = "-C"
+)
 
 var (
 	// ErrNotGitCommand is returned when the command is not a git command.
@@ -31,7 +38,7 @@ type GitCommand struct {
 
 // Global git options that take a value.
 var globalOptionsWithValue = map[string]bool{
-	"-C":                   true,
+	flagDashC:              true,
 	"--git-dir":            true,
 	"--work-tree":          true,
 	"-c":                   true,
@@ -55,16 +62,34 @@ var globalOptionsWithValue = map[string]bool{
 	"--list-cmds":          true,
 }
 
-// Flags that take values.
+// Flags that take a value across all subcommands.
 var flagsWithValues = map[string]bool{
 	flagMessage:       true,
 	"--message":       true,
 	"-F":              true,
 	"--file":          true,
-	"-C":              true,
+	flagDashC:         true,
 	"--reuse-message": true,
-	"-c":              false, // -c for switch/checkout is a boolean flag
-	"-b":              false, // -b for checkout is a boolean flag
+}
+
+// branchCreationFlags consume the following token as the new branch name for the
+// checkout and switch subcommands, listed in branch-name extraction order. These
+// letters mean other things for other subcommands (e.g. -C is commit's
+// reuse-message), so they are only treated as value-taking for checkout/switch.
+var branchCreationFlags = []string{
+	"-b", "--branch", // checkout
+	"-c", "--create", flagDashC, "--force-create", // switch
+}
+
+// flagTakesValue reports whether flag consumes the next token as its value within
+// the given subcommand.
+func flagTakesValue(flag, subcommand string) bool {
+	if (subcommand == "checkout" || subcommand == "switch") &&
+		slices.Contains(branchCreationFlags, flag) {
+		return true
+	}
+
+	return flagsWithValues[flag]
 }
 
 // ParseGitCommand parses a Command into a GitCommand.
@@ -188,7 +213,7 @@ func addFlag(flag string, args []string, idx int, gitCmd *GitCommand) int {
 	gitCmd.Flags = append(gitCmd.Flags, flag)
 
 	// Check if this flag takes a value
-	if takesValue, exists := flagsWithValues[flag]; exists && takesValue {
+	if flagTakesValue(flag, gitCmd.Subcommand) {
 		if idx+1 < len(args) {
 			// Only store the first value for flags that can repeat (e.g., -m for title)
 			if _, alreadySet := gitCmd.FlagMap[flag]; !alreadySet {
@@ -221,8 +246,7 @@ func parseCombinedFlags(combined string, args []string, idx int, gitCmd *GitComm
 		gitCmd.Flags = append(gitCmd.Flags, flag)
 
 		// Check if this flag takes a value
-		takesValue, exists := flagsWithValues[flag]
-		if !exists || !takesValue {
+		if !flagTakesValue(flag, gitCmd.Subcommand) {
 			continue
 		}
 
@@ -300,9 +324,15 @@ func (g *GitCommand) ExtractRemote() string {
 // ExtractBranchName extracts branch name from various git commands.
 func (g *GitCommand) ExtractBranchName() string {
 	switch g.Subcommand {
-	case "checkout":
-		// git checkout [-b] <branch>
-		// Branch name is always in Args (first positional arg)
+	case "checkout", "switch":
+		// git checkout -b/--branch <branch>, git switch -c/--create/-C/
+		// --force-create <branch>: the creation flag captures the new branch
+		// name (including a dash-prefixed one). Existing-branch checkout/switch
+		// has no creation flag, so fall back to the first positional argument.
+		if name := g.branchCreationName(); name != "" {
+			return name
+		}
+
 		if len(g.Args) > 0 {
 			return g.Args[0]
 		}
@@ -315,18 +345,23 @@ func (g *GitCommand) ExtractBranchName() string {
 			return g.Args[len(g.Args)-1]
 		}
 
-	case "switch":
-		// git switch [-c] <branch>
-		// git switch <branch>
-		// Branch name is always in Args (first positional arg)
-		if len(g.Args) > 0 {
-			return g.Args[0]
-		}
-
 	case "push", "pull":
 		// git push/pull <remote> <branch>
 		if len(g.Args) > 1 {
 			return g.Args[1]
+		}
+	}
+
+	return ""
+}
+
+// branchCreationName returns the value captured for a checkout/switch branch
+// creation flag (-b, --branch, -c, --create, -C, --force-create), or "" when no
+// such flag is present.
+func (g *GitCommand) branchCreationName() string {
+	for _, flag := range branchCreationFlags {
+		if name := g.FlagMap[flag]; name != "" {
+			return name
 		}
 	}
 
@@ -357,7 +392,7 @@ func (g *GitCommand) ExtractFilePaths() []string {
 func (g *GitCommand) GetWorkingDirectory() string {
 	cdDir := g.WorkingDirectory
 
-	cDir, hasC := g.GlobalOptions["-C"]
+	cDir, hasC := g.GlobalOptions[flagDashC]
 	if !hasC {
 		return cdDir
 	}
