@@ -395,6 +395,15 @@ func (v *PRValidator) validatePRTitleData(
 		return
 	}
 
+	// A bare variable title (e.g. gh pr create --title "$TITLE") is an unresolved
+	// expansion whose runtime value the hook cannot see, so its format can't be
+	// checked. Skip rather than reject a valid title.
+	if isBarePRExpansion(title) {
+		v.Logger().Debug("PR title is an unresolved expansion; skipping validation", "title", title)
+
+		return
+	}
+
 	// Check title length
 	lengthRule := &TitleLengthRule{
 		MaxLength:                 v.getTitleMaxLength(),
@@ -443,10 +452,43 @@ func (v *PRValidator) validatePRBodyData(body, prType string, allErrors, allWarn
 		return
 	}
 
+	// A bare variable body (e.g. gh pr create --body "$BODY") is an unresolved
+	// expansion the hook cannot inspect, so skip rather than report it as missing
+	// required sections.
+	if isBarePRExpansion(body) {
+		v.Logger().Debug("PR body is an unresolved expansion; skipping validation", "body", body)
+
+		return
+	}
+
 	requireChangelog := v.isRequireChangelog()
 	bodyResult := validatePRBody(body, prType, requireChangelog)
 	*allErrors = append(*allErrors, bodyResult.Errors...)
 	*allWarnings = append(*allWarnings, bodyResult.Warnings...)
+}
+
+// bareShortVarPattern matches a bare short-form shell variable like "$TITLE".
+var bareShortVarPattern = regexp.MustCompile(`^\$[A-Za-z_][A-Za-z0-9_]*$`)
+
+// isBarePRExpansion reports whether a regex-extracted PR field is a single
+// unresolved shell expansion - "$NAME", "${NAME}", or a "$(...)" command
+// substitution. The PR validator reads the title and body from the raw command
+// text, so an expansion appears verbatim; its runtime value can't be inspected,
+// and validating the literal token would wrongly reject a valid PR, so skip it.
+func isBarePRExpansion(s string) bool {
+	s = strings.TrimSpace(s)
+
+	if strings.HasPrefix(s, "$(") && strings.HasSuffix(s, ")") {
+		return true
+	}
+
+	// ${NAME} braced form (shared with the commit/branch validators).
+	if isBareExpansion(s) {
+		return true
+	}
+
+	// $NAME short form.
+	return bareShortVarPattern.MatchString(s)
 }
 
 // validateBaseBranchLabels validates base branch labels
