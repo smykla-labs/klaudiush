@@ -1025,6 +1025,150 @@ See docs/api.md'`,
 			Expect(result.Passed).To(BeTrue())
 		})
 
+		It("should pass with a bare variable title", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "$TITLE" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See docs/api.md
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should pass with a braced variable title", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "${PR_TITLE}" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See docs/api.md
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should pass with a bare variable body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$BODY"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should pass when both title and body are variables", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "$TITLE" --body "$BODY"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should still validate a single-quoted literal title", func() {
+			// Single quotes are literal in shell, so '$TITLE' is the literal
+			// string "$TITLE" and must be validated (and rejected), not skipped.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title '$TITLE' --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See docs/api.md
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		})
+
+		It("should still validate a single-quoted literal body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body '$BODY'`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		})
+
+		It("should not run content checks on a command-substitution title", func() {
+			// A "$(...)" title is an unresolved expansion; the raw token must not
+			// be pattern-matched (it contains "tmp/" here) because the runtime
+			// value is unknown.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "$(make-title tmp/x)" --body "$BODY"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
 		It("should pass for non-gh commands", func() {
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,

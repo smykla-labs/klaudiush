@@ -265,6 +265,12 @@ type PRData struct {
 	BaseBranch string
 	Labels     []string
 	HasLabels  bool
+	// TitleIsExpansion / BodyIsExpansion report that the value came from a
+	// double-quoted argument and is a single unresolved shell expansion (e.g.
+	// --title "$TITLE"), so its runtime value can't be validated. Single-quoted
+	// values are literal in shell and are never marked, so they stay validated.
+	TitleIsExpansion bool
+	BodyIsExpansion  bool
 }
 
 // extractPRData extracts PR title, body, base branch, and labels from gh command
@@ -273,9 +279,12 @@ func (v *PRValidator) extractPRData(command string) PRData {
 		Labels: []string{},
 	}
 
-	// Extract title (try double quotes first, then single quotes)
+	// Extract title (try double quotes first, then single quotes). Only a
+	// double-quoted value undergoes shell expansion, so only it can be a bare
+	// expansion to skip; a single-quoted value is a literal and stays validated.
 	if matches := prTitleRegex.FindStringSubmatch(command); len(matches) > 1 {
 		data.Title = matches[1]
+		data.TitleIsExpansion = isBarePRExpansion(matches[1])
 	} else if matches := prTitleSingleRegex.FindStringSubmatch(command); len(matches) > 1 {
 		data.Title = matches[1]
 	}
@@ -296,12 +305,15 @@ func (v *PRValidator) extractPRData(command string) PRData {
 		data.Labels = v.parseLabels(matches[1])
 	}
 
-	// Extract body - try heredoc first, then quoted strings
+	// Extract body - try heredoc first, then quoted strings. As with the title,
+	// only a double-quoted body can be a bare expansion to skip; heredoc bodies
+	// and single-quoted bodies are literal and stay validated.
 	if matches := heredocRegex.FindStringSubmatch(command); len(matches) > 1 {
 		// Add trailing newline for markdownlint MD047 rule
 		data.Body = matches[1] + "\n"
 	} else if matches := bodyRegex.FindStringSubmatch(command); len(matches) > 1 {
 		data.Body = matches[1] + "\n"
+		data.BodyIsExpansion = isBarePRExpansion(matches[1])
 	} else if matches := bodySingleRegex.FindStringSubmatch(command); len(matches) > 1 {
 		data.Body = matches[1] + "\n"
 	}
@@ -340,31 +352,45 @@ func (v *PRValidator) validatePR(ctx context.Context, data PRData) *validator.Re
 	allWarnings := make([]string, 0, typicalWarningCount)
 
 	// 1. Validate PR title
-	v.validatePRTitleData(ctx, data.Title, &allErrors, &allWarnings)
+	v.validatePRTitleData(ctx, data.Title, data.TitleIsExpansion, &allErrors, &allWarnings)
+
+	// An unresolved expansion (e.g. --title "$TITLE", --body "$(...)") can't be
+	// inspected, so treat it as empty for every content-based check below. This
+	// keeps the raw token from being pattern-matched, linted, used for type
+	// detection, or surfaced in the result.
+	titleForChecks := data.Title
+	if data.TitleIsExpansion {
+		titleForChecks = ""
+	}
+
+	bodyForChecks := data.Body
+	if data.BodyIsExpansion {
+		bodyForChecks = ""
+	}
 
 	// 2. Check for forbidden patterns in title and body
-	forbiddenErrors := v.checkForbiddenPatterns(data.Title, data.Body)
+	forbiddenErrors := v.checkForbiddenPatterns(titleForChecks, bodyForChecks)
 	allErrors = append(allErrors, forbiddenErrors...)
 
 	// 2b. Check for AI attribution in title and body
-	allErrors = append(allErrors, v.checkAIAttribution(data.Title, data.Body)...)
+	allErrors = append(allErrors, v.checkAIAttribution(titleForChecks, bodyForChecks)...)
 
 	// 3. Extract PR type for body validation
 	validTypes := v.getValidTypes()
-	prType := extractPRType(data.Title, validTypes)
+	prType := extractPRType(titleForChecks, validTypes)
 
 	// 4. Validate PR body
-	v.validatePRBodyData(data.Body, prType, &allErrors, &allWarnings)
+	v.validatePRBodyData(data.Body, prType, data.BodyIsExpansion, &allErrors, &allWarnings)
 
 	// 5. Validate markdown formatting
-	if data.Body != "" {
+	if bodyForChecks != "" {
 		// External markdownlint validation
 		disabledRules := v.getMarkdownDisabledRules()
-		mdResult := ValidatePRMarkdown(ctx, data.Body, disabledRules)
+		mdResult := ValidatePRMarkdown(ctx, bodyForChecks, disabledRules)
 		allWarnings = append(allWarnings, mdResult.Errors...)
 
 		// Internal markdown validation (code block indentation, empty lines, etc.)
-		internalMdResult := validators.AnalyzeMarkdown(data.Body, nil)
+		internalMdResult := validators.AnalyzeMarkdown(bodyForChecks, nil)
 		allWarnings = append(allWarnings, internalMdResult.Warnings...)
 	}
 
@@ -372,18 +398,26 @@ func (v *PRValidator) validatePR(ctx context.Context, data PRData) *validator.Re
 	validateBaseBranchLabels(data, &allErrors)
 
 	// 7. Validate CI label heuristics (if enabled)
-	if v.isCheckCILabelsEnabled() && data.Title != "" && data.Body != "" {
+	if v.isCheckCILabelsEnabled() && titleForChecks != "" && bodyForChecks != "" {
 		ciWarnings := v.checkCILabelHeuristics(data, prType)
 		allWarnings = append(allWarnings, ciWarnings...)
 	}
 
-	return v.buildResult(allErrors, allWarnings, data.Title)
+	// Redact an unresolved-expansion title from the preview so a "$(...)" form is
+	// not echoed back in the hook output.
+	previewTitle := data.Title
+	if data.TitleIsExpansion {
+		previewTitle = "(unresolved expansion)"
+	}
+
+	return v.buildResult(allErrors, allWarnings, previewTitle)
 }
 
 // validatePRTitleData validates the PR title using commit rules.
 func (v *PRValidator) validatePRTitleData(
 	ctx context.Context,
 	title string,
+	titleIsExpansion bool,
 	allErrors, allWarnings *[]string,
 ) {
 	if title == "" {
@@ -391,6 +425,16 @@ func (v *PRValidator) validatePRTitleData(
 			*allWarnings,
 			"Could not extract PR title - ensure you're using --title flag",
 		)
+
+		return
+	}
+
+	// A bare variable title (e.g. gh pr create --title "$TITLE") is an unresolved
+	// expansion whose runtime value the hook cannot see, so its format can't be
+	// checked. Skip rather than reject a valid title. The value is omitted from
+	// the log since a "$(...)" form can carry sensitive command content.
+	if titleIsExpansion {
+		v.Logger().Debug("PR title is an unresolved expansion; skipping validation")
 
 		return
 	}
@@ -424,7 +468,11 @@ func (v *PRValidator) validatePRTitleData(
 }
 
 // validatePRBodyData validates the PR body
-func (v *PRValidator) validatePRBodyData(body, prType string, allErrors, allWarnings *[]string) {
+func (v *PRValidator) validatePRBodyData(
+	body, prType string,
+	bodyIsExpansion bool,
+	allErrors, allWarnings *[]string,
+) {
 	requireBody := v.isRequireBody()
 
 	if body == "" {
@@ -443,10 +491,44 @@ func (v *PRValidator) validatePRBodyData(body, prType string, allErrors, allWarn
 		return
 	}
 
+	// A bare variable body (e.g. gh pr create --body "$BODY") is an unresolved
+	// expansion the hook cannot inspect, so skip rather than report it as missing
+	// required sections. The value is omitted from the log since a "$(...)" form
+	// can carry sensitive command content.
+	if bodyIsExpansion {
+		v.Logger().Debug("PR body is an unresolved expansion; skipping validation")
+
+		return
+	}
+
 	requireChangelog := v.isRequireChangelog()
 	bodyResult := validatePRBody(body, prType, requireChangelog)
 	*allErrors = append(*allErrors, bodyResult.Errors...)
 	*allWarnings = append(*allWarnings, bodyResult.Warnings...)
+}
+
+// bareShortVarPattern matches a bare short-form shell variable like "$TITLE".
+var bareShortVarPattern = regexp.MustCompile(`^\$[A-Za-z_][A-Za-z0-9_]*$`)
+
+// isBarePRExpansion reports whether a regex-extracted PR field is a single
+// unresolved shell expansion - "$NAME", "${NAME}", or a "$(...)" command
+// substitution. The PR validator reads the title and body from the raw command
+// text, so an expansion appears verbatim; its runtime value can't be inspected,
+// and validating the literal token would wrongly reject a valid PR, so skip it.
+func isBarePRExpansion(s string) bool {
+	s = strings.TrimSpace(s)
+
+	if strings.HasPrefix(s, "$(") && strings.HasSuffix(s, ")") {
+		return true
+	}
+
+	// ${NAME} braced form (shared with the commit/branch validators).
+	if isBareExpansion(s) {
+		return true
+	}
+
+	// $NAME short form.
+	return bareShortVarPattern.MatchString(s)
 }
 
 // validateBaseBranchLabels validates base branch labels
