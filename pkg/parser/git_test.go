@@ -207,6 +207,17 @@ EOF
 				Expect(gitCmd.ExtractBranchName()).To(Equal("new-branch"))
 			})
 
+			It("returns the new branch, not the start-point, on creation", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"branch", "new-branch", "upstream/main"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.ExtractBranchName()).To(Equal("new-branch"))
+			})
+
 			It("parses branch rename with -m", func() {
 				cmd := parser.Command{
 					Name: "git",
