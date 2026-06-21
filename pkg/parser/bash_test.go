@@ -1085,11 +1085,13 @@ EOF`
 			Expect(content).To(Equal("feat: subject"))
 		})
 
-		It("matches a brace-form variable redirect target", func() {
+		It("matches mixed $VAR and ${VAR} forms", func() {
+			// "${MSG}" and "$MSG" canonicalize to the same token, so a redirect
+			// written one way matches a -F path written the other.
 			result, err := p.Parse(`printf '%s' 'feat: subject' > "${MSG}"`)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("${MSG}", "", afterAll)
+			content, ok := result.InlineFileContent("$MSG", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: subject"))
 		})

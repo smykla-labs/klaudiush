@@ -1550,6 +1550,26 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			).ToNot(ContainSubstring("failed to read commit message file"))
 		})
 
+		It("matches a $VAR redirect against a ${VAR} -F path", func() {
+			// The redirect and the -F flag name the same variable in different
+			// forms; both canonicalize to one token, so the message is validated.
+			cmd := `printf '%s\n\n%s\n' 'not conventional' 'body' > "$MSG" && ` +
+				`git commit -sS -a -F "${MSG}"`
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: cmd},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
 		It("skips an unresolved -m variable instead of validating the token", func() {
 			// The hook cannot see $VAR's runtime value, so it must not validate
 			// the literal "$VAR" (which would fail the conventional-commit check).
