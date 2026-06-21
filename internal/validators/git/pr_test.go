@@ -1153,6 +1153,22 @@ EOF
 			Expect(result.Passed).To(BeFalse())
 		})
 
+		It("should not run content checks on a command-substitution title", func() {
+			// A "$(...)" title is an unresolved expansion; the raw token must not
+			// be pattern-matched (it contains "tmp/" here) because the runtime
+			// value is unknown.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "$(make-title tmp/x)" --body "$BODY"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
 		It("should pass for non-gh commands", func() {
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,

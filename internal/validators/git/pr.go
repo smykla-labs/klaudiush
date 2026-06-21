@@ -354,29 +354,43 @@ func (v *PRValidator) validatePR(ctx context.Context, data PRData) *validator.Re
 	// 1. Validate PR title
 	v.validatePRTitleData(ctx, data.Title, data.TitleIsExpansion, &allErrors, &allWarnings)
 
+	// An unresolved expansion (e.g. --title "$TITLE", --body "$(...)") can't be
+	// inspected, so treat it as empty for every content-based check below. This
+	// keeps the raw token from being pattern-matched, linted, used for type
+	// detection, or surfaced in the result.
+	titleForChecks := data.Title
+	if data.TitleIsExpansion {
+		titleForChecks = ""
+	}
+
+	bodyForChecks := data.Body
+	if data.BodyIsExpansion {
+		bodyForChecks = ""
+	}
+
 	// 2. Check for forbidden patterns in title and body
-	forbiddenErrors := v.checkForbiddenPatterns(data.Title, data.Body)
+	forbiddenErrors := v.checkForbiddenPatterns(titleForChecks, bodyForChecks)
 	allErrors = append(allErrors, forbiddenErrors...)
 
 	// 2b. Check for AI attribution in title and body
-	allErrors = append(allErrors, v.checkAIAttribution(data.Title, data.Body)...)
+	allErrors = append(allErrors, v.checkAIAttribution(titleForChecks, bodyForChecks)...)
 
 	// 3. Extract PR type for body validation
 	validTypes := v.getValidTypes()
-	prType := extractPRType(data.Title, validTypes)
+	prType := extractPRType(titleForChecks, validTypes)
 
 	// 4. Validate PR body
 	v.validatePRBodyData(data.Body, prType, data.BodyIsExpansion, &allErrors, &allWarnings)
 
 	// 5. Validate markdown formatting
-	if data.Body != "" {
+	if bodyForChecks != "" {
 		// External markdownlint validation
 		disabledRules := v.getMarkdownDisabledRules()
-		mdResult := ValidatePRMarkdown(ctx, data.Body, disabledRules)
+		mdResult := ValidatePRMarkdown(ctx, bodyForChecks, disabledRules)
 		allWarnings = append(allWarnings, mdResult.Errors...)
 
 		// Internal markdown validation (code block indentation, empty lines, etc.)
-		internalMdResult := validators.AnalyzeMarkdown(data.Body, nil)
+		internalMdResult := validators.AnalyzeMarkdown(bodyForChecks, nil)
 		allWarnings = append(allWarnings, internalMdResult.Warnings...)
 	}
 
@@ -384,12 +398,19 @@ func (v *PRValidator) validatePR(ctx context.Context, data PRData) *validator.Re
 	validateBaseBranchLabels(data, &allErrors)
 
 	// 7. Validate CI label heuristics (if enabled)
-	if v.isCheckCILabelsEnabled() && data.Title != "" && data.Body != "" {
+	if v.isCheckCILabelsEnabled() && titleForChecks != "" && bodyForChecks != "" {
 		ciWarnings := v.checkCILabelHeuristics(data, prType)
 		allWarnings = append(allWarnings, ciWarnings...)
 	}
 
-	return v.buildResult(allErrors, allWarnings, data.Title)
+	// Redact an unresolved-expansion title from the preview so a "$(...)" form is
+	// not echoed back in the hook output.
+	previewTitle := data.Title
+	if data.TitleIsExpansion {
+		previewTitle = "(unresolved expansion)"
+	}
+
+	return v.buildResult(allErrors, allWarnings, previewTitle)
 }
 
 // validatePRTitleData validates the PR title using commit rules.
