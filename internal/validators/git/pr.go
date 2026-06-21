@@ -346,6 +346,9 @@ func (v *PRValidator) validatePR(ctx context.Context, data PRData) *validator.Re
 	forbiddenErrors := v.checkForbiddenPatterns(data.Title, data.Body)
 	allErrors = append(allErrors, forbiddenErrors...)
 
+	// 2b. Check for AI attribution in title and body
+	allErrors = append(allErrors, v.checkAIAttribution(data.Title, data.Body)...)
+
 	// 3. Extract PR type for body validation
 	validTypes := v.getValidTypes()
 	prType := extractPRType(data.Title, validTypes)
@@ -620,4 +623,43 @@ func (v *PRValidator) getForbiddenPatterns() []string {
 	}
 
 	return config.DefaultForbiddenPatterns
+}
+
+// checkAIAttribution checks for Claude AI attribution in the PR title and body.
+// It catches both plain phrasing ("Generated with Claude Code") and the markdown
+// footer link, while allow-listing legitimate references (CLAUDE.md, klaudiush,
+// claude-hooks). Detection reuses containsClaudeAIAttribution so the PR and commit
+// paths stay in sync; the messages are PR-specific to point at the right field.
+func (v *PRValidator) checkAIAttribution(title, body string) []string {
+	if !v.shouldBlockAIAttribution() {
+		return nil
+	}
+
+	errs := make([]string, 0)
+
+	if title != "" && containsClaudeAIAttribution(title) {
+		errs = append(
+			errs,
+			"PR title contains AI attribution - remove any AI generation attribution",
+		)
+	}
+
+	if body != "" && containsClaudeAIAttribution(body) {
+		errs = append(
+			errs,
+			"PR body contains AI attribution - remove any AI generation attribution",
+		)
+	}
+
+	return errs
+}
+
+// shouldBlockAIAttribution returns whether AI attribution should be blocked in
+// the PR title and body.
+func (v *PRValidator) shouldBlockAIAttribution() bool {
+	if v.config != nil && v.config.BlockAIAttribution != nil {
+		return *v.config.BlockAIAttribution
+	}
+
+	return true // default: enabled
 }

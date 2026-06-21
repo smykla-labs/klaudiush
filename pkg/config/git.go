@@ -216,6 +216,11 @@ type PRValidatorConfig struct {
 	// Each pattern is a regular expression that will be checked against the PR title and body.
 	// Default: ["\\btmp/", "\\btmp\\b"] (blocks mentions of tmp directory)
 	ForbiddenPatterns []string `json:"forbidden_patterns,omitempty" koanf:"forbidden_patterns" toml:"forbidden_patterns,omitempty"`
+
+	// BlockAIAttribution blocks Claude AI attribution in PR title and body
+	// (e.g. "Generated with Claude Code" or a Claude markdown footer link).
+	// Default: true
+	BlockAIAttribution *bool `json:"block_ai_attribution,omitempty" koanf:"block_ai_attribution" toml:"block_ai_attribution,omitempty"`
 }
 
 // MergeValidatorConfig configures the gh pr merge validator.

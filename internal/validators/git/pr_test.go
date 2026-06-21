@@ -816,6 +816,189 @@ EOF
 			Expect(result.Passed).To(BeTrue())
 		})
 
+		It("should fail with AI attribution footer in body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See docs/api.md
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+		})
+
+		It("should fail with plain AI attribution phrase in body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description generated with Claude Code
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See docs/api.md
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+		})
+
+		It("should fail with AI attribution in title", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): generated with claude code" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See docs/api.md
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR title contains AI attribution"))
+		})
+
+		It("should pass with a legitimate CLAUDE.md reference", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated CLAUDE.md with new docs
+
+## Supporting documentation
+
+See docs/api.md
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should pass with a CLAUDE.md markdown link in body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See [CLAUDE.md](CLAUDE.md) for the architecture overview
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should not block AI attribution when disabled via config", func() {
+			block := false
+			cfg := &config.PRValidatorConfig{BlockAIAttribution: &block}
+			disabledValidator := git.NewPRValidator(cfg, logger.NewNoOpLogger(), nil)
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description generated with Claude Code
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See docs/api.md
+EOF
+)"`,
+				},
+			}
+
+			result := disabledValidator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
 		It("should extract title with single quotes", func() {
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,
