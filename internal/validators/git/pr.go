@@ -628,7 +628,7 @@ func (v *PRValidator) getForbiddenPatterns() []string {
 // checkAIAttribution checks for Claude AI attribution in the PR title and body.
 // It catches both plain phrasing ("Generated with Claude Code") and the markdown
 // footer link, while allow-listing legitimate references (CLAUDE.md, klaudiush,
-// `claude`). Detection reuses containsClaudeAIAttribution so the PR and commit
+// claude-hooks). Detection reuses containsClaudeAIAttribution so the PR and commit
 // paths stay in sync; the messages are PR-specific to point at the right field.
 func (v *PRValidator) checkAIAttribution(title, body string) []string {
 	if !v.shouldBlockAIAttribution() {
