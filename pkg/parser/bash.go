@@ -167,9 +167,11 @@ func (r *ParseResult) InlineFileContent(path, workDir string, before Location) (
 
 // resolvePath cleans path, joining it onto workDir when path is relative and a
 // working directory is known, so writes and consumers in different directories
-// compare unequal.
+// compare unequal. A leading ~ is left unjoined: the shell expands it to a home
+// directory independent of the current directory, so a ~ path must compare the
+// same regardless of the consumer's working directory.
 func resolvePath(workDir, path string) string {
-	if workDir == "" || filepath.IsAbs(path) {
+	if workDir == "" || filepath.IsAbs(path) || strings.HasPrefix(path, "~") {
 		return filepath.Clean(path)
 	}
 

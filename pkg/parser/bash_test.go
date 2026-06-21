@@ -1095,5 +1095,16 @@ EOF`
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: x\n"))
 		})
+
+		It("matches a ~ path regardless of the consumer working directory", func() {
+			// ~ expands to a home directory independent of cwd, so it must not be
+			// joined onto the consumer's working directory.
+			result, err := p.Parse("cat > ~/msg.txt <<'EOF'\nfeat: x\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("~/msg.txt", "some/dir", afterAll)
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: x\n"))
+		})
 	})
 })
