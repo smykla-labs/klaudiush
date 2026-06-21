@@ -95,6 +95,14 @@ var _ = Describe("PushValidator", func() {
 				Expect(result.Passed).To(BeTrue())
 			})
 
+			It("skips validation for a forwarded \"$@\" remote", func() {
+				// Wrapper scripts call "git push $@"; the special parameter is an
+				// unresolved expansion, so it must not be validated as a remote.
+				ctx := createContext(`git push "$@"`)
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
 			It("extracts remote from various push formats", func() {
 				testCases := []struct {
 					command     string

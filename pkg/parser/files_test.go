@@ -205,6 +205,18 @@ var _ = Describe("Files", func() {
 				_, ok := fw.CapturedOverwrite()
 				Expect(ok).To(BeFalse())
 			})
+
+			It("does not panic on a redirected block", func() {
+				// "{ ...; } > out" is a redirected block, not a simple command, so
+				// the producer CallExpr is nil; capture must be skipped, not crash.
+				result, err := p.Parse("{ echo hi; } > out.txt")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.FileWrites).To(HaveLen(1))
+
+				fw := result.FileWrites[0]
+				Expect(fw.Path).To(Equal("out.txt"))
+				Expect(fw.RedirectContentCaptured).To(BeFalse())
+			})
 		})
 
 		Context("with tee command", func() {

@@ -427,12 +427,13 @@ func expandTilde(path string) string {
 }
 
 // isBareExpansion reports whether s is exactly one shell parameter expansion as
-// rendered by the parser - "$NAME" or "${...}" - and nothing else. Such a value
-// is an unresolved variable whose runtime content the hook cannot observe, so
-// callers skip validation instead of treating the literal token as the message
-// or as a real file path. A literal "$NAME" written in single quotes renders the
-// same way, but committing a literal "$NAME" message or reading a file literally
-// named "$NAME" is not a realistic scenario, so skipping it is acceptable.
+// rendered by the parser - "$NAME", a positional like "$1", a special parameter
+// like "$@"/"$?", or "${...}" - and nothing else. Such a value is an unresolved
+// expansion whose runtime content the hook cannot observe, so callers skip
+// validation instead of treating the literal token as the message or as a real
+// file path. A literal "$NAME" written in single quotes renders the same way,
+// but committing a literal "$NAME" message or reading a file literally named
+// "$NAME" is not a realistic scenario, so skipping it is acceptable.
 func isBareExpansion(s string) bool {
 	if len(s) < 2 || s[0] != '$' {
 		return false
@@ -444,7 +445,13 @@ func isBareExpansion(s string) bool {
 		return len(body) > 2 && body[len(body)-1] == '}'
 	}
 
-	// "$NAME": every remaining byte must be a valid identifier character.
+	// A single special parameter: $@, $*, $#, $?, $$, $!, $- (e.g. a wrapper
+	// script forwarding "$@" to git push).
+	if len(body) == 1 && isSpecialParam(body[0]) {
+		return true
+	}
+
+	// "$NAME" or a positional like "$12": every byte is an identifier character.
 	for i := range len(body) {
 		if !isNameByte(body[i]) {
 			return false
@@ -460,6 +467,17 @@ func isNameByte(b byte) bool {
 		(b >= 'a' && b <= 'z') ||
 		(b >= 'A' && b <= 'Z') ||
 		(b >= '0' && b <= '9')
+}
+
+// isSpecialParam reports whether b is a single-character shell special
+// parameter ($@, $*, $#, $?, $$, $!, $-).
+func isSpecialParam(b byte) bool {
+	switch b {
+	case '@', '*', '#', '?', '$', '!', '-':
+		return true
+	default:
+		return false
+	}
 }
 
 // getFlagValue returns the value for any of the provided flags, or empty string if not found.

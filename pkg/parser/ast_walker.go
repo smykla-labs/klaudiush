@@ -87,7 +87,10 @@ func callExprOf(stmt *syntax.Stmt) *syntax.CallExpr {
 // literalCommandOutput returns the text a simple echo/printf command writes to
 // stdout, when it can be determined from literal arguments alone.
 func literalCommandOutput(call *syntax.CallExpr) (string, bool) {
-	if len(call.Args) == 0 {
+	// callExprOf returns nil for statements that are not a simple command (e.g.
+	// a redirected block or subshell like "{ echo hi; } > out"), so guard
+	// against a nil call to avoid a panic.
+	if call == nil || len(call.Args) == 0 {
 		return "", false
 	}
 
