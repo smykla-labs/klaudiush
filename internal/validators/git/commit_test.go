@@ -890,6 +890,24 @@ EOF
 				Expect(result.Message).To(ContainSubstring("AI attribution"))
 			})
 
+			It("should pass with a CLAUDE.md markdown link", func() {
+				ctx := &hook.Context{
+					EventType: hook.EventTypePreToolUse,
+					ToolName:  hook.ToolTypeBash,
+					ToolInput: hook.ToolInput{
+						Command: `git commit -sS -a -m "$(cat <<'EOF'
+docs(guide): link the project guide
+
+See [CLAUDE.md](CLAUDE.md) for the architecture overview.
+EOF
+)"`,
+					},
+				}
+
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
 			It("should fail with Co-Authored-By: Claude", func() {
 				ctx := &hook.Context{
 					EventType: hook.EventTypePreToolUse,

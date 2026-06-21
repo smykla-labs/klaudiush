@@ -937,6 +937,35 @@ EOF
 			Expect(result.Passed).To(BeTrue())
 		})
 
+		It("should pass with a CLAUDE.md markdown link in body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+See [CLAUDE.md](CLAUDE.md) for the architecture overview
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
 		It("should not block AI attribution when disabled via config", func() {
 			block := false
 			cfg := &config.PRValidatorConfig{BlockAIAttribution: &block}
