@@ -20,6 +20,13 @@ const (
 	flagLowerC = "-c"
 )
 
+// Subcommands whose flag/argument handling needs special-casing.
+const (
+	subcmdCheckout = "checkout"
+	subcmdSwitch   = "switch"
+	subcmdBranch   = "branch"
+)
+
 var (
 	// ErrNotGitCommand is returned when the command is not a git command.
 	ErrNotGitCommand = errors.New("not a git command")
@@ -95,9 +102,9 @@ var branchRenameCopyFlags = []string{"-m", "-M", "--move", flagLowerC, flagUpper
 // when it has none.
 func branchCreationFlagsFor(subcommand string) []string {
 	switch subcommand {
-	case "checkout":
+	case subcmdCheckout:
 		return checkoutCreationFlags
-	case "switch":
+	case subcmdSwitch:
 		return switchCreationFlags
 	default:
 		return nil
@@ -109,6 +116,13 @@ func branchCreationFlagsFor(subcommand string) []string {
 func flagTakesValue(flag, subcommand string) bool {
 	if slices.Contains(branchCreationFlagsFor(subcommand), flag) {
 		return true
+	}
+
+	// For "git branch", -m/-M/--move and -c/-C/--copy are rename/copy mode flags;
+	// the old and new names are positional, so they do not consume a value (unlike
+	// commit's -m/-C, which flagsWithValues would otherwise treat as value-taking).
+	if subcommand == subcmdBranch && slices.Contains(branchRenameCopyFlags, flag) {
+		return false
 	}
 
 	return flagsWithValues[flag]
@@ -346,7 +360,7 @@ func (g *GitCommand) ExtractRemote() string {
 // ExtractBranchName extracts branch name from various git commands.
 func (g *GitCommand) ExtractBranchName() string {
 	switch g.Subcommand {
-	case "checkout", "switch":
+	case subcmdCheckout, subcmdSwitch:
 		// git checkout -b/--branch <branch>, git switch -c/--create/-C/
 		// --force-create <branch>: the creation flag captures the new branch
 		// name (including a dash-prefixed one). Existing-branch checkout/switch
@@ -359,7 +373,7 @@ func (g *GitCommand) ExtractBranchName() string {
 			return g.Args[0]
 		}
 
-	case "branch":
+	case subcmdBranch:
 		if len(g.Args) == 0 {
 			return ""
 		}

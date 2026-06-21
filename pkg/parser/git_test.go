@@ -229,6 +229,18 @@ EOF
 				Expect(gitCmd.HasFlag("-m")).To(BeTrue())
 				Expect(gitCmd.ExtractBranchName()).To(Equal("new-name"))
 			})
+
+			It("parses single-argument branch rename with -m", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"branch", "-m", "renamed-branch"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.HasFlag("-m")).To(BeTrue())
+				Expect(gitCmd.ExtractBranchName()).To(Equal("renamed-branch"))
+			})
 		})
 
 		Context("with git switch command", func() {
