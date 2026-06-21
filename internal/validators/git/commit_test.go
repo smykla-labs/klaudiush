@@ -1369,13 +1369,15 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			Expect(result.Message).To(ContainSubstring("AI attribution"))
 		})
 
-		It("validates a heredoc appended to the message file", func() {
-			// "cat >> f <<EOF" is captured as a heredoc overwrite, so the body
-			// is available even though it uses the append redirect.
-			cmd := "cat >> tmp/msg.txt <<'EOF'\n" +
+		It("falls back to disk (warns) for an append heredoc", func() {
+			// "cat >> f <<EOF" appends, so the heredoc body is not the full file
+			// content (the file may already exist). The validator must not treat
+			// it as the message; it reads disk and warns since the file is
+			// missing at PreToolUse.
+			cmd := "cat >> /nonexistent/dir/msg.txt <<'EOF'\n" +
 				"this is not conventional\n" +
 				"EOF\n" +
-				"git commit -sS -a -F tmp/msg.txt"
+				"git commit -sS -a -F /nonexistent/dir/msg.txt"
 
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,
@@ -1385,9 +1387,29 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
-			Expect(
-				result.Message,
-			).To(ContainSubstring("doesn't follow conventional commits format"))
+			Expect(result.ShouldBlock).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("Failed to read commit message"))
+		})
+
+		It("ignores a message file rewritten after the commit", func() {
+			// The file is written after "git commit -F", so at execution time
+			// the commit does not see this content. The validator must not use
+			// it; the file is missing on disk, so this warns.
+			cmd := "git commit -sS -a -F /nonexistent/dir/msg.txt\n" +
+				"cat > /nonexistent/dir/msg.txt <<'EOF'\n" +
+				"feat(api): add endpoint\n" +
+				"EOF"
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: cmd},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("Failed to read commit message"))
 		})
 
 		It("falls back to disk (warns) for an uncaptured echo redirect", func() {

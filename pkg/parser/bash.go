@@ -115,20 +115,23 @@ func (r *ParseResult) GetFirstGitWorkingDir() string {
 	return ""
 }
 
-// InlineFileContent returns the content written to path earlier in the same
-// command, and whether that content was reconstructed exactly.
+// InlineFileContent returns the content written to path before the consumer at
+// source position "before", and whether that content was reconstructed exactly.
 //
-// It models the writes the parser captured: an overwrite (">" or a
+// Only writes preceding that position (in source order, which models shell
+// execution order for sequential commands) are considered, so a write that
+// happens after the consumer - e.g. "git commit -F f && cat > f <<EOF" - is
+// ignored. It models the writes the parser captured: an overwrite (">" or a
 // "cat > f <<EOF" heredoc) replaces any earlier content, and the last overwrite
-// wins. Appends (">>") and writes whose content cannot be reconstructed from
-// the command alone (tee/cp/mv, or "cmd > f" where cmd is not a literal
-// echo/printf) make the result uncertain, so ok is false and callers should
-// fall back to reading the file from disk.
+// wins. Appends (">>", including "cat >> f <<EOF") and writes whose content
+// cannot be reconstructed from the command alone (tee/cp/mv, or "cmd > f" where
+// cmd is not a literal echo/printf) make the result uncertain, so ok is false
+// and callers should fall back to reading the file from disk.
 //
 // This lets validators inspect "git commit -F f" messages when f is created
 // inline (e.g. "cat > f <<EOF ... EOF; git commit -F f"), since f does not
 // exist on disk yet when the PreToolUse hook runs.
-func (r *ParseResult) InlineFileContent(path string) (string, bool) {
+func (r *ParseResult) InlineFileContent(path string, before Location) (string, bool) {
 	target := filepath.Clean(path)
 
 	var (
@@ -137,6 +140,10 @@ func (r *ParseResult) InlineFileContent(path string) (string, bool) {
 	)
 
 	for _, fw := range r.FileWrites {
+		if !locationBefore(fw.Location, before) {
+			continue
+		}
+
 		if filepath.Clean(fw.Path) != target {
 			continue
 		}
@@ -144,6 +151,7 @@ func (r *ParseResult) InlineFileContent(path string) (string, bool) {
 		switch fw.Operation {
 		case WriteOpRedirect, WriteOpHeredoc:
 			// Overwrite: the last write wins, discarding earlier content.
+			// ContentCaptured is false for appends and uncaptured writes.
 			content, ok = fw.Content, fw.ContentCaptured
 		default:
 			// Append, tee, cp, mv: the resulting bytes can't be reconstructed
@@ -154,6 +162,15 @@ func (r *ParseResult) InlineFileContent(path string) (string, bool) {
 	}
 
 	return content, ok
+}
+
+// locationBefore reports whether a occurs strictly before b in source order.
+func locationBefore(a, b Location) bool {
+	if a.Line != b.Line {
+		return a.Line < b.Line
+	}
+
+	return a.Column < b.Column
 }
 
 // BacktickIssue represents a problematic use of backticks in double quotes.

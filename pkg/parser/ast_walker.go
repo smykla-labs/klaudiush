@@ -345,12 +345,14 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 	switch {
 	case info.hasOutput && info.hasHeredoc:
 		// Output redirection combined with a heredoc. The heredoc body is the
-		// exact content written (e.g. "cat > file <<EOF ... EOF").
+		// exact file content only for an overwrite (">"); for an append (">>")
+		// the final bytes also depend on prior file content the parser cannot
+		// see, so it is not an exact capture.
 		w.fileWrites = append(w.fileWrites, FileWrite{
 			Path:            info.outputPath,
 			Operation:       WriteOpHeredoc,
 			Content:         info.heredocContent,
-			ContentCaptured: true,
+			ContentCaptured: info.outputOp == WriteOpRedirect,
 			Location:        info.heredocLoc,
 		})
 	case info.hasOutput:

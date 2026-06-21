@@ -901,7 +901,7 @@ EOF`
 	})
 
 	Describe("redirect content capture", func() {
-		It("marks heredoc-to-file content as captured", func() {
+		It("marks an overwrite heredoc as captured", func() {
 			result, err := p.Parse("cat > file.txt <<'EOF'\nbody\nEOF")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.FileWrites).To(HaveLen(1))
@@ -910,6 +910,18 @@ EOF`
 			Expect(fw.Operation).To(Equal(parser.WriteOpHeredoc))
 			Expect(fw.ContentCaptured).To(BeTrue())
 			Expect(fw.Content).To(Equal("body\n"))
+		})
+
+		It("does not mark an append heredoc as captured", func() {
+			// "cat >> f <<EOF" appends; the final file also depends on prior
+			// content, so the heredoc body is not an exact capture.
+			result, err := p.Parse("cat >> file.txt <<'EOF'\nbody\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.FileWrites).To(HaveLen(1))
+
+			fw := result.FileWrites[0]
+			Expect(fw.Operation).To(Equal(parser.WriteOpHeredoc))
+			Expect(fw.ContentCaptured).To(BeFalse())
 		})
 
 		It("does not capture content for a plain echo redirect", func() {
@@ -927,6 +939,11 @@ EOF`
 	})
 
 	Describe("InlineFileContent", func() {
+		// afterAll is a sentinel position past any write in these single-chain
+		// commands, so every write is considered (ordering is exercised
+		// separately below).
+		afterAll := parser.Location{Line: 1 << 30}
+
 		It("returns heredoc content written to the path", func() {
 			cmd := "cat > tmp/commit-msg-1.txt <<'EOF'\n" +
 				"perf(scope): subject\n\nbody line\nEOF\n" +
@@ -934,7 +951,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("tmp/commit-msg-1.txt")
+			content, ok := result.InlineFileContent("tmp/commit-msg-1.txt", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("perf(scope): subject\n\nbody line\n"))
 		})
@@ -943,7 +960,7 @@ EOF`
 			result, err := p.Parse("cat > ./tmp/msg.txt <<'EOF'\nbody\nEOF")
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("tmp/msg.txt")
+			content, ok := result.InlineFileContent("tmp/msg.txt", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("body\n"))
 		})
@@ -954,9 +971,17 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("msg.txt")
+			content, ok := result.InlineFileContent("msg.txt", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("second\n"))
+		})
+
+		It("is uncertain for an append heredoc", func() {
+			result, err := p.Parse("cat >> msg.txt <<'EOF'\nbody\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt", afterAll)
+			Expect(ok).To(BeFalse())
 		})
 
 		It("is uncertain when a captured heredoc is appended to", func() {
@@ -965,7 +990,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt")
+			_, ok := result.InlineFileContent("msg.txt", afterAll)
 			Expect(ok).To(BeFalse())
 		})
 
@@ -973,7 +998,7 @@ EOF`
 			result, err := p.Parse("echo body > msg.txt")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt")
+			_, ok := result.InlineFileContent("msg.txt", afterAll)
 			Expect(ok).To(BeFalse())
 		})
 
@@ -983,7 +1008,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("msg.txt")
+			content, ok := result.InlineFileContent("msg.txt", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: x\n"))
 		})
@@ -992,7 +1017,30 @@ EOF`
 			result, err := p.Parse("cat > other.txt <<'EOF'\nbody\nEOF")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt")
+			_, ok := result.InlineFileContent("msg.txt", afterAll)
+			Expect(ok).To(BeFalse())
+		})
+
+		It("considers writes occurring before the consumer position", func() {
+			// Heredoc on lines 1-3, consumer (commit) on line 4.
+			cmd := "cat > msg.txt <<'EOF'\nfeat: x\nEOF\n" +
+				"git commit -F msg.txt"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("msg.txt", parser.Location{Line: 4})
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: x\n"))
+		})
+
+		It("ignores writes occurring after the consumer position", func() {
+			// Consumer (commit) on line 1, file written afterwards on lines 2-4.
+			cmd := "git commit -F msg.txt\n" +
+				"cat > msg.txt <<'EOF'\nfeat: x\nEOF"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt", parser.Location{Line: 1})
 			Expect(ok).To(BeFalse())
 		})
 	})

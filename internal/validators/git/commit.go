@@ -344,9 +344,10 @@ func (v *CommitValidator) extractMessageFromFile(
 	// Prefer content written to the file earlier in the same command. At
 	// PreToolUse time the file usually doesn't exist on disk yet (e.g.
 	// "cat > msg.txt <<EOF ... EOF; git commit -F msg.txt"), so reading it
-	// directly would fail and silently skip message validation.
+	// directly would fail and silently skip message validation. Only writes
+	// before this commit are considered, so a later rewrite is ignored.
 	if parsed != nil {
-		if content, ok := parsed.InlineFileContent(filePath); ok {
+		if content, ok := parsed.InlineFileContent(filePath, gitCmd.Location); ok {
 			v.Logger().Debug("Reading commit message from inline file write", "path", filePath)
 
 			return strings.TrimSpace(content), nil
