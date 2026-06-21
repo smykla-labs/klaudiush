@@ -908,6 +908,23 @@ EOF
 				Expect(result.Passed).To(BeTrue())
 			})
 
+			It("should fail with a backticked Claude Code link label", func() {
+				ctx := &hook.Context{
+					EventType: hook.EventTypePreToolUse,
+					ToolName:  hook.ToolTypeBash,
+					ToolInput: hook.ToolInput{
+						Command: "git commit -sS -a -m \"$(cat <<'EOF'\n" +
+							"chore(styles): add duplicate btn-radius definition\n\n" +
+							"🤖 Generated with [`Claude Code`](https://claude.com/claude-code)\n" +
+							"EOF\n)\"",
+					},
+				}
+
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("AI attribution"))
+			})
+
 			It("should fail with Co-Authored-By: Claude", func() {
 				ctx := &hook.Context{
 					EventType: hook.EventTypePreToolUse,

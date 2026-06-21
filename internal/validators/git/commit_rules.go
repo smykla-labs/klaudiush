@@ -553,8 +553,10 @@ func (r *SignoffRule) Validate(_ *ParsedCommit, message string) *RuleResult {
 }
 
 // claudeLinkPattern matches a markdown link whose label and target both mention
-// "claude", e.g. "[Claude Code](https://claude.com/claude-code)".
-var claudeLinkPattern = regexp.MustCompile(`\[claude[^\]]*\]\([^)]*claude[^)]*\)`)
+// "claude", e.g. "[Claude Code](https://claude.com/claude-code)". The label is
+// matched anywhere (not just at its start) so a backtick- or text-prefixed label
+// such as "[`Claude Code`](...)" cannot slip the check.
+var claudeLinkPattern = regexp.MustCompile(`\[[^\]]*claude[^\]]*\]\([^)]*claude[^)]*\)`)
 
 // containsClaudeAIAttribution reports whether a message carries Claude AI
 // generation attribution. It matches explicit attribution phrases and Claude
@@ -596,16 +598,17 @@ func containsClaudeAIAttribution(message string) bool {
 	return false
 }
 
-// isLegitimateClaudeReference reports whether a lowercased fragment that mentions
-// "claude" is a known non-attribution reference - the CLAUDE.md guidance file, the
-// klaudiush tool, claude-hooks, or an inline-code span - rather than attribution.
+// isLegitimateClaudeReference reports whether a lowercased markdown link that
+// mentions "claude" points at a known non-attribution reference - the CLAUDE.md
+// guidance file, the klaudiush tool, or claude-hooks - rather than attribution.
+// Only concrete file/tool identifiers are allow-listed: inline-code heuristics
+// (backticked "claude") are deliberately excluded, since a footer label wrapped
+// in backticks could otherwise slip the attribution check.
 func isLegitimateClaudeReference(lower string) bool {
 	legitimatePatterns := []string{
 		"claude.md",
 		"claude-hooks",
 		"klaudiush",
-		"`claude",
-		"claude`",
 	}
 
 	for _, pattern := range legitimatePatterns {
