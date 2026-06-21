@@ -146,6 +146,22 @@ var _ = Describe("BranchValidator", func() {
 				Expect(result.Passed).To(BeFalse())
 			})
 		})
+
+		Context("with trailing flags after the branch name", func() {
+			It("should pass and ignore a trailing --quiet", func() {
+				ctx.ToolInput.Command = "git checkout -b feat/with-flag main --quiet"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+
+			It("should validate the branch name, not the trailing flag", func() {
+				ctx.ToolInput.Command = "git checkout -b add-feature --quiet"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Message).To(ContainSubstring("type/description"))
+				Expect(result.Message).NotTo(ContainSubstring("--quiet"))
+			})
+		})
 	})
 
 	Describe("git switch", func() {
@@ -167,6 +183,12 @@ var _ = Describe("BranchValidator", func() {
 				result := v.Validate(context.Background(), ctx)
 				Expect(result.Passed).To(BeFalse())
 				Expect(result.Message).To(ContainSubstring("spaces"))
+			})
+
+			It("should pass and ignore a trailing --quiet", func() {
+				ctx.ToolInput.Command = "git switch -c feat/new-feature main --quiet"
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
 			})
 		})
 
