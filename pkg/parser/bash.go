@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -112,6 +113,78 @@ func (r *ParseResult) GetFirstGitWorkingDir() string {
 	}
 
 	return ""
+}
+
+// InlineFileContent returns the content written to path before the consumer at
+// source position "before", and whether that content was reconstructed exactly.
+// workDir is the consumer's effective working directory (from cd or git -C),
+// used to resolve a relative path so writes in a different directory don't match.
+//
+// Only writes preceding that position (in source order, which models shell
+// execution order for sequential commands) are considered, so a write that
+// happens after the consumer - e.g. "git commit -F f && cat > f <<EOF" - is
+// ignored. The only content the parser captures exactly is an overwrite heredoc
+// fed to a verbatim copier (e.g. "cat > f <<EOF ... EOF"); the last such
+// overwrite to the resolved path wins. Appends (">>"), plain redirects, heredocs
+// on transforming commands, and tee/cp/mv leave the result uncertain, so ok is
+// false and callers should fall back to reading the file from disk.
+//
+// This lets validators inspect "git commit -F f" messages when f is created
+// inline (e.g. "cat > f <<EOF ... EOF; git commit -F f"), since f does not
+// exist on disk yet when the PreToolUse hook runs.
+func (r *ParseResult) InlineFileContent(path, workDir string, before Location) (string, bool) {
+	target := resolvePath(workDir, path)
+
+	var (
+		content string
+		ok      bool
+	)
+
+	for _, fw := range r.FileWrites {
+		if !locationBefore(fw.Location, before) {
+			continue
+		}
+
+		if resolvePath(fw.WorkingDirectory, fw.Path) != target {
+			continue
+		}
+
+		switch fw.Operation {
+		case WriteOpRedirect, WriteOpHeredoc:
+			// Overwrite: the last write wins, discarding earlier content.
+			// ContentCaptured is false for appends and uncaptured writes.
+			content, ok = fw.Content, fw.ContentCaptured
+		default:
+			// Append, tee, cp, mv: the resulting bytes can't be reconstructed
+			// from the command alone (prior content or trailing newlines are
+			// unknown), so the capture is no longer exact.
+			content, ok = "", false
+		}
+	}
+
+	return content, ok
+}
+
+// resolvePath cleans path, joining it onto workDir when path is relative and a
+// working directory is known, so writes and consumers in different directories
+// compare unequal. A leading ~ is left unjoined: the shell expands it to a home
+// directory independent of the current directory, so a ~ path must compare the
+// same regardless of the consumer's working directory.
+func resolvePath(workDir, path string) string {
+	if workDir == "" || filepath.IsAbs(path) || strings.HasPrefix(path, "~") {
+		return filepath.Clean(path)
+	}
+
+	return filepath.Clean(filepath.Join(workDir, path))
+}
+
+// locationBefore reports whether a occurs strictly before b in source order.
+func locationBefore(a, b Location) bool {
+	if a.Line != b.Line {
+		return a.Line < b.Line
+	}
+
+	return a.Column < b.Column
 }
 
 // BacktickIssue represents a problematic use of backticks in double quotes.

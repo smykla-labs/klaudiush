@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -25,6 +26,7 @@ type GitCommand struct {
 	GlobalOptions    map[string]string // Global git options (e.g., "-C" -> "/path/to/repo")
 	WorkingDirectory string            // Working directory from preceding cd commands
 	Stdin            string            // Content fed to stdin (heredoc or piped echo/printf)
+	Location         Location          // Position of the command in source
 }
 
 // Global git options that take a value.
@@ -82,6 +84,7 @@ func ParseGitCommand(cmd Command) (*GitCommand, error) {
 		GlobalOptions:    make(map[string]string),
 		WorkingDirectory: cmd.WorkingDirectory,
 		Stdin:            cmd.Stdin,
+		Location:         cmd.Location,
 	}
 
 	// First, parse global options and find the subcommand
@@ -347,22 +350,25 @@ func (g *GitCommand) ExtractFilePaths() []string {
 	return nil
 }
 
-// GetWorkingDirectory returns the effective working directory.
-// Priority: git's -C flag > cd command's directory > empty string.
-// The git -C flag takes precedence over the cd command because it's
-// git-specific and more explicit.
+// GetWorkingDirectory returns git's effective working directory, combining a
+// preceding cd with git's -C flag the way the shell and git do: "cd a" then
+// "git -C b" runs in a/b, while an absolute -C ignores the cd. Returns the cd
+// directory alone when there is no -C, or "" when neither is present.
 func (g *GitCommand) GetWorkingDirectory() string {
-	// First check git's -C flag (highest priority)
-	if dir, ok := g.GlobalOptions["-C"]; ok {
-		return dir
+	cdDir := g.WorkingDirectory
+
+	cDir, hasC := g.GlobalOptions["-C"]
+	if !hasC {
+		return cdDir
 	}
 
-	// Then check the cd command's directory from bash context
-	if g.WorkingDirectory != "" {
-		return g.WorkingDirectory
+	// -C is relative to the cd directory unless it is absolute (or there is no
+	// preceding cd).
+	if cdDir == "" || filepath.IsAbs(cDir) {
+		return cDir
 	}
 
-	return ""
+	return filepath.Join(cdDir, cDir)
 }
 
 // GetGitDir returns the git directory from --git-dir global option.
