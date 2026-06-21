@@ -360,13 +360,19 @@ func (v *CommitValidator) extractMessageFromFile(
 		}
 	}
 
-	// Resolve a relative path against the commit's effective working directory
-	// (from cd or git -C), since git reads -F relative to where it runs, not the
-	// hook's cwd.
-	readPath := filePath
-	if workDir := gitCmd.GetWorkingDirectory(); workDir != "" && !filepath.IsAbs(filePath) {
-		readPath = filepath.Join(workDir, filePath)
+	// Resolve the path the way the shell would: expand a leading ~ and, for a
+	// relative path, join it onto the commit's effective working directory (from
+	// cd or git -C), since git reads -F relative to where it runs, not the hook's
+	// cwd. Resolution is best-effort; an unresolved path just fails the read
+	// below and warns, as before.
+	readPath := expandTilde(filePath)
+	if !filepath.IsAbs(readPath) {
+		if workDir := expandTilde(gitCmd.GetWorkingDirectory()); workDir != "" {
+			readPath = filepath.Join(workDir, readPath)
+		}
 	}
+
+	readPath = filepath.Clean(readPath)
 
 	v.Logger().Debug("Reading commit message from file", "path", readPath)
 
@@ -378,6 +384,26 @@ func (v *CommitValidator) extractMessageFromFile(
 	}
 
 	return strings.TrimSpace(string(content)), nil
+}
+
+// expandTilde best-effort expands a leading ~ or ~/ to the user's home
+// directory, mirroring shell expansion the parser leaves intact. Other forms
+// (e.g. ~user) and home-lookup failures return the path unchanged.
+func expandTilde(path string) string {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+
+	if path == "~" {
+		return home
+	}
+
+	return filepath.Join(home, path[2:])
 }
 
 // getFlagValue returns the value for any of the provided flags, or empty string if not found.
