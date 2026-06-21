@@ -73,6 +73,16 @@ var _ = Describe("BranchValidator", func() {
 			})
 		})
 
+		Context("with a bare variable branch name", func() {
+			It("skips validation for an unresolved variable", func() {
+				// "$BRANCH" is an unresolved expansion; the hook cannot see its
+				// runtime value, so its format must not be validated.
+				ctx.ToolInput.Command = `git checkout -b "$BRANCH"`
+				result := v.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(BeTrue())
+			})
+		})
+
 		Context("with protected branches", func() {
 			It("should skip validation for main", func() {
 				ctx.ToolInput.Command = "git checkout -b main"

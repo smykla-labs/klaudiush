@@ -151,9 +151,11 @@ func (r *ParseResult) InlineFileContent(path, workDir string, before Location) (
 
 		switch fw.Operation {
 		case WriteOpRedirect, WriteOpHeredoc:
-			// Overwrite: the last write wins, discarding earlier content.
-			// ContentCaptured is false for appends and uncaptured writes.
-			content, ok = fw.Content, fw.ContentCaptured
+			// Overwrite: the last write wins, discarding earlier content. Only
+			// captured content (an exact reconstruction) counts - a heredoc body
+			// fed to cat, or literal echo/printf output - otherwise ok stays
+			// false so callers fall back to reading the file from disk.
+			content, ok = fw.CapturedOverwrite()
 		default:
 			// Append, tee, cp, mv: the resulting bytes can't be reconstructed
 			// from the command alone (prior content or trailing newlines are

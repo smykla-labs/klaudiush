@@ -311,6 +311,16 @@ func (v *CommitValidator) extractCommitMessage(
 	// Check for inline message flags (-m/--message)
 	// TrimSpace handles trailing newlines from HEREDOC syntax: -m "$(cat <<'EOF'\n...\nEOF\n)"
 	if msg := v.getFlagValue(gitCmd, commitMessageFlags); msg != "" {
+		// A bare variable (e.g. -m "$MSG") is an unresolved expansion whose
+		// runtime content the hook cannot see. Skip rather than validate the
+		// literal token, which would always fail the conventional-commit check.
+		if isBareExpansion(msg) {
+			v.Logger().
+				Debug("commit message is an unresolved variable; skipping validation", "value", msg)
+
+			return "", nil
+		}
+
 		return strings.TrimSpace(msg), nil
 	}
 
@@ -360,6 +370,16 @@ func (v *CommitValidator) extractMessageFromFile(
 		}
 	}
 
+	// A bare variable path (e.g. -F "$MSG") that did not resolve to inline
+	// content names a file whose runtime location the hook cannot determine.
+	// Skip rather than attempt a literal "$MSG" disk read that always fails.
+	if isBareExpansion(filePath) {
+		v.Logger().
+			Debug("commit message file path is an unresolved variable; skipping validation", "path", filePath)
+
+		return "", nil
+	}
+
 	// Resolve the path the way the shell would: expand a leading ~ and, for a
 	// relative path, join it onto the commit's effective working directory (from
 	// cd or git -C), since git reads -F relative to where it runs, not the hook's
@@ -404,6 +424,42 @@ func expandTilde(path string) string {
 	}
 
 	return filepath.Join(home, path[2:])
+}
+
+// isBareExpansion reports whether s is exactly one shell parameter expansion as
+// rendered by the parser - "$NAME" or "${...}" - and nothing else. Such a value
+// is an unresolved variable whose runtime content the hook cannot observe, so
+// callers skip validation instead of treating the literal token as the message
+// or as a real file path. A literal "$NAME" written in single quotes renders the
+// same way, but committing a literal "$NAME" message or reading a file literally
+// named "$NAME" is not a realistic scenario, so skipping it is acceptable.
+func isBareExpansion(s string) bool {
+	if len(s) < 2 || s[0] != '$' {
+		return false
+	}
+
+	body := s[1:]
+	if body[0] == '{' {
+		// "${...}": require a closing brace and a non-empty body.
+		return len(body) > 2 && body[len(body)-1] == '}'
+	}
+
+	// "$NAME": every remaining byte must be a valid identifier character.
+	for i := range len(body) {
+		if !isNameByte(body[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isNameByte reports whether b may appear in a shell variable name.
+func isNameByte(b byte) bool {
+	return b == '_' ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= 'A' && b <= 'Z') ||
+		(b >= '0' && b <= '9')
 }
 
 // getFlagValue returns the value for any of the provided flags, or empty string if not found.

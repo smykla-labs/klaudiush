@@ -60,6 +60,35 @@ type FileWrite struct {
 	// on transforming commands (grep, sed, ...), plain redirects, and tee/cp/mv,
 	// where the content cannot be reconstructed from the command alone.
 	ContentCaptured bool
+	// RedirectContent holds the exact bytes a plain overwrite redirect (">")
+	// from a literal echo/printf produced. It is captured for inline
+	// commit-message recovery only (e.g. printf '%s' msg > "$MSG"; git commit -F
+	// "$MSG") and is deliberately kept out of Content so it is NOT fanned out to
+	// file validators - linting partial program text written with echo/printf
+	// (e.g. "printf 'package x' > f.go") would produce spurious failures.
+	RedirectContent string
+	// RedirectContentCaptured reports whether RedirectContent holds the exact
+	// bytes written. It is true only for an overwrite redirect (">", not ">>")
+	// whose producer is a literal echo or a printf using only %s/%% directives
+	// and known escapes; otherwise the output cannot be reproduced exactly.
+	RedirectContentCaptured bool
+}
+
+// CapturedOverwrite returns the exact bytes an overwrite write produced and
+// whether they were captured. Heredoc bodies are stored in Content; literal
+// echo/printf output is stored in RedirectContent (kept separate so it is not
+// linted as a file). Appends and transforming or copying commands capture
+// nothing, so ok is false for them.
+func (f FileWrite) CapturedOverwrite() (string, bool) {
+	if f.ContentCaptured {
+		return f.Content, true
+	}
+
+	if f.RedirectContentCaptured {
+		return f.RedirectContent, true
+	}
+
+	return "", false
 }
 
 // String returns a string representation of the file write operation.

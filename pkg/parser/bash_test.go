@@ -1026,8 +1026,10 @@ EOF`
 			Expect(ok).To(BeFalse())
 		})
 
-		It("is uncertain for a plain (uncaptured) redirect", func() {
-			result, err := p.Parse("echo body > msg.txt")
+		It("is uncertain for a redirect whose output can't be reconstructed", func() {
+			// A non-echo/printf producer's output cannot be reproduced from the
+			// command alone, so the write is not captured.
+			result, err := p.Parse("date > msg.txt")
 			Expect(err).NotTo(HaveOccurred())
 
 			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
@@ -1035,7 +1037,7 @@ EOF`
 		})
 
 		It("recovers when a captured heredoc follows an uncertain write", func() {
-			cmd := "echo body > msg.txt\n" +
+			cmd := "date > msg.txt\n" +
 				"cat > msg.txt <<'EOF'\nfeat: x\nEOF"
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
@@ -1043,6 +1045,77 @@ EOF`
 			content, ok := result.InlineFileContent("msg.txt", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: x\n"))
+		})
+
+		It("captures a literal echo overwrite redirect", func() {
+			result, err := p.Parse("echo 'feat: subject' > msg.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("msg.txt", "", afterAll)
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: subject"))
+		})
+
+		It("captures a literal printf overwrite redirect", func() {
+			result, err := p.Parse(`printf '%s' 'feat: subject' > msg.txt`)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("msg.txt", "", afterAll)
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: subject"))
+		})
+
+		It("captures a multi-argument printf as title and body", func() {
+			result, err := p.Parse(`printf '%s\n\n%s\n' 'feat: subject' 'body line' > msg.txt`)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("msg.txt", "", afterAll)
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: subject\n\nbody line"))
+		})
+
+		It("matches a variable redirect target against a variable consumer path", func() {
+			// printf writes to "$MSG" and the consumer reads "$MSG"; both render
+			// to the same token, so they match without resolving the variable.
+			result, err := p.Parse(`printf '%s' 'feat: subject' > "$MSG"`)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("$MSG", "", afterAll)
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: subject"))
+		})
+
+		It("matches a brace-form variable redirect target", func() {
+			result, err := p.Parse(`printf '%s' 'feat: subject' > "${MSG}"`)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("${MSG}", "", afterAll)
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: subject"))
+		})
+
+		It("is uncertain for a printf with an unsupported directive", func() {
+			result, err := p.Parse(`printf '%d' 42 > msg.txt`)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
+			Expect(ok).To(BeFalse())
+		})
+
+		It("is uncertain for a redirect whose content contains an expansion", func() {
+			result, err := p.Parse(`echo "$VAR" > msg.txt`)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
+			Expect(ok).To(BeFalse())
+		})
+
+		It("does not capture an append redirect from echo", func() {
+			result, err := p.Parse("echo more >> msg.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
+			Expect(ok).To(BeFalse())
 		})
 
 		It("returns false when no write targets the path", func() {

@@ -175,6 +175,36 @@ var _ = Describe("Files", func() {
 				Expect(fw.Path).To(Equal("tmp/output.txt"))
 				Expect(fw.IsProtectedPath()).To(BeFalse())
 			})
+
+			It("captures literal output in RedirectContent, not Content", func() {
+				// The dispatcher fans out FileWrite.Content to file validators, so
+				// echo/printf output must stay in RedirectContent to avoid linting
+				// partial program text (e.g. gofumpt on "printf 'package x' > f.go").
+				result, err := p.Parse(`printf 'package x' > f.go`)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.FileWrites).To(HaveLen(1))
+
+				fw := result.FileWrites[0]
+				Expect(fw.Content).To(BeEmpty())
+				Expect(fw.RedirectContent).To(Equal("package x"))
+				Expect(fw.RedirectContentCaptured).To(BeTrue())
+
+				content, ok := fw.CapturedOverwrite()
+				Expect(ok).To(BeTrue())
+				Expect(content).To(Equal("package x"))
+			})
+
+			It("does not capture content for an append redirect", func() {
+				result, err := p.Parse(`printf 'package x' >> f.go`)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.FileWrites).To(HaveLen(1))
+
+				fw := result.FileWrites[0]
+				Expect(fw.RedirectContentCaptured).To(BeFalse())
+
+				_, ok := fw.CapturedOverwrite()
+				Expect(ok).To(BeFalse())
+			})
 		})
 
 		Context("with tee command", func() {

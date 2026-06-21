@@ -207,30 +207,122 @@ func echoFlag(arg string) (string, bool) {
 	return arg[1:], true
 }
 
-// printfOutput returns the literal text content of a simple "printf" call, for
-// the forms commonly used to feed a commit message: a bare literal format with
-// no directives, or "%s"/"%s\n" with a single string argument. This is a
-// best-effort capture for validation: it returns the argument text itself and
-// does not apply any newline implied by the format string (callers trim
-// surrounding whitespace anyway).
+// printfOutput returns the text a simple "printf" call writes, for the forms
+// used to build commit messages: a bare literal format, or a format whose only
+// directives are %s (one string argument each) and %%. Backslash escapes in the
+// format (\n, \t, \r, \\, \a, \b, \f, \v) are interpreted, so a multi-line
+// message like "printf '%s\n\n%s\n' title body" is reconstructed correctly. A
+// single trailing newline is dropped (callers trim surrounding whitespace
+// anyway). It returns false for any other directive (e.g. %d, %q), an unknown
+// escape, or a %s/argument count mismatch, so an uncertain capture falls back to
+// a disk read rather than validating reconstructed-wrong bytes.
 func printfOutput(args []string) (string, bool) {
 	if len(args) == 0 {
 		return "", false
 	}
 
-	format := args[0]
-
-	// "printf <literal>" with no format directives.
-	if len(args) == 1 && !strings.Contains(format, "%") {
-		return format, true
+	out, ok := expandPrintf(args[0], args[1:])
+	if !ok {
+		return "", false
 	}
 
-	// "printf %s msg" / "printf '%s\n' msg" with a single argument.
-	if len(args) == 2 && (format == "%s" || format == "%s\n" || format == `%s\n`) {
-		return args[1], true
+	return strings.TrimSuffix(out, "\n"), true
+}
+
+// expandPrintf reproduces a printf call's output for formats that use only %s
+// and %% directives plus known backslash escapes. It returns false when the
+// format contains any other directive, an unknown or trailing escape, a dangling
+// "%", or when the number of %s directives does not equal len(args) - printf's
+// format recycling and missing-argument behaviour are intentionally not
+// reproduced, so such calls decline capture instead of guessing.
+func expandPrintf(format string, args []string) (string, bool) {
+	var b strings.Builder
+
+	used := 0
+
+	for i := 0; i < len(format); i++ {
+		switch format[i] {
+		case '\\':
+			i++
+			if i >= len(format) {
+				return "", false
+			}
+
+			esc, ok := printfEscape(format[i])
+			if !ok {
+				return "", false
+			}
+
+			b.WriteByte(esc)
+		case '%':
+			i++
+			if i >= len(format) {
+				return "", false
+			}
+
+			ok := writePrintfVerb(&b, format[i], args, &used)
+			if !ok {
+				return "", false
+			}
+		default:
+			b.WriteByte(format[i])
+		}
 	}
 
-	return "", false
+	if used != len(args) {
+		return "", false
+	}
+
+	return b.String(), true
+}
+
+// writePrintfVerb handles the character after a "%" in a printf format. It
+// supports "%%" (a literal percent) and "%s" (consuming the next argument),
+// returning false for any other verb or when no argument remains for "%s".
+func writePrintfVerb(b *strings.Builder, verb byte, args []string, used *int) bool {
+	switch verb {
+	case '%':
+		b.WriteByte('%')
+
+		return true
+	case 's':
+		if *used >= len(args) {
+			return false
+		}
+
+		b.WriteString(args[*used])
+		*used++
+
+		return true
+	default:
+		return false
+	}
+}
+
+// printfEscape interprets a backslash escape in a printf format string. It
+// returns false for escapes this best-effort reproducer does not handle (e.g.
+// octal or hex), so the caller can decline to capture rather than guess.
+func printfEscape(c byte) (byte, bool) {
+	switch c {
+	case 'n':
+		return '\n', true
+	case 't':
+		return '\t', true
+	case 'r':
+		return '\r', true
+	case '\\':
+		return '\\', true
+	case 'a':
+		return '\a', true
+	case 'b':
+		return '\b', true
+	case 'f':
+		return '\f', true
+	case 'v':
+		return '\v', true
+	default:
+		return 0, false
+	}
 }
 
 // extractCommand extracts a command from a CallExpr node.
@@ -359,16 +451,27 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 			WorkingDirectory: w.currentDir,
 		})
 	case info.hasOutput:
-		// Just output redirection without heredoc. Content is intentionally not
-		// captured here: it would flow to the dispatcher's synthetic file-write
-		// validation and lint partial bytes (e.g. "echo 'x' > foo.go" tripping
-		// gofumpt). Heredoc bodies are the only redirect content captured.
-		w.fileWrites = append(w.fileWrites, FileWrite{
+		// Just output redirection without heredoc. A literal overwrite's output
+		// is captured into RedirectContent for inline commit-message recovery
+		// (e.g. printf '%s' msg > "$MSG"; git commit -F "$MSG"), but never into
+		// Content: Content flows to the dispatcher's synthetic file-write
+		// validation, which would lint partial bytes (e.g. "echo 'x' > foo.go"
+		// tripping gofumpt).
+		fw := FileWrite{
 			Path:             info.outputPath,
 			Operation:        info.outputOp,
 			Location:         info.outputLoc,
 			WorkingDirectory: w.currentDir,
-		})
+		}
+
+		if info.outputOp == WriteOpRedirect {
+			if content, ok := literalCommandOutput(callExprOf(stmt)); ok {
+				fw.RedirectContent = content
+				fw.RedirectContentCaptured = true
+			}
+		}
+
+		w.fileWrites = append(w.fileWrites, fw)
 	}
 }
 

@@ -91,11 +91,20 @@ func wordToString(word *syntax.Word) string {
 			result.WriteString(p.Value)
 		case *syntax.SglQuoted:
 			result.WriteString(p.Value)
+		case *syntax.ParamExp:
+			// Render a variable reference as a stable token (e.g. "$MSG",
+			// "${MSG}") instead of dropping it. Keeping the token preserves
+			// argument positions - so "git commit -F \"$MSG\" -- file" does not
+			// misalign -F onto "--" - and lets a redirect target and a -F path
+			// that name the same variable match by token equality.
+			result.WriteString(paramExpToString(p))
 		case *syntax.DblQuoted:
 			for _, dqPart := range p.Parts {
 				switch dqp := dqPart.(type) {
 				case *syntax.Lit:
 					result.WriteString(dqp.Value)
+				case *syntax.ParamExp:
+					result.WriteString(paramExpToString(dqp))
 				case *syntax.CmdSubst:
 					// Handle command substitution (e.g., "$(cat <<'EOF' ... EOF)")
 					if heredoc := extractHeredocFromCmdSubst(dqp); heredoc != "" {
@@ -112,6 +121,23 @@ func wordToString(word *syntax.Word) string {
 	}
 
 	return result.String()
+}
+
+// paramExpToString renders a parameter expansion as a stable source-like token:
+// "$NAME" for the short form and "${NAME}" otherwise. Operators inside ${...}
+// (e.g. ":-default") are not reproduced; the token only needs to be identical
+// for the same variable so a write target and a consumer can be matched, and to
+// be recognizable as an unresolved expansion so message validation can skip it.
+func paramExpToString(pe *syntax.ParamExp) string {
+	if pe == nil || pe.Param == nil {
+		return ""
+	}
+
+	if pe.Short {
+		return "$" + pe.Param.Value
+	}
+
+	return "${" + pe.Param.Value + "}"
 }
 
 // extractHeredocFromCmdSubst extracts heredoc content from command substitution.
