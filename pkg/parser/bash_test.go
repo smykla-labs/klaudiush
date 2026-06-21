@@ -1075,23 +1075,23 @@ EOF`
 		})
 
 		It("matches a variable redirect target against a variable consumer path", func() {
-			// printf writes to "$MSG" and the consumer reads "$MSG"; both render
-			// to the same token, so they match without resolving the variable.
+			// printf writes to "$MSG" and the consumer reads it; both render to the
+			// same braced token, so they match without resolving the variable.
 			result, err := p.Parse(`printf '%s' 'feat: subject' > "$MSG"`)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("$MSG", "", afterAll)
+			content, ok := result.InlineFileContent("${MSG}", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: subject"))
 		})
 
 		It("matches mixed $VAR and ${VAR} forms", func() {
-			// "${MSG}" and "$MSG" canonicalize to the same token, so a redirect
-			// written one way matches a -F path written the other.
+			// "${MSG}" and "$MSG" canonicalize to the same braced token, so a
+			// redirect written one way matches a -F path written the other.
 			result, err := p.Parse(`printf '%s' 'feat: subject' > "${MSG}"`)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("$MSG", "", afterAll)
+			content, ok := result.InlineFileContent("${MSG}", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: subject"))
 		})

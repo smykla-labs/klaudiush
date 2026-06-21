@@ -427,57 +427,21 @@ func expandTilde(path string) string {
 }
 
 // isBareExpansion reports whether s is exactly one shell parameter expansion as
-// rendered by the parser - "$NAME", a positional like "$1", a special parameter
-// like "$@"/"$?", or "${...}" - and nothing else. Such a value is an unresolved
-// expansion whose runtime content the hook cannot observe, so callers skip
-// validation instead of treating the literal token as the message or as a real
-// file path. A literal "$NAME" written in single quotes renders the same way,
-// but committing a literal "$NAME" message or reading a file literally named
-// "$NAME" is not a realistic scenario, so skipping it is acceptable.
+// rendered by the parser - the braced token "${...}" produced by
+// paramExpToString - and nothing else. Such a value is an unresolved variable
+// whose runtime content the hook cannot observe, so callers skip validation
+// instead of treating the token as a real message, file path, remote, or branch.
+// A single-quoted literal that merely looks like a variable (e.g. '$MSG') renders
+// without braces and is still validated; a value mixing an expansion with literal
+// text (e.g. "${1}foo") does not end in "}" and is likewise not skipped.
 func isBareExpansion(s string) bool {
-	if len(s) < 2 || s[0] != '$' {
+	if len(s) < 4 || s[0] != '$' || s[1] != '{' || s[len(s)-1] != '}' {
 		return false
 	}
 
-	body := s[1:]
-	if body[0] == '{' {
-		// "${...}": require a closing brace and a non-empty body.
-		return len(body) > 2 && body[len(body)-1] == '}'
-	}
+	inner := s[2 : len(s)-1]
 
-	// A single special parameter: $@, $*, $#, $?, $$, $!, $- (e.g. a wrapper
-	// script forwarding "$@" to git push).
-	if len(body) == 1 && isSpecialParam(body[0]) {
-		return true
-	}
-
-	// "$NAME" or a positional like "$12": every byte is an identifier character.
-	for i := range len(body) {
-		if !isNameByte(body[i]) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// isNameByte reports whether b may appear in a shell variable name.
-func isNameByte(b byte) bool {
-	return b == '_' ||
-		(b >= 'a' && b <= 'z') ||
-		(b >= 'A' && b <= 'Z') ||
-		(b >= '0' && b <= '9')
-}
-
-// isSpecialParam reports whether b is a single-character shell special
-// parameter ($@, $*, $#, $?, $$, $!, $-).
-func isSpecialParam(b byte) bool {
-	switch b {
-	case '@', '*', '#', '?', '$', '!', '-':
-		return true
-	default:
-		return false
-	}
+	return inner != "" && !strings.ContainsAny(inner, "{}")
 }
 
 // getFlagValue returns the value for any of the provided flags, or empty string if not found.

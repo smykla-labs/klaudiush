@@ -92,12 +92,12 @@ func wordToString(word *syntax.Word) string {
 		case *syntax.SglQuoted:
 			result.WriteString(p.Value)
 		case *syntax.ParamExp:
-			// Render a variable reference as a stable token (the short form
-			// "$MSG", so "$MSG" and "${MSG}" coincide) instead of dropping it.
-			// Keeping the token preserves argument positions - so "git commit -F
-			// \"$MSG\" -- file" does not misalign -F onto "--" - and lets a
-			// redirect target and a -F path that name the same variable match by
-			// token equality.
+			// Render a variable reference as a stable braced token ("${MSG}")
+			// instead of dropping it. Keeping the token preserves argument
+			// positions - so "git commit -F \"$MSG\" -- file" does not misalign -F
+			// onto "--" - and lets a redirect target and a -F path that name the
+			// same variable match by token equality. The braced form also keeps a
+			// real expansion distinct from a single-quoted literal like '$MSG'.
 			result.WriteString(paramExpToString(p))
 		case *syntax.DblQuoted:
 			for _, dqPart := range p.Parts {
@@ -124,18 +124,20 @@ func wordToString(word *syntax.Word) string {
 	return result.String()
 }
 
-// paramExpToString renders a parameter expansion as a stable "$NAME" token.
-// Both "$MSG" and "${MSG}" canonicalize to "$MSG" so a write target and a
-// consumer that name the same variable in different forms still match.
-// Operators inside ${...} (e.g. ":-default") are not reproduced; the token only
-// needs to be identical for the same variable and recognizable as an unresolved
-// expansion so message validation can skip it.
+// paramExpToString renders a parameter expansion as a stable braced token
+// "${NAME}". Both "$MSG" and "${MSG}" canonicalize to "${MSG}" so a write target
+// and a consumer that name the same variable in different forms still match. The
+// braced form is used even for a "$NAME" source so a real expansion stays
+// distinct from a single-quoted literal like '$NAME' (which keeps its source
+// form and is still validated). Operators inside ${...} (e.g. ":-default") are
+// not reproduced; the token only needs to be identical for the same variable and
+// recognizable as an unresolved expansion so message validation can skip it.
 func paramExpToString(pe *syntax.ParamExp) string {
 	if pe == nil || pe.Param == nil {
 		return ""
 	}
 
-	return "$" + pe.Param.Value
+	return "${" + pe.Param.Value + "}"
 }
 
 // extractHeredocFromCmdSubst extracts heredoc content from command substitution.

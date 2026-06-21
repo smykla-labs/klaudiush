@@ -1583,6 +1583,34 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			Expect(result.Passed).To(BeTrue())
 		})
 
+		It("validates a single-quoted literal that looks like a variable", func() {
+			// '$MSG' is a literal, not an expansion, so it renders without braces
+			// and must be validated (and rejected) rather than skipped.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -m '$MSG'`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+		})
+
+		It("validates a value mixing an expansion with literal text", func() {
+			// "$9FOO" is positional $9 plus literal FOO, not a single expansion,
+			// so it renders as "${9}FOO" and is not skipped.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -m "$9FOO"`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+		})
+
 		It("skips an unresolved -F variable path with no inline write", func() {
 			// "$MSG" was never written in this command, so there is nothing to
 			// recover and no real path to read. Skip rather than warn.

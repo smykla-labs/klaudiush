@@ -417,15 +417,15 @@ EOF
 		})
 
 		It("keeps a variable -F value aligned with the -- separator", func() {
-			// "$MSG" renders to a stable token, so -F captures it instead of
-			// grabbing "--", and the pathspec stays a positional argument.
+			// "$MSG" renders to a stable braced token, so -F captures it instead
+			// of grabbing "--", and the pathspec stays a positional argument.
 			result, err := p.Parse(`git commit -sS -F "$MSG" -- file.go`)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.GitOperations).To(HaveLen(1))
 
 			gitCmd, err := parser.ParseGitCommand(result.GitOperations[0])
 			Expect(err).NotTo(HaveOccurred())
-			Expect(gitCmd.GetFlagValue("-F")).To(Equal("$MSG"))
+			Expect(gitCmd.GetFlagValue("-F")).To(Equal("${MSG}"))
 			Expect(gitCmd.Args).To(ContainElement("file.go"))
 		})
 	})
