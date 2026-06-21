@@ -957,6 +957,17 @@ EOF`
 			fw := result.FileWrites[0]
 			Expect(fw.ContentCaptured).To(BeTrue())
 		})
+
+		It("does not capture a heredoc fed to 'cat - -'", func() {
+			// Multiple "-" can emit stdin more than once, so the heredoc body is
+			// not the exact file content.
+			result, err := p.Parse("cat - - > file.txt <<'EOF'\nbody\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.FileWrites).To(HaveLen(1))
+
+			fw := result.FileWrites[0]
+			Expect(fw.ContentCaptured).To(BeFalse())
+		})
 	})
 
 	Describe("InlineFileContent", func() {

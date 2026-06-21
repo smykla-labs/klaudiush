@@ -374,8 +374,9 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 
 // copiesStdinVerbatim reports whether the command copies its stdin to stdout
 // unchanged, so that a heredoc fed to it becomes the exact redirected output.
-// Only "cat" with no arguments (or only "-") qualifies; "cat file", "cat -n",
-// and transforming commands (grep, sed, ...) do not.
+// Only "cat" (reading stdin implicitly) or "cat -" (reading stdin once) qualify.
+// "cat file", "cat -n", "cat - -" (stdin emitted more than once), and
+// transforming commands (grep, sed, ...) do not.
 func copiesStdinVerbatim(call *syntax.CallExpr) bool {
 	if call == nil || len(call.Args) == 0 {
 		return false
@@ -385,13 +386,14 @@ func copiesStdinVerbatim(call *syntax.CallExpr) bool {
 		return false
 	}
 
-	for _, arg := range call.Args[1:] {
-		if wordToString(arg) != "-" {
-			return false
-		}
+	switch rest := call.Args[1:]; len(rest) {
+	case 0:
+		return true // "cat"
+	case 1:
+		return wordToString(rest[0]) == "-" // "cat -"
+	default:
+		return false // "cat - -", "cat file", ...
 	}
-
-	return true
 }
 
 // extractFileWriteCommand detects file write commands (tee, cp, mv).

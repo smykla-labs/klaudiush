@@ -374,7 +374,7 @@ func (v *CommitValidator) extractMessageFromFile(
 		readPath,
 	) //#nosec G304 -- file path is user-provided from git commit -F flag
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to read commit message file %s", filePath)
+		return "", errors.Wrapf(err, "failed to read commit message file %s", readPath)
 	}
 
 	return strings.TrimSpace(string(content)), nil
