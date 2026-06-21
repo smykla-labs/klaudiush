@@ -49,8 +49,12 @@ type FileWrite struct {
 	Path      string   // Target file path
 	Operation WriteOp  // Type of write operation
 	Source    string   // Source command (for cp, mv, tee)
-	Content   string   // Content for heredoc operations
+	Content   string   // Content written (populated for heredoc operations)
 	Location  Location // Position in source
+	// ContentCaptured reports whether Content holds the exact bytes written.
+	// It is true for heredocs and false otherwise (plain redirects, tee/cp/mv),
+	// where the content cannot be reconstructed from the command alone.
+	ContentCaptured bool
 }
 
 // String returns a string representation of the file write operation.

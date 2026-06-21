@@ -344,15 +344,20 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 
 	switch {
 	case info.hasOutput && info.hasHeredoc:
-		// Output redirection combined with a heredoc.
+		// Output redirection combined with a heredoc. The heredoc body is the
+		// exact content written (e.g. "cat > file <<EOF ... EOF").
 		w.fileWrites = append(w.fileWrites, FileWrite{
-			Path:      info.outputPath,
-			Operation: WriteOpHeredoc,
-			Content:   info.heredocContent,
-			Location:  info.heredocLoc,
+			Path:            info.outputPath,
+			Operation:       WriteOpHeredoc,
+			Content:         info.heredocContent,
+			ContentCaptured: true,
+			Location:        info.heredocLoc,
 		})
 	case info.hasOutput:
-		// Just output redirection without heredoc.
+		// Just output redirection without heredoc. Content is intentionally not
+		// captured here: it would flow to the dispatcher's synthetic file-write
+		// validation and lint partial bytes (e.g. "echo 'x' > foo.go" tripping
+		// gofumpt). Heredoc bodies are the only redirect content captured.
 		w.fileWrites = append(w.fileWrites, FileWrite{
 			Path:      info.outputPath,
 			Operation: info.outputOp,

@@ -94,7 +94,7 @@ func (v *CommitValidator) Validate(ctx context.Context, hookCtx *hook.Context) *
 		}
 
 		// Validate the git commit command
-		return v.validateGitCommit(ctx, gitCmd, hasGitAdd)
+		return v.validateGitCommit(ctx, gitCmd, hasGitAdd, result)
 	}
 
 	log.Debug("No git commit commands found")
@@ -107,6 +107,7 @@ func (v *CommitValidator) validateGitCommit(
 	ctx context.Context,
 	gitCmd *parser.GitCommand,
 	hasGitAdd bool,
+	parsed *parser.ParseResult,
 ) *validator.Result {
 	log := v.Logger()
 
@@ -128,7 +129,7 @@ func (v *CommitValidator) validateGitCommit(
 		return validator.Pass()
 	}
 
-	commitMsg, err := v.extractCommitMessage(gitCmd)
+	commitMsg, err := v.extractCommitMessage(gitCmd, parsed)
 	if err != nil {
 		log.Error("Failed to extract commit message", "error", err)
 		return validator.Warn(fmt.Sprintf("Failed to read commit message: %v", err))
@@ -297,36 +298,13 @@ func (*CommitValidator) hasGitAddInChain(commands []parser.Command) bool {
 }
 
 // extractCommitMessage extracts commit message from -m/--message or -F/--file flags.
-func (v *CommitValidator) extractCommitMessage(gitCmd *parser.GitCommand) (string, error) {
+func (v *CommitValidator) extractCommitMessage(
+	gitCmd *parser.GitCommand,
+	parsed *parser.ParseResult,
+) (string, error) {
 	// Check for file flags first (-F/--file)
 	if filePath := v.getFlagValue(gitCmd, commitFileFlags); filePath != "" {
-		// "-" means read from stdin. The parser captures stdin fed via a
-		// heredoc or a piped echo/printf, so validate that when available.
-		if filePath == "-" {
-			stdin := strings.TrimSpace(gitCmd.Stdin)
-			if stdin == "" {
-				// Stdin wasn't capturable (e.g. message piped from a process
-				// the parser can't read); treat it like no inline message.
-				v.Logger().Debug("Commit message comes from uncaptured stdin (-F -)")
-
-				return "", nil
-			}
-
-			v.Logger().Debug("Reading commit message from stdin (-F -)")
-
-			return stdin, nil
-		}
-
-		v.Logger().Debug("Reading commit message from file", "path", filePath)
-
-		content, err := os.ReadFile(
-			filePath,
-		) //#nosec G304 -- file path is user-provided from git commit -F flag
-		if err != nil {
-			return "", errors.Wrapf(err, "failed to read commit message file %s", filePath)
-		}
-
-		return strings.TrimSpace(string(content)), nil
+		return v.extractMessageFromFile(gitCmd, parsed, filePath)
 	}
 
 	// Check for inline message flags (-m/--message)
@@ -336,6 +314,55 @@ func (v *CommitValidator) extractCommitMessage(gitCmd *parser.GitCommand) (strin
 	}
 
 	return "", nil
+}
+
+// extractMessageFromFile resolves the commit message for a -F/--file flag.
+// It handles stdin ("-"), content written to the file earlier in the same
+// command, and finally the file on disk.
+func (v *CommitValidator) extractMessageFromFile(
+	gitCmd *parser.GitCommand,
+	parsed *parser.ParseResult,
+	filePath string,
+) (string, error) {
+	// "-" means read from stdin. The parser captures stdin fed via a heredoc or
+	// a piped echo/printf, so validate that when available.
+	if filePath == "-" {
+		stdin := strings.TrimSpace(gitCmd.Stdin)
+		if stdin == "" {
+			// Stdin wasn't capturable (e.g. message piped from a process the
+			// parser can't read); treat it like no inline message.
+			v.Logger().Debug("Commit message comes from uncaptured stdin (-F -)")
+
+			return "", nil
+		}
+
+		v.Logger().Debug("Reading commit message from stdin (-F -)")
+
+		return stdin, nil
+	}
+
+	// Prefer content written to the file earlier in the same command. At
+	// PreToolUse time the file usually doesn't exist on disk yet (e.g.
+	// "cat > msg.txt <<EOF ... EOF; git commit -F msg.txt"), so reading it
+	// directly would fail and silently skip message validation.
+	if parsed != nil {
+		if content, ok := parsed.InlineFileContent(filePath); ok {
+			v.Logger().Debug("Reading commit message from inline file write", "path", filePath)
+
+			return strings.TrimSpace(content), nil
+		}
+	}
+
+	v.Logger().Debug("Reading commit message from file", "path", filePath)
+
+	content, err := os.ReadFile(
+		filePath,
+	) //#nosec G304 -- file path is user-provided from git commit -F flag
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to read commit message file %s", filePath)
+	}
+
+	return strings.TrimSpace(string(content)), nil
 }
 
 // getFlagValue returns the value for any of the provided flags, or empty string if not found.

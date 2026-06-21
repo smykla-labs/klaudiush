@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -112,6 +113,47 @@ func (r *ParseResult) GetFirstGitWorkingDir() string {
 	}
 
 	return ""
+}
+
+// InlineFileContent returns the content written to path earlier in the same
+// command, and whether that content was reconstructed exactly.
+//
+// It models the writes the parser captured: an overwrite (">" or a
+// "cat > f <<EOF" heredoc) replaces any earlier content, and the last overwrite
+// wins. Appends (">>") and writes whose content cannot be reconstructed from
+// the command alone (tee/cp/mv, or "cmd > f" where cmd is not a literal
+// echo/printf) make the result uncertain, so ok is false and callers should
+// fall back to reading the file from disk.
+//
+// This lets validators inspect "git commit -F f" messages when f is created
+// inline (e.g. "cat > f <<EOF ... EOF; git commit -F f"), since f does not
+// exist on disk yet when the PreToolUse hook runs.
+func (r *ParseResult) InlineFileContent(path string) (string, bool) {
+	target := filepath.Clean(path)
+
+	var (
+		content string
+		ok      bool
+	)
+
+	for _, fw := range r.FileWrites {
+		if filepath.Clean(fw.Path) != target {
+			continue
+		}
+
+		switch fw.Operation {
+		case WriteOpRedirect, WriteOpHeredoc:
+			// Overwrite: the last write wins, discarding earlier content.
+			content, ok = fw.Content, fw.ContentCaptured
+		default:
+			// Append, tee, cp, mv: the resulting bytes can't be reconstructed
+			// from the command alone (prior content or trailing newlines are
+			// unknown), so the capture is no longer exact.
+			content, ok = "", false
+		}
+	}
+
+	return content, ok
 }
 
 // BacktickIssue represents a problematic use of backticks in double quotes.

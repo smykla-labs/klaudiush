@@ -899,4 +899,101 @@ EOF`
 			Expect(result.GetFirstGitWorkingDir()).To(BeEmpty())
 		})
 	})
+
+	Describe("redirect content capture", func() {
+		It("marks heredoc-to-file content as captured", func() {
+			result, err := p.Parse("cat > file.txt <<'EOF'\nbody\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.FileWrites).To(HaveLen(1))
+
+			fw := result.FileWrites[0]
+			Expect(fw.Operation).To(Equal(parser.WriteOpHeredoc))
+			Expect(fw.ContentCaptured).To(BeTrue())
+			Expect(fw.Content).To(Equal("body\n"))
+		})
+
+		It("does not capture content for a plain echo redirect", func() {
+			// Plain redirect content is deliberately not captured so it does not
+			// reach the dispatcher's synthetic file-write validation.
+			result, err := p.Parse(`echo 'hello world' > file.txt`)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.FileWrites).To(HaveLen(1))
+
+			fw := result.FileWrites[0]
+			Expect(fw.Operation).To(Equal(parser.WriteOpRedirect))
+			Expect(fw.ContentCaptured).To(BeFalse())
+			Expect(fw.Content).To(BeEmpty())
+		})
+	})
+
+	Describe("InlineFileContent", func() {
+		It("returns heredoc content written to the path", func() {
+			cmd := "cat > tmp/commit-msg-1.txt <<'EOF'\n" +
+				"perf(scope): subject\n\nbody line\nEOF\n" +
+				"git commit -sS -F tmp/commit-msg-1.txt"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("tmp/commit-msg-1.txt")
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("perf(scope): subject\n\nbody line\n"))
+		})
+
+		It("normalizes paths before matching", func() {
+			result, err := p.Parse("cat > ./tmp/msg.txt <<'EOF'\nbody\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("tmp/msg.txt")
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("body\n"))
+		})
+
+		It("returns the last overwrite when a path is rewritten via heredoc", func() {
+			cmd := "cat > msg.txt <<'EOF'\nfirst\nEOF\n" +
+				"cat > msg.txt <<'EOF'\nsecond\nEOF"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("msg.txt")
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("second\n"))
+		})
+
+		It("is uncertain when a captured heredoc is appended to", func() {
+			cmd := "cat > msg.txt <<'EOF'\nbody\nEOF\n" +
+				"echo more >> msg.txt"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt")
+			Expect(ok).To(BeFalse())
+		})
+
+		It("is uncertain for a plain (uncaptured) redirect", func() {
+			result, err := p.Parse("echo body > msg.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt")
+			Expect(ok).To(BeFalse())
+		})
+
+		It("recovers when a captured heredoc follows an uncertain write", func() {
+			cmd := "echo body > msg.txt\n" +
+				"cat > msg.txt <<'EOF'\nfeat: x\nEOF"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("msg.txt")
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: x\n"))
+		})
+
+		It("returns false when no write targets the path", func() {
+			result, err := p.Parse("cat > other.txt <<'EOF'\nbody\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt")
+			Expect(ok).To(BeFalse())
+		})
+	})
 })
