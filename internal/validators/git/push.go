@@ -84,6 +84,15 @@ func (v *PushValidator) validatePushCommand(
 		return validator.Pass()
 	}
 
+	// A bare variable remote (e.g. "git push $REMOTE main") is an unresolved
+	// expansion whose runtime value the hook cannot see, so neither the blocked
+	// list nor existence can be checked meaningfully. Skip rather than block.
+	if isBareExpansion(remote) {
+		log.Debug("remote is an unresolved variable; skipping validation", "remote", remote)
+
+		return validator.Pass()
+	}
+
 	// Check if remote is blocked (before checking if it exists)
 	if result := v.validateNotBlockedRemote(remote, runner); !result.Passed {
 		return result

@@ -91,11 +91,21 @@ func wordToString(word *syntax.Word) string {
 			result.WriteString(p.Value)
 		case *syntax.SglQuoted:
 			result.WriteString(p.Value)
+		case *syntax.ParamExp:
+			// Render a variable reference as a stable braced token ("${MSG}")
+			// instead of dropping it. Keeping the token preserves argument
+			// positions - so "git commit -F \"$MSG\" -- file" does not misalign -F
+			// onto "--" - and lets a redirect target and a -F path that name the
+			// same variable match by token equality. The braced form also keeps a
+			// real expansion distinct from a single-quoted literal like '$MSG'.
+			result.WriteString(paramExpToString(p))
 		case *syntax.DblQuoted:
 			for _, dqPart := range p.Parts {
 				switch dqp := dqPart.(type) {
 				case *syntax.Lit:
 					result.WriteString(dqp.Value)
+				case *syntax.ParamExp:
+					result.WriteString(paramExpToString(dqp))
 				case *syntax.CmdSubst:
 					// Handle command substitution (e.g., "$(cat <<'EOF' ... EOF)")
 					if heredoc := extractHeredocFromCmdSubst(dqp); heredoc != "" {
@@ -112,6 +122,40 @@ func wordToString(word *syntax.Word) string {
 	}
 
 	return result.String()
+}
+
+// paramExpToString renders a parameter expansion as a stable token. A simple
+// reference - "$MSG" or "${MSG}" - canonicalizes to the braced form "${MSG}" so
+// a write target and a consumer that name the same variable in different forms
+// match, and so a real expansion stays distinct from a single-quoted literal like
+// '$MSG' (which keeps its source form and is still validated). An expansion
+// carrying an operator or modifier - "${#MSG}", "${MSG:-default}", "${!MSG}" - is
+// printed verbatim so distinct expansions are not collapsed onto "${MSG}".
+func paramExpToString(pe *syntax.ParamExp) string {
+	if pe == nil || pe.Param == nil {
+		return ""
+	}
+
+	canonical := "${" + pe.Param.Value + "}"
+
+	// A short reference ("$NAME", "$@") has no braces and so no operator; use the
+	// canonical braced form directly.
+	if pe.Short {
+		return canonical
+	}
+
+	// A braced reference may carry an operator/modifier. Print it and keep that
+	// form only when it differs from the plain "${NAME}".
+	var b strings.Builder
+	if err := syntax.NewPrinter().Print(&b, pe); err != nil {
+		return canonical
+	}
+
+	if printed := b.String(); printed != canonical {
+		return printed
+	}
+
+	return canonical
 }
 
 // extractHeredocFromCmdSubst extracts heredoc content from command substitution.

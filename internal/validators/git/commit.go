@@ -311,6 +311,16 @@ func (v *CommitValidator) extractCommitMessage(
 	// Check for inline message flags (-m/--message)
 	// TrimSpace handles trailing newlines from HEREDOC syntax: -m "$(cat <<'EOF'\n...\nEOF\n)"
 	if msg := v.getFlagValue(gitCmd, commitMessageFlags); msg != "" {
+		// A bare variable (e.g. -m "$MSG") is an unresolved expansion whose
+		// runtime content the hook cannot see. Skip rather than validate the
+		// literal token, which would always fail the conventional-commit check.
+		if isBareExpansion(msg) {
+			v.Logger().
+				Debug("commit message is an unresolved variable; skipping validation", "value", msg)
+
+			return "", nil
+		}
+
 		return strings.TrimSpace(msg), nil
 	}
 
@@ -360,6 +370,16 @@ func (v *CommitValidator) extractMessageFromFile(
 		}
 	}
 
+	// A bare variable path (e.g. -F "$MSG") that did not resolve to inline
+	// content names a file whose runtime location the hook cannot determine.
+	// Skip rather than attempt a literal "$MSG" disk read that always fails.
+	if isBareExpansion(filePath) {
+		v.Logger().
+			Debug("commit message file path is an unresolved variable; skipping validation", "path", filePath)
+
+		return "", nil
+	}
+
 	// Resolve the path the way the shell would: expand a leading ~ and, for a
 	// relative path, join it onto the commit's effective working directory (from
 	// cd or git -C), since git reads -F relative to where it runs, not the hook's
@@ -404,6 +424,24 @@ func expandTilde(path string) string {
 	}
 
 	return filepath.Join(home, path[2:])
+}
+
+// isBareExpansion reports whether s is exactly one shell parameter expansion as
+// rendered by the parser - the braced token "${...}" produced by
+// paramExpToString - and nothing else. Such a value is an unresolved variable
+// whose runtime content the hook cannot observe, so callers skip validation
+// instead of treating the token as a real message, file path, remote, or branch.
+// A single-quoted literal that merely looks like a variable (e.g. '$MSG') renders
+// without braces and is still validated; a value mixing an expansion with literal
+// text (e.g. "${1}foo") does not end in "}" and is likewise not skipped.
+func isBareExpansion(s string) bool {
+	if len(s) < 4 || s[0] != '$' || s[1] != '{' || s[len(s)-1] != '}' {
+		return false
+	}
+
+	inner := s[2 : len(s)-1]
+
+	return inner != "" && !strings.ContainsAny(inner, "{}")
 }
 
 // getFlagValue returns the value for any of the provided flags, or empty string if not found.

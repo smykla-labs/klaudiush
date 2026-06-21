@@ -208,6 +208,16 @@ func (v *BranchValidator) validateBranchCreation(gitCmd *parser.GitCommand) *val
 		return nil
 	}
 
+	// A bare variable branch name (e.g. "git checkout -b $BRANCH") is an
+	// unresolved expansion whose runtime value the hook cannot see, so its
+	// format can't be checked. Skip rather than block.
+	if isBareExpansion(branchName) {
+		v.Logger().
+			Debug("branch name is an unresolved variable; skipping validation", "branch", branchName)
+
+		return nil
+	}
+
 	if strings.Contains(branchName, " ") {
 		return v.createSpaceError()
 	}

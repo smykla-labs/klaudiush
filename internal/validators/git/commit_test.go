@@ -1474,9 +1474,10 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			Expect(result.Message).To(ContainSubstring("Failed to read commit message"))
 		})
 
-		It("falls back to disk (warns) for an uncaptured echo redirect", func() {
-			// Plain redirects aren't captured, so the validator reads the file
-			// from disk; at PreToolUse it does not exist yet, hence a warning.
+		It("validates a message written via an echo redirect", func() {
+			// A literal echo overwrite is captured for message recovery, so the
+			// validator sees the non-conventional message and blocks even though
+			// the file does not exist on disk yet.
 			cmd := `echo 'this is not conventional' > /nonexistent/dir/msg.txt && ` +
 				`git commit -sS -a -F /nonexistent/dir/msg.txt`
 
@@ -1488,8 +1489,152 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
-			Expect(result.ShouldBlock).To(BeFalse())
-			Expect(result.Message).To(ContainSubstring("Failed to read commit message"))
+			Expect(result.ShouldBlock).To(BeTrue())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("validates a printf-written message at a variable path (good)", func() {
+			// Screenshot case: a multi-line message is built with printf and
+			// referenced through a variable. Both the redirect target and the -F
+			// path render to "${MSG}", so the captured content is validated.
+			cmd := `printf '%s\n\n%s\n' 'feat(api): add endpoint' 'Adds the endpoint.' > "$MSG" && ` +
+				`git commit -sS -a -F "$MSG"`
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: cmd},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("blocks a printf-written message at a variable path (bad)", func() {
+			cmd := `printf '%s\n\n%s\n' 'not conventional' 'body' > "$MSG" && ` +
+				`git commit -sS -a -F "$MSG"`
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: cmd},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("does not misread -- as the message file with a variable -F path", func() {
+			// Regression: "$MSG" once rendered empty and was dropped, so -F
+			// captured the "--" separator and the validator reported "failed to
+			// read commit message file --". It must validate the message instead.
+			cmd := `printf '%s' 'feat(api): add endpoint' > "$MSG" && ` +
+				`git commit -sS -a -F "$MSG" -- file.go`
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: cmd},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+			Expect(
+				result.Message,
+			).ToNot(ContainSubstring("failed to read commit message file"))
+		})
+
+		It("matches a $VAR redirect against a ${VAR} -F path", func() {
+			// The redirect and the -F flag name the same variable in different
+			// forms; both canonicalize to one token, so the message is validated.
+			cmd := `printf '%s\n\n%s\n' 'not conventional' 'body' > "$MSG" && ` +
+				`git commit -sS -a -F "${MSG}"`
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: cmd},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
+		})
+
+		It("skips an unresolved -m variable instead of validating the token", func() {
+			// The hook cannot see $VAR's runtime value, so it must not validate
+			// the literal "$VAR" (which would fail the conventional-commit check).
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -m "$VAR"`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("validates a single-quoted literal that looks like a variable", func() {
+			// '$MSG' is a literal, not an expansion, so it renders without braces
+			// and must be validated (and rejected) rather than skipped.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -m '$MSG'`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+		})
+
+		It("validates a value mixing an expansion with literal text", func() {
+			// "$9FOO" is positional $9 plus literal FOO, not a single expansion,
+			// so it renders as "${9}FOO" and is not skipped.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -m "$9FOO"`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+		})
+
+		It("skips a modified -m expansion", func() {
+			// "${MSG:-default}" is still an unresolved expansion (its value depends
+			// on MSG at runtime), so it is skipped rather than validated.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -m "${MSG:-default}"`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("skips an unresolved -F variable path with no inline write", func() {
+			// "$MSG" was never written in this command, so there is nothing to
+			// recover and no real path to read. Skip rather than warn.
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{Command: `git commit -sS -a -F "$MSG"`},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
 		})
 	})
 
