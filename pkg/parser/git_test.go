@@ -68,6 +68,18 @@ var _ = Describe("GitCommand", func() {
 				Expect(gitCmd.ExtractCommitMessage()).To(Equal("fix: bug fix"))
 			})
 
+			It("captures the commit ref for -c/-C reuse flags", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"commit", "-c", "HEAD~1"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetFlagValue("-c")).To(Equal("HEAD~1"))
+				Expect(gitCmd.Args).To(BeEmpty())
+			})
+
 			It("uses first -m flag as commit message when multiple -m flags provided", func() {
 				// git commit -m "title" -m "body" should use "title" as the message
 				cmd := parser.Command{

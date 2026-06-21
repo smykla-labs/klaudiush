@@ -25,6 +25,7 @@ const (
 	subcmdCheckout = "checkout"
 	subcmdSwitch   = "switch"
 	subcmdBranch   = "branch"
+	subcmdCommit   = "commit"
 )
 
 var (
@@ -72,15 +73,20 @@ var globalOptionsWithValue = map[string]bool{
 	"--list-cmds":          true,
 }
 
-// Flags that take a value across all subcommands.
+// Flags that take a value regardless of subcommand. Context-dependent flags
+// (-c/-C, and branch's -m) are handled per subcommand in flagTakesValue instead.
 var flagsWithValues = map[string]bool{
 	flagMessage:       true,
 	"--message":       true,
 	"-F":              true,
 	"--file":          true,
-	flagUpperC:        true,
 	"--reuse-message": true,
 }
+
+// commitReuseFlags reuse another commit's message for "git commit" and consume
+// the commit reference: -c/--reedit-message edits the reused message, -C/
+// --reuse-message keeps it as-is.
+var commitReuseFlags = []string{flagLowerC, flagUpperC}
 
 // checkoutCreationFlags and switchCreationFlags consume the following token as
 // the new branch name for their own subcommand ("git checkout -b feat/x",
@@ -112,17 +118,26 @@ func branchCreationFlagsFor(subcommand string) []string {
 }
 
 // flagTakesValue reports whether flag consumes the next token as its value within
-// the given subcommand.
+// the given subcommand. It resolves context-dependent flags (-c/-C, branch's -m)
+// per subcommand before falling back to the subcommand-independent set.
 func flagTakesValue(flag, subcommand string) bool {
-	if slices.Contains(branchCreationFlagsFor(subcommand), flag) {
-		return true
-	}
-
-	// For "git branch", -m/-M/--move and -c/-C/--copy are rename/copy mode flags;
-	// the old and new names are positional, so they do not consume a value (unlike
-	// commit's -m/-C, which flagsWithValues would otherwise treat as value-taking).
-	if subcommand == subcmdBranch && slices.Contains(branchRenameCopyFlags, flag) {
-		return false
+	switch subcommand {
+	case subcmdCheckout, subcmdSwitch:
+		// The creation flag captures the new branch name.
+		if slices.Contains(branchCreationFlagsFor(subcommand), flag) {
+			return true
+		}
+	case subcmdBranch:
+		// Rename/copy mode flags (-m/-M/--move, -c/-C/--copy) are boolean; the
+		// old and new names are positional.
+		if slices.Contains(branchRenameCopyFlags, flag) {
+			return false
+		}
+	case subcmdCommit:
+		// -c/-C reuse another commit's message and consume the commit ref.
+		if slices.Contains(commitReuseFlags, flag) {
+			return true
+		}
 	}
 
 	return flagsWithValues[flag]
