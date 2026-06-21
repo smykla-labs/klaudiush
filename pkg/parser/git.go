@@ -11,9 +11,10 @@ import (
 const (
 	// flagMessage is the short git/gh message flag.
 	flagMessage = "-m"
-	// flagDashC is the "-C" flag, whose meaning is subcommand-specific: a repo
-	// path for the top-level git command, --reuse-message for commit, and
-	// --force-create for switch.
+	// flagDashC is the "-C" flag. Its meaning is subcommand-specific and handled
+	// per context rather than globally - for example a repo path for the
+	// top-level git command, --reuse-message for commit, --force-create for
+	// switch, and force-copy for branch.
 	flagDashC = "-C"
 )
 
@@ -75,7 +76,8 @@ var flagsWithValues = map[string]bool{
 // branchCreationFlags consume the following token as the new branch name for the
 // checkout and switch subcommands, listed in branch-name extraction order. These
 // letters mean other things for other subcommands (e.g. -C is commit's
-// reuse-message), so they are only treated as value-taking for checkout/switch.
+// reuse-message, value-taking via flagsWithValues), so they are only treated as
+// branch-creation flags for checkout/switch.
 var branchCreationFlags = []string{
 	"-b", "--branch", // checkout
 	"-c", "--create", flagDashC, "--force-create", // switch
