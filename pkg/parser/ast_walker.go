@@ -344,16 +344,19 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 
 	switch {
 	case info.hasOutput && info.hasHeredoc:
-		// Output redirection combined with a heredoc. The heredoc body is the
-		// exact file content only for an overwrite (">"); for an append (">>")
-		// the final bytes also depend on prior file content the parser cannot
-		// see, so it is not an exact capture.
+		// Output redirection combined with a heredoc. The heredoc body equals the
+		// file bytes only when it is an overwrite (">", not ">>") and the command
+		// copies stdin to stdout verbatim (cat). A transforming command such as
+		// "grep foo > f <<EOF" writes filtered output, not the heredoc body, so
+		// that content must not be treated as captured.
+		captured := info.outputOp == WriteOpRedirect && copiesStdinVerbatim(callExprOf(stmt))
 		w.fileWrites = append(w.fileWrites, FileWrite{
-			Path:            info.outputPath,
-			Operation:       WriteOpHeredoc,
-			Content:         info.heredocContent,
-			ContentCaptured: info.outputOp == WriteOpRedirect,
-			Location:        info.heredocLoc,
+			Path:             info.outputPath,
+			Operation:        WriteOpHeredoc,
+			Content:          info.heredocContent,
+			ContentCaptured:  captured,
+			Location:         info.heredocLoc,
+			WorkingDirectory: w.currentDir,
 		})
 	case info.hasOutput:
 		// Just output redirection without heredoc. Content is intentionally not
@@ -361,11 +364,34 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 		// validation and lint partial bytes (e.g. "echo 'x' > foo.go" tripping
 		// gofumpt). Heredoc bodies are the only redirect content captured.
 		w.fileWrites = append(w.fileWrites, FileWrite{
-			Path:      info.outputPath,
-			Operation: info.outputOp,
-			Location:  info.outputLoc,
+			Path:             info.outputPath,
+			Operation:        info.outputOp,
+			Location:         info.outputLoc,
+			WorkingDirectory: w.currentDir,
 		})
 	}
+}
+
+// copiesStdinVerbatim reports whether the command copies its stdin to stdout
+// unchanged, so that a heredoc fed to it becomes the exact redirected output.
+// Only "cat" with no arguments (or only "-") qualifies; "cat file", "cat -n",
+// and transforming commands (grep, sed, ...) do not.
+func copiesStdinVerbatim(call *syntax.CallExpr) bool {
+	if call == nil || len(call.Args) == 0 {
+		return false
+	}
+
+	if wordToString(call.Args[0]) != "cat" {
+		return false
+	}
+
+	for _, arg := range call.Args[1:] {
+		if wordToString(arg) != "-" {
+			return false
+		}
+	}
+
+	return true
 }
 
 // extractFileWriteCommand detects file write commands (tee, cp, mv).
@@ -377,10 +403,11 @@ func (w *astWalker) extractFileWriteCommand(cmd Command) {
 
 	for _, target := range targets {
 		fw := FileWrite{
-			Path:      target,
-			Operation: op,
-			Source:    cmd.Name,
-			Location:  cmd.Location,
+			Path:             target,
+			Operation:        op,
+			Source:           cmd.Name,
+			Location:         cmd.Location,
+			WorkingDirectory: cmd.WorkingDirectory,
 		}
 
 		w.fileWrites = append(w.fileWrites, fw)

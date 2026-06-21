@@ -347,7 +347,12 @@ func (v *CommitValidator) extractMessageFromFile(
 	// directly would fail and silently skip message validation. Only writes
 	// before this commit are considered, so a later rewrite is ignored.
 	if parsed != nil {
-		if content, ok := parsed.InlineFileContent(filePath, gitCmd.Location); ok {
+		content, ok := parsed.InlineFileContent(
+			filePath,
+			gitCmd.GetWorkingDirectory(),
+			gitCmd.Location,
+		)
+		if ok {
 			v.Logger().Debug("Reading commit message from inline file write", "path", filePath)
 
 			return strings.TrimSpace(content), nil

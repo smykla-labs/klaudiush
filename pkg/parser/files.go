@@ -51,8 +51,13 @@ type FileWrite struct {
 	Source    string   // Source command (for cp, mv, tee)
 	Content   string   // Content written (populated for heredoc operations)
 	Location  Location // Position in source
+	// WorkingDirectory is the effective directory (from preceding cd commands)
+	// when the write occurs, used to resolve relative paths.
+	WorkingDirectory string
 	// ContentCaptured reports whether Content holds the exact bytes written.
-	// It is true for heredocs and false otherwise (plain redirects, tee/cp/mv),
+	// It is true only for an overwrite heredoc (">") whose command copies stdin
+	// to stdout verbatim (cat). It is false for append heredocs (">>"), heredocs
+	// on transforming commands (grep, sed, ...), plain redirects, and tee/cp/mv,
 	// where the content cannot be reconstructed from the command alone.
 	ContentCaptured bool
 }

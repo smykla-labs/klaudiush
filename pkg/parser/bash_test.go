@@ -936,12 +936,33 @@ EOF`
 			Expect(fw.ContentCaptured).To(BeFalse())
 			Expect(fw.Content).To(BeEmpty())
 		})
+
+		It("does not capture a heredoc on a transforming command", func() {
+			// "grep > f <<EOF" writes filtered output, not the heredoc body, so
+			// the body must not be treated as captured.
+			result, err := p.Parse("grep foo > file.txt <<'EOF'\nfoo\nbar\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.FileWrites).To(HaveLen(1))
+
+			fw := result.FileWrites[0]
+			Expect(fw.Operation).To(Equal(parser.WriteOpHeredoc))
+			Expect(fw.ContentCaptured).To(BeFalse())
+		})
+
+		It("captures a heredoc fed to 'cat -'", func() {
+			result, err := p.Parse("cat - > file.txt <<'EOF'\nbody\nEOF")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.FileWrites).To(HaveLen(1))
+
+			fw := result.FileWrites[0]
+			Expect(fw.ContentCaptured).To(BeTrue())
+		})
 	})
 
 	Describe("InlineFileContent", func() {
 		// afterAll is a sentinel position past any write in these single-chain
 		// commands, so every write is considered (ordering is exercised
-		// separately below).
+		// separately below). The empty workDir means paths compare as written.
 		afterAll := parser.Location{Line: 1 << 30}
 
 		It("returns heredoc content written to the path", func() {
@@ -951,7 +972,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("tmp/commit-msg-1.txt", afterAll)
+			content, ok := result.InlineFileContent("tmp/commit-msg-1.txt", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("perf(scope): subject\n\nbody line\n"))
 		})
@@ -960,7 +981,7 @@ EOF`
 			result, err := p.Parse("cat > ./tmp/msg.txt <<'EOF'\nbody\nEOF")
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("tmp/msg.txt", afterAll)
+			content, ok := result.InlineFileContent("tmp/msg.txt", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("body\n"))
 		})
@@ -971,7 +992,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("msg.txt", afterAll)
+			content, ok := result.InlineFileContent("msg.txt", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("second\n"))
 		})
@@ -980,7 +1001,7 @@ EOF`
 			result, err := p.Parse("cat >> msg.txt <<'EOF'\nbody\nEOF")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt", afterAll)
+			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
 			Expect(ok).To(BeFalse())
 		})
 
@@ -990,7 +1011,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt", afterAll)
+			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
 			Expect(ok).To(BeFalse())
 		})
 
@@ -998,7 +1019,7 @@ EOF`
 			result, err := p.Parse("echo body > msg.txt")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt", afterAll)
+			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
 			Expect(ok).To(BeFalse())
 		})
 
@@ -1008,7 +1029,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("msg.txt", afterAll)
+			content, ok := result.InlineFileContent("msg.txt", "", afterAll)
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: x\n"))
 		})
@@ -1017,7 +1038,7 @@ EOF`
 			result, err := p.Parse("cat > other.txt <<'EOF'\nbody\nEOF")
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt", afterAll)
+			_, ok := result.InlineFileContent("msg.txt", "", afterAll)
 			Expect(ok).To(BeFalse())
 		})
 
@@ -1028,7 +1049,7 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			content, ok := result.InlineFileContent("msg.txt", parser.Location{Line: 4})
+			content, ok := result.InlineFileContent("msg.txt", "", parser.Location{Line: 4})
 			Expect(ok).To(BeTrue())
 			Expect(content).To(Equal("feat: x\n"))
 		})
@@ -1040,8 +1061,28 @@ EOF`
 			result, err := p.Parse(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, ok := result.InlineFileContent("msg.txt", parser.Location{Line: 1})
+			_, ok := result.InlineFileContent("msg.txt", "", parser.Location{Line: 1})
 			Expect(ok).To(BeFalse())
+		})
+
+		It("does not match a write in a different working directory", func() {
+			// Write happens in dir "a"; consumer resolves msg.txt against "b".
+			cmd := "cd a && cat > msg.txt <<'EOF'\nfeat: x\nEOF"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := result.InlineFileContent("msg.txt", "b", afterAll)
+			Expect(ok).To(BeFalse())
+		})
+
+		It("matches a write in the same working directory", func() {
+			cmd := "cd a && cat > msg.txt <<'EOF'\nfeat: x\nEOF"
+			result, err := p.Parse(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			content, ok := result.InlineFileContent("msg.txt", "a", afterAll)
+			Expect(ok).To(BeTrue())
+			Expect(content).To(Equal("feat: x\n"))
 		})
 	})
 })

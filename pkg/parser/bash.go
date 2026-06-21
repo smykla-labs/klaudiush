@@ -117,22 +117,23 @@ func (r *ParseResult) GetFirstGitWorkingDir() string {
 
 // InlineFileContent returns the content written to path before the consumer at
 // source position "before", and whether that content was reconstructed exactly.
+// workDir is the consumer's effective working directory (from cd or git -C),
+// used to resolve a relative path so writes in a different directory don't match.
 //
 // Only writes preceding that position (in source order, which models shell
 // execution order for sequential commands) are considered, so a write that
 // happens after the consumer - e.g. "git commit -F f && cat > f <<EOF" - is
-// ignored. It models the writes the parser captured: an overwrite (">" or a
-// "cat > f <<EOF" heredoc) replaces any earlier content, and the last overwrite
-// wins. Appends (">>", including "cat >> f <<EOF") and writes whose content
-// cannot be reconstructed from the command alone (tee/cp/mv, or "cmd > f" where
-// cmd is not a literal echo/printf) make the result uncertain, so ok is false
-// and callers should fall back to reading the file from disk.
+// ignored. The only content the parser captures exactly is an overwrite heredoc
+// fed to a verbatim copier (e.g. "cat > f <<EOF ... EOF"); the last such
+// overwrite to the resolved path wins. Appends (">>"), plain redirects, heredocs
+// on transforming commands, and tee/cp/mv leave the result uncertain, so ok is
+// false and callers should fall back to reading the file from disk.
 //
 // This lets validators inspect "git commit -F f" messages when f is created
 // inline (e.g. "cat > f <<EOF ... EOF; git commit -F f"), since f does not
 // exist on disk yet when the PreToolUse hook runs.
-func (r *ParseResult) InlineFileContent(path string, before Location) (string, bool) {
-	target := filepath.Clean(path)
+func (r *ParseResult) InlineFileContent(path, workDir string, before Location) (string, bool) {
+	target := resolvePath(workDir, path)
 
 	var (
 		content string
@@ -144,7 +145,7 @@ func (r *ParseResult) InlineFileContent(path string, before Location) (string, b
 			continue
 		}
 
-		if filepath.Clean(fw.Path) != target {
+		if resolvePath(fw.WorkingDirectory, fw.Path) != target {
 			continue
 		}
 
@@ -162,6 +163,17 @@ func (r *ParseResult) InlineFileContent(path string, before Location) (string, b
 	}
 
 	return content, ok
+}
+
+// resolvePath cleans path, joining it onto workDir when path is relative and a
+// working directory is known, so writes and consumers in different directories
+// compare unequal.
+func resolvePath(workDir, path string) string {
+	if workDir == "" || filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+
+	return filepath.Clean(filepath.Join(workDir, path))
 }
 
 // locationBefore reports whether a occurs strictly before b in source order.
