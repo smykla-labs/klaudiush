@@ -1424,30 +1424,25 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 
 		It("expands a leading ~ in the -F path", func() {
 			// The parser keeps ~ literal, so the disk read must expand it the way
-			// the shell would, otherwise validation is skipped though the file
-			// exists.
-			home, err := os.UserHomeDir()
+			// the shell would. Point HOME at a temp dir to keep the test hermetic.
+			tmpHome, err := os.MkdirTemp("", "klaudiush-home-*")
 			Expect(err).ToNot(HaveOccurred())
 
-			dir, err := os.MkdirTemp(home, "klaudiush-tilde-*")
-			Expect(err).ToNot(HaveOccurred())
+			defer func() { _ = os.RemoveAll(tmpHome) }()
 
-			defer func() { _ = os.RemoveAll(dir) }()
+			GinkgoT().Setenv("HOME", tmpHome)
 
 			Expect(os.WriteFile(
-				filepath.Join(dir, "msg.txt"),
+				filepath.Join(tmpHome, "msg.txt"),
 				[]byte("not conventional at all"),
 				0o600,
 			)).To(Succeed())
-
-			rel, err := filepath.Rel(home, dir)
-			Expect(err).ToNot(HaveOccurred())
 
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,
 				ToolName:  hook.ToolTypeBash,
 				ToolInput: hook.ToolInput{
-					Command: "git commit -sS -a -F ~/" + rel + "/msg.txt",
+					Command: "git commit -sS -a -F ~/msg.txt",
 				},
 			}
 
