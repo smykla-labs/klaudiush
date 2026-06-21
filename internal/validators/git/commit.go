@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -359,10 +360,18 @@ func (v *CommitValidator) extractMessageFromFile(
 		}
 	}
 
-	v.Logger().Debug("Reading commit message from file", "path", filePath)
+	// Resolve a relative path against the commit's effective working directory
+	// (from cd or git -C), since git reads -F relative to where it runs, not the
+	// hook's cwd.
+	readPath := filePath
+	if workDir := gitCmd.GetWorkingDirectory(); workDir != "" && !filepath.IsAbs(filePath) {
+		readPath = filepath.Join(workDir, filePath)
+	}
+
+	v.Logger().Debug("Reading commit message from file", "path", readPath)
 
 	content, err := os.ReadFile(
-		filePath,
+		readPath,
 	) //#nosec G304 -- file path is user-provided from git commit -F flag
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to read commit message file %s", filePath)

@@ -3,6 +3,7 @@ package git_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1389,6 +1390,36 @@ Signed-off-by: Test User <test@klaudiu.sh>`
 			Expect(result.Passed).To(BeFalse())
 			Expect(result.ShouldBlock).To(BeFalse())
 			Expect(result.Message).To(ContainSubstring("Failed to read commit message"))
+		})
+
+		It("resolves a relative -F path against the commit working directory", func() {
+			// git reads -F relative to where it runs. The message file lives in
+			// dir, the commit cd's there and uses a relative path, so the disk
+			// read must join them rather than read relative to the hook cwd.
+			dir, err := os.MkdirTemp("", "commit-wd-*")
+			Expect(err).ToNot(HaveOccurred())
+
+			defer func() { _ = os.RemoveAll(dir) }()
+
+			Expect(os.WriteFile(
+				filepath.Join(dir, "msg.txt"),
+				[]byte("not conventional at all"),
+				0o600,
+			)).To(Succeed())
+
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: "cd " + dir + " && git commit -sS -a -F msg.txt",
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(
+				result.Message,
+			).To(ContainSubstring("doesn't follow conventional commits format"))
 		})
 
 		It("ignores a message file rewritten after the commit", func() {
