@@ -344,20 +344,55 @@ func (w *astWalker) extractRedirect(stmt *syntax.Stmt) {
 
 	switch {
 	case info.hasOutput && info.hasHeredoc:
-		// Output redirection combined with a heredoc.
+		// Output redirection combined with a heredoc. The heredoc body equals the
+		// file bytes only when it is an overwrite (">", not ">>") and the command
+		// copies stdin to stdout verbatim (cat). A transforming command such as
+		// "grep foo > f <<EOF" writes filtered output, not the heredoc body, so
+		// that content must not be treated as captured.
+		captured := info.outputOp == WriteOpRedirect && copiesStdinVerbatim(callExprOf(stmt))
 		w.fileWrites = append(w.fileWrites, FileWrite{
-			Path:      info.outputPath,
-			Operation: WriteOpHeredoc,
-			Content:   info.heredocContent,
-			Location:  info.heredocLoc,
+			Path:             info.outputPath,
+			Operation:        WriteOpHeredoc,
+			Content:          info.heredocContent,
+			ContentCaptured:  captured,
+			Location:         info.heredocLoc,
+			WorkingDirectory: w.currentDir,
 		})
 	case info.hasOutput:
-		// Just output redirection without heredoc.
+		// Just output redirection without heredoc. Content is intentionally not
+		// captured here: it would flow to the dispatcher's synthetic file-write
+		// validation and lint partial bytes (e.g. "echo 'x' > foo.go" tripping
+		// gofumpt). Heredoc bodies are the only redirect content captured.
 		w.fileWrites = append(w.fileWrites, FileWrite{
-			Path:      info.outputPath,
-			Operation: info.outputOp,
-			Location:  info.outputLoc,
+			Path:             info.outputPath,
+			Operation:        info.outputOp,
+			Location:         info.outputLoc,
+			WorkingDirectory: w.currentDir,
 		})
+	}
+}
+
+// copiesStdinVerbatim reports whether the command copies its stdin to stdout
+// unchanged, so that a heredoc fed to it becomes the exact redirected output.
+// Only "cat" (reading stdin implicitly) or "cat -" (reading stdin once) qualify.
+// "cat file", "cat -n", "cat - -" (stdin emitted more than once), and
+// transforming commands (grep, sed, ...) do not.
+func copiesStdinVerbatim(call *syntax.CallExpr) bool {
+	if call == nil || len(call.Args) == 0 {
+		return false
+	}
+
+	if wordToString(call.Args[0]) != "cat" {
+		return false
+	}
+
+	switch rest := call.Args[1:]; len(rest) {
+	case 0:
+		return true // "cat"
+	case 1:
+		return wordToString(rest[0]) == "-" // "cat -"
+	default:
+		return false // "cat - -", "cat file", ...
 	}
 }
 
@@ -370,10 +405,11 @@ func (w *astWalker) extractFileWriteCommand(cmd Command) {
 
 	for _, target := range targets {
 		fw := FileWrite{
-			Path:      target,
-			Operation: op,
-			Source:    cmd.Name,
-			Location:  cmd.Location,
+			Path:             target,
+			Operation:        op,
+			Source:           cmd.Name,
+			Location:         cmd.Location,
+			WorkingDirectory: cmd.WorkingDirectory,
 		}
 
 		w.fileWrites = append(w.fileWrites, fw)

@@ -446,7 +446,7 @@ EOF
 		})
 
 		Context("with both -C flag and WorkingDirectory", func() {
-			It("prioritizes -C flag over WorkingDirectory", func() {
+			It("lets an absolute -C override the cd directory", func() {
 				cmd := parser.Command{
 					Name:             "git",
 					Args:             []string{"-C", "/explicit/path", "status"},
@@ -456,6 +456,32 @@ EOF
 				gitCmd, err := parser.ParseGitCommand(cmd)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(gitCmd.GetWorkingDirectory()).To(Equal("/explicit/path"))
+			})
+
+			It("joins a relative -C onto the cd directory", func() {
+				// "cd a && git -C b" runs in a/b.
+				cmd := parser.Command{
+					Name:             "git",
+					Args:             []string{"-C", "b", "status"},
+					WorkingDirectory: "a",
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetWorkingDirectory()).To(Equal("a/b"))
+			})
+		})
+
+		Context("with a relative -C flag and no cd", func() {
+			It("returns the -C value", func() {
+				cmd := parser.Command{
+					Name: "git",
+					Args: []string{"-C", "sub", "status"},
+				}
+
+				gitCmd, err := parser.ParseGitCommand(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gitCmd.GetWorkingDirectory()).To(Equal("sub"))
 			})
 		})
 
