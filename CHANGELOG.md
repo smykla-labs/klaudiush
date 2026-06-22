@@ -5,6 +5,20 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.33.0](https://github.com/smykla-skalski/klaudiush/compare/v1.32.5...v1.33.0) (2026-06-22)
+
+### Features
+
+* **git:** block AI attribution in gh pr create ([#505](https://github.com/smykla-skalski/klaudiush/issues/505)) ([1f40e82](https://github.com/smykla-skalski/klaudiush/commit/1f40e82c77d42a9c1e6c5a9660fcfb37949946f7))
+
+### Bug Fixes
+
+* **deps:** update module github.com/cockroachdb/errors to v1.14.0 ([#499](https://github.com/smykla-skalski/klaudiush/issues/499)) ([0d5db5a](https://github.com/smykla-skalski/klaudiush/commit/0d5db5a56acfdd5c6012a350361e591d24ddb93d))
+* **git:** ignore trailing flags in branch name ([#506](https://github.com/smykla-skalski/klaudiush/issues/506)) ([7ed7e4a](https://github.com/smykla-skalski/klaudiush/commit/7ed7e4a4ff27510ce75a482ddcec8bf3728c249d))
+* **git:** skip bare-variable PR title and body ([#507](https://github.com/smykla-skalski/klaudiush/issues/507)) ([1a273c0](https://github.com/smykla-skalski/klaudiush/commit/1a273c0df75c7262b4d44884a61492e658096dd0))
+* **git:** validate inline -F commit message files ([#501](https://github.com/smykla-skalski/klaudiush/issues/501)) ([6f64a7f](https://github.com/smykla-skalski/klaudiush/commit/6f64a7f892b992468927b213ccc2afa055a324aa))
+* **git:** validate variable-path commit messages ([#503](https://github.com/smykla-skalski/klaudiush/issues/503)) ([8561b86](https://github.com/smykla-skalski/klaudiush/commit/8561b86ceb8c9cac38a418a9d795c8c42fc86679))
+
 ## [1.32.5](https://github.com/smykla-skalski/klaudiush/compare/v1.32.4...v1.32.5) (2026-06-18)
 
 ### Bug Fixes
