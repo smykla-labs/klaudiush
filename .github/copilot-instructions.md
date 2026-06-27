@@ -140,7 +140,7 @@ registry.Register(
 - Title ≤50 chars, body lines ≤72 chars (77 with tolerance)
 - Blocks `feat(ci)`, `fix(test)` - infrastructure changes should use `ci(...)`, `test(...)`
 - No PR references (`#123` or GitHub URLs)
-- No Claude AI attribution
+- No AI attribution
 
 **File Validators** (`internal/validators/file/`):
 
@@ -281,4 +281,3 @@ Parse combined flags like -sS into individual flags.
 Fixes issue where HasFlag() couldn't detect combined
 flags properly.
 ```
-
