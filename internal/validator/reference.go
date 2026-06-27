@@ -44,7 +44,7 @@ const (
 	// RefGitPRRef indicates PR reference in commit message.
 	RefGitPRRef Reference = ReferenceBaseURL + "/GIT011"
 
-	// RefGitClaudeAttr indicates Claude attribution in commit message.
+	// RefGitClaudeAttr indicates AI attribution in commit message.
 	RefGitClaudeAttr Reference = ReferenceBaseURL + "/GIT012"
 
 	// RefGitConventionalCommit indicates invalid conventional commit format.

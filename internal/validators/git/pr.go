@@ -707,11 +707,11 @@ func (v *PRValidator) getForbiddenPatterns() []string {
 	return config.DefaultForbiddenPatterns
 }
 
-// checkAIAttribution checks for Claude AI attribution in the PR title and body.
-// It catches both plain phrasing ("Generated with Claude Code") and the markdown
-// footer link, while allow-listing legitimate references (CLAUDE.md, klaudiush,
-// claude-hooks). Detection reuses containsClaudeAIAttribution so the PR and commit
-// paths stay in sync; the messages are PR-specific to point at the right field.
+// checkAIAttribution checks for AI attribution in the PR title and body.
+// It catches both plain phrasing ("Generated with Claude Code") and markdown
+// footer links, while allow-listing legitimate references (CLAUDE.md, klaudiush,
+// claude-hooks). Detection reuses containsAIAttribution so the PR and commit
+// paths stay in sync; messages are PR-specific to point at the right field.
 func (v *PRValidator) checkAIAttribution(title, body string) []string {
 	if !v.shouldBlockAIAttribution() {
 		return nil
@@ -719,14 +719,14 @@ func (v *PRValidator) checkAIAttribution(title, body string) []string {
 
 	errs := make([]string, 0)
 
-	if title != "" && containsClaudeAIAttribution(title) {
+	if title != "" && containsAIAttribution(title) {
 		errs = append(
 			errs,
 			"PR title contains AI attribution - remove any AI generation attribution",
 		)
 	}
 
-	if body != "" && containsClaudeAIAttribution(body) {
+	if body != "" && containsAIAttribution(body) {
 		errs = append(
 			errs,
 			"PR body contains AI attribution - remove any AI generation attribution",

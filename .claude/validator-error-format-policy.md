@@ -59,7 +59,7 @@ RefShellcheck     Reference = "https://klaudiu.sh/e/FILE001"
 - GIT009: File doesn't exist
 - GIT010: Missing required flags
 - GIT011: PR reference in commit
-- GIT012: Claude attribution
+- GIT012: AI attribution
 - GIT013: Invalid conventional commit
 - GIT014: Forbidden pattern
 - GIT015: Signoff identity mismatch
