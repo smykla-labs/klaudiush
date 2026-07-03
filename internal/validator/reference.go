@@ -90,7 +90,7 @@ const (
 	RefGitBlockedBranch Reference = ReferenceBaseURL + "/GIT026"
 )
 
-// File-related references (FILE001-FILE009).
+// File-related references (FILE001-FILE011).
 const (
 	// RefShellcheck indicates shellcheck validation failure.
 	RefShellcheck Reference = ReferenceBaseURL + "/FILE001"
@@ -121,6 +121,9 @@ const (
 
 	// RefLinterIgnore indicates linter ignore directives detected in code.
 	RefLinterIgnore Reference = ReferenceBaseURL + "/FILE010"
+
+	// RefAIComments indicates filler comments that only restate adjacent code.
+	RefAIComments Reference = ReferenceBaseURL + "/FILE011"
 )
 
 // Security-related references (SEC001-SEC005).
