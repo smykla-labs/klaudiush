@@ -44,7 +44,7 @@ does/is/handles/...".
 ## Allowed (not flagged)
 
 - Task and annotation markers: `// TODO: ...`, `// FIXME ...`, `// HACK`,
-  `// XXX`, `// BUG`, `@annotations`.
+  `// XXX`, `// BUG`, `// OPTIMIZE`, `// REVIEW`, `// DEPRECATED`, `@annotations`.
 - Doc comments directly above an exported/public declaration (Go exported
   func/type/const/var, JS/TS `export`, Python `def`/`class`) — a blank line
   between the comment and the declaration breaks this exemption.

@@ -71,4 +71,18 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		Entry("blank line breaks doc association",
 			"// Returns the user.\n\nfunc GetUser() {\n}"),
 	)
+	DescribeTable(
+		"allows // or # inside string and URL literals",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			result := v.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		},
+		Entry("https url with verb after slashes",
+			`endpoint := "https://set.example.com/v1"`),
+		Entry("http url with verb",
+			`u := "http://config.example.com/handle"`),
+		Entry("hash inside string literal",
+			`color := "#set0aa"`),
+	)
 })

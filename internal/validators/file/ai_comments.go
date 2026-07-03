@@ -19,7 +19,7 @@ import (
 var defaultAICommentPatterns = []string{
 	// A comment opening (optionally after "the"/"a") with a verb whose only
 	// job is to describe the mechanics of the following statement.
-	`(?i)(//|#)\s*(the\s+|a\s+|an\s+)?` +
+	`(?i)(^\s*|\s)(//|#)\s*(the\s+|a\s+|an\s+)?` +
 		`(initiali[sz]|set|reset|get|loop|iterate|check|return|` +
 		`creat|mak|build|construct|instantiat|` +
 		`call|invok|execut|run|increment|decrement|` +
@@ -36,7 +36,7 @@ var defaultAICommentPatterns = []string{
 		`toggl|enabl|disabl|mark|lock|bind|connect)` +
 		`(e|es|ed|d|s|ing|ping|ting|ning|ling|ging|ies|ied|y)?\b`,
 	// "This function/method/... does/is/handles/..." restatements.
-	`(?i)(//|#)\s*this\s+(function|method|class|struct|interface|type|` +
+	`(?i)(^\s*|\s)(//|#)\s*this\s+(function|method|class|struct|interface|type|` +
 		`variable|field|constant|value|helper|wrapper)\s+` +
 		`(does|is|are|will|handles?|returns?|sets?|gets?|` +
 		`represents?|holds?|stores?|contains?)\b`,
@@ -64,8 +64,10 @@ var aiExportedDecl = regexp.MustCompile(
 		`)`,
 )
 
-// aiCommentMarker locates the start of a // or # comment on a line.
-var aiCommentMarker = regexp.MustCompile(`(//|#)`)
+// aiCommentMarker locates the start of a // or # comment on a line. It anchors
+// to line start or whitespace so markers inside string/URL literals (e.g. the
+// "//" in "https://…") are not treated as comments.
+var aiCommentMarker = regexp.MustCompile(`(^\s*|\s)(//|#)`)
 
 // AICommentValidator flags filler comments that only restate adjacent code,
 // a pattern common in LLM-generated output.
