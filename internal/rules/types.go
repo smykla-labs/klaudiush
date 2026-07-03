@@ -50,6 +50,7 @@ const (
 	ValidatorFileJavaScript   ValidatorType = "file.javascript"
 	ValidatorFileRust         ValidatorType = "file.rust"
 	ValidatorFileLinterIgnore ValidatorType = "file.linter_ignore"
+	ValidatorFileAIComments   ValidatorType = "file.ai_comments"
 	ValidatorFileAll          ValidatorType = "file.*"
 	ValidatorSecrets          ValidatorType = "secrets.secrets"
 	ValidatorShellBacktick    ValidatorType = "shell.backtick"

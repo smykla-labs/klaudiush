@@ -29,6 +29,9 @@ type FileConfig struct {
 
 	// LinterIgnore validator configuration
 	LinterIgnore *LinterIgnoreValidatorConfig `json:"linter_ignore,omitempty" koanf:"linter_ignore" toml:"linter_ignore,omitempty"`
+
+	// AIComments validator configuration
+	AIComments *AICommentValidatorConfig `json:"ai_comments,omitempty" koanf:"ai_comments" toml:"ai_comments,omitempty"`
 }
 
 // MarkdownValidatorConfig configures the Markdown file validator.
@@ -338,5 +341,14 @@ type LinterIgnoreValidatorConfig struct {
 
 	// Patterns is a list of regex patterns to detect linter ignore directives.
 	// Default: built-in patterns for common languages (noqa, eslint-disable, nolint, etc.)
+	Patterns []string `json:"patterns,omitempty" koanf:"patterns" toml:"patterns,omitempty"`
+}
+
+// AICommentValidatorConfig configures the AI filler comment validator.
+type AICommentValidatorConfig struct {
+	ValidatorConfig `koanf:",squash"`
+
+	// Patterns is a list of regex patterns to detect filler comments.
+	// Default: built-in patterns for throat-clearing phrases (initialize, loop through, etc.)
 	Patterns []string `json:"patterns,omitempty" koanf:"patterns" toml:"patterns,omitempty"`
 }

@@ -35,6 +35,13 @@ func (f *FileValidatorFactory) SetRuleEngine(engine *rules.RuleEngine) {
 	f.ruleEngine = engine
 }
 
+// fileValidatorCheck pairs an enablement condition with the validator it creates.
+type fileValidatorCheck struct {
+	enabled bool
+	key     string
+	create  func() ValidatorWithPredicate
+}
+
 // CreateValidators creates all file validators based on configuration.
 func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorWithPredicate {
 	var validators []ValidatorWithPredicate
@@ -45,8 +52,22 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 		timeout = cfg.Global.DefaultTimeout.ToDuration()
 	}
 
-	// Initialize linters
 	runner := execpkg.NewCommandRunner(timeout)
+
+	for _, c := range f.fileValidatorChecks(cfg, runner) {
+		if c.enabled && !isValidatorOverridden(cfg.Overrides, c.key) {
+			validators = append(validators, c.create())
+		}
+	}
+
+	return validators
+}
+
+// fileValidatorChecks builds the enablement/factory pairs for every file validator.
+func (f *FileValidatorFactory) fileValidatorChecks(
+	cfg *config.Config,
+	runner execpkg.CommandRunner,
+) []fileValidatorCheck {
 	shellChecker := linters.NewShellChecker(runner)
 	terraformFormatter := linters.NewTerraformFormatter(runner)
 	tfLinter := linters.NewTfLinter(runner)
@@ -56,81 +77,85 @@ func (f *FileValidatorFactory) CreateValidators(cfg *config.Config) []ValidatorW
 	oxlintChecker := linters.NewOxlintChecker(runner)
 	rustfmtChecker := linters.NewRustfmtChecker(runner)
 
-	if cfg.Validators.File.Markdown != nil && cfg.Validators.File.Markdown.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.markdown") {
-		// Create markdown linter with config for rule support
-		markdownLinter := linters.NewMarkdownLinterWithConfig(runner, cfg.Validators.File.Markdown)
+	fc := cfg.Validators.File
 
-		validators = append(
-			validators,
-			f.createMarkdownValidator(cfg.Validators.File.Markdown, markdownLinter),
-		)
+	return []fileValidatorCheck{
+		{
+			enabled: fc.Markdown != nil && fc.Markdown.IsEnabled(),
+			key:     "file.markdown",
+			create: func() ValidatorWithPredicate {
+				markdownLinter := linters.NewMarkdownLinterWithConfig(runner, fc.Markdown)
+				return f.createMarkdownValidator(fc.Markdown, markdownLinter)
+			},
+		},
+		{
+			enabled: fc.Terraform != nil && fc.Terraform.IsEnabled(),
+			key:     "file.terraform",
+			create: func() ValidatorWithPredicate {
+				return f.createTerraformValidator(fc.Terraform, terraformFormatter, tfLinter)
+			},
+		},
+		{
+			enabled: fc.ShellScript != nil && fc.ShellScript.IsEnabled(),
+			key:     "file.shellscript",
+			create: func() ValidatorWithPredicate {
+				return f.createShellScriptValidator(fc.ShellScript, shellChecker)
+			},
+		},
+		{
+			enabled: fc.Workflow != nil && fc.Workflow.IsEnabled(),
+			key:     "file.workflow",
+			create: func() ValidatorWithPredicate {
+				return f.createWorkflowValidator(
+					fc.Workflow,
+					actionLinter,
+					func() githubpkg.Client { return githubpkg.NewClient() },
+				)
+			},
+		},
+		{
+			enabled: fc.Gofumpt != nil && fc.Gofumpt.IsEnabled(),
+			key:     "file.gofumpt",
+			create: func() ValidatorWithPredicate {
+				return f.createGofumptValidator(fc.Gofumpt, gofumptChecker)
+			},
+		},
+		{
+			enabled: fc.Python != nil && fc.Python.IsEnabled(),
+			key:     "file.python",
+			create: func() ValidatorWithPredicate {
+				return f.createPythonValidator(fc.Python, ruffChecker)
+			},
+		},
+		{
+			enabled: fc.JavaScript != nil && fc.JavaScript.IsEnabled(),
+			key:     "file.javascript",
+			create: func() ValidatorWithPredicate {
+				return f.createJavaScriptValidator(fc.JavaScript, oxlintChecker)
+			},
+		},
+		{
+			enabled: fc.Rust != nil && fc.Rust.IsEnabled(),
+			key:     "file.rust",
+			create: func() ValidatorWithPredicate {
+				return f.createRustValidator(fc.Rust, rustfmtChecker)
+			},
+		},
+		{
+			enabled: fc.LinterIgnore != nil && fc.LinterIgnore.IsEnabled(),
+			key:     "file.linter_ignore",
+			create: func() ValidatorWithPredicate {
+				return f.createLinterIgnoreValidator(fc.LinterIgnore)
+			},
+		},
+		{
+			enabled: fc.AIComments != nil && fc.AIComments.IsEnabled(),
+			key:     "file.ai_comments",
+			create: func() ValidatorWithPredicate {
+				return f.createAICommentValidator(fc.AIComments)
+			},
+		},
 	}
-
-	if cfg.Validators.File.Terraform != nil && cfg.Validators.File.Terraform.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.terraform") {
-		validators = append(validators, f.createTerraformValidator(
-			cfg.Validators.File.Terraform, terraformFormatter, tfLinter))
-	}
-
-	if cfg.Validators.File.ShellScript != nil && cfg.Validators.File.ShellScript.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.shellscript") {
-		validators = append(
-			validators,
-			f.createShellScriptValidator(cfg.Validators.File.ShellScript, shellChecker),
-		)
-	}
-
-	if cfg.Validators.File.Workflow != nil && cfg.Validators.File.Workflow.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.workflow") {
-		validators = append(validators, f.createWorkflowValidator(
-			cfg.Validators.File.Workflow,
-			actionLinter,
-			func() githubpkg.Client { return githubpkg.NewClient() },
-		))
-	}
-
-	if cfg.Validators.File.Gofumpt != nil && cfg.Validators.File.Gofumpt.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.gofumpt") {
-		validators = append(
-			validators,
-			f.createGofumptValidator(cfg.Validators.File.Gofumpt, gofumptChecker),
-		)
-	}
-
-	if cfg.Validators.File.Python != nil && cfg.Validators.File.Python.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.python") {
-		validators = append(
-			validators,
-			f.createPythonValidator(cfg.Validators.File.Python, ruffChecker),
-		)
-	}
-
-	if cfg.Validators.File.JavaScript != nil && cfg.Validators.File.JavaScript.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.javascript") {
-		validators = append(
-			validators,
-			f.createJavaScriptValidator(cfg.Validators.File.JavaScript, oxlintChecker),
-		)
-	}
-
-	if cfg.Validators.File.Rust != nil && cfg.Validators.File.Rust.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.rust") {
-		validators = append(
-			validators,
-			f.createRustValidator(cfg.Validators.File.Rust, rustfmtChecker),
-		)
-	}
-
-	if cfg.Validators.File.LinterIgnore != nil && cfg.Validators.File.LinterIgnore.IsEnabled() &&
-		!isValidatorOverridden(cfg.Overrides, "file.linter_ignore") {
-		validators = append(
-			validators,
-			f.createLinterIgnoreValidator(cfg.Validators.File.LinterIgnore),
-		)
-	}
-
-	return validators
 }
 
 func (f *FileValidatorFactory) createMarkdownValidator(
@@ -379,6 +404,30 @@ func (f *FileValidatorFactory) createLinterIgnoreValidator(
 	return ValidatorWithPredicate{
 		Validator: wrapValidatorWithSeverity(
 			filevalidators.NewLinterIgnoreValidator(f.log, cfg, rc),
+			cfg,
+		),
+		Predicate: validator.And(
+			beforeToolOrCodexAfterToolPredicate(),
+			validator.ToolTypeIn(hook.ToolTypeWrite, hook.ToolTypeEdit, hook.ToolTypeMultiEdit),
+		),
+	}
+}
+
+func (f *FileValidatorFactory) createAICommentValidator(
+	cfg *config.AICommentValidatorConfig,
+) ValidatorWithPredicate {
+	var rc validator.RuleChecker
+	if f.ruleEngine != nil {
+		rc = rules.NewRuleValidatorAdapter(
+			f.ruleEngine,
+			rules.ValidatorFileAIComments,
+			rules.WithAdapterLogger(f.log),
+		)
+	}
+
+	return ValidatorWithPredicate{
+		Validator: wrapValidatorWithSeverity(
+			filevalidators.NewAICommentValidator(f.log, cfg, rc),
 			cfg,
 		),
 		Predicate: validator.And(

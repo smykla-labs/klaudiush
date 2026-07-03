@@ -2,6 +2,27 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/smykla-skalski/klaudiush/pkg/config/config",
   "$defs": {
+    "AICommentValidatorConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "rules_enabled": {
+          "type": "boolean"
+        },
+        "patterns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AddValidatorConfig": {
       "properties": {
         "enabled": {
@@ -458,6 +479,9 @@
         },
         "linter_ignore": {
           "$ref": "#/$defs/LinterIgnoreValidatorConfig"
+        },
+        "ai_comments": {
+          "$ref": "#/$defs/AICommentValidatorConfig"
         }
       },
       "additionalProperties": false,
