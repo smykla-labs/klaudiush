@@ -344,11 +344,32 @@ type LinterIgnoreValidatorConfig struct {
 	Patterns []string `json:"patterns,omitempty" koanf:"patterns" toml:"patterns,omitempty"`
 }
 
-// AICommentValidatorConfig configures the AI filler comment validator.
+// AI comment validator modes.
+const (
+	// AICommentModeStrict blocks every in-body comment in source files,
+	// allowing only task markers, machine directives, doc comments on
+	// exported declarations, and comments carrying an EXC: exception token.
+	// This is the default.
+	AICommentModeStrict = "strict"
+
+	// AICommentModeFiller keeps the lenient pattern-based behaviour: only
+	// comments matching a filler pattern (verb-first restatement, etc.) are
+	// blocked.
+	AICommentModeFiller = "filler"
+)
+
+// AICommentValidatorConfig configures the AI comment validator.
 type AICommentValidatorConfig struct {
 	ValidatorConfig `koanf:",squash"`
 
-	// Patterns is a list of regex patterns to detect filler comments.
-	// Default: built-in patterns for throat-clearing phrases (initialize, loop through, etc.)
+	// Mode selects the detection policy: "strict" (default) blocks all
+	// in-body comments in source files except allowed forms; "filler" only
+	// blocks comments matching Patterns. Config, markup, data and shell files
+	// always use pattern-based behaviour regardless of Mode.
+	Mode string `json:"mode,omitempty" koanf:"mode" toml:"mode,omitempty"`
+
+	// Patterns is a list of regex patterns to detect filler comments in
+	// "filler" mode (and in non-source files). Default: built-in patterns for
+	// verb-first restatements (initialize, loop through, etc.)
 	Patterns []string `json:"patterns,omitempty" koanf:"patterns" toml:"patterns,omitempty"`
 }

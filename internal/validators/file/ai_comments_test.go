@@ -125,7 +125,7 @@ count := 0
 				Expect(result.ShouldBlock).To(BeTrue())
 				Expect(
 					result.Message,
-				).To(ContainSubstring("Filler comments that only restate the code are not allowed"))
+				).To(ContainSubstring("Inline comments are not allowed"))
 			})
 
 			It("fails for 'Loop through'", func() {
