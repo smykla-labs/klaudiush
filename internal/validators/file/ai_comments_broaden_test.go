@@ -80,7 +80,36 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		Entry("trailing narration", "x := compute()  // holds the running total"),
 		Entry("doc comment on unexported func",
 			"// helper does the thing.\nfunc helper() {}"),
+		Entry("prose starting with a slash is not a Rust doc",
+			"x := 1\n// /tmp is where we stash it for now"),
 	)
+
+	DescribeTable(
+		"does not mistake markers inside multi-line backtick strings for comments",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			result := v.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		},
+		Entry("go raw string spanning lines with // inside",
+			"q := `SELECT 1\nFROM t -- note\nWHERE u // not a comment`\nreturn q"),
+		Entry("go raw string with # inside",
+			"tmpl := `line one\n# not a comment here\nline three`\nreturn tmpl"),
+	)
+
+	It("allows Rust doc comments (///)", func() {
+		ctx.ToolInput.FilePath = "/repo/lib.rs"
+		ctx.ToolInput.Content = "/// Widget models a thing.\npub struct Widget;"
+		result := v.Validate(context.Background(), ctx)
+		Expect(result.Passed).To(BeTrue())
+	})
+
+	It("keeps .env dotfiles on pattern-based behaviour", func() {
+		ctx.ToolInput.FilePath = "/repo/.env"
+		ctx.ToolInput.Content = "# API host for the beta cohort\nHOST=localhost"
+		result := v.Validate(context.Background(), ctx)
+		Expect(result.Passed).To(BeTrue())
+	})
 
 	DescribeTable(
 		"still flags filler that is not a doc comment",

@@ -366,7 +366,7 @@ type AICommentValidatorConfig struct {
 	// in-body comments in source files except allowed forms; "filler" only
 	// blocks comments matching Patterns. Config, markup, data and shell files
 	// always use pattern-based behaviour regardless of Mode.
-	Mode string `json:"mode,omitempty" koanf:"mode" toml:"mode,omitempty"`
+	Mode string `json:"mode,omitempty" jsonschema:"enum=strict,enum=filler" koanf:"mode" toml:"mode,omitempty"`
 
 	// Patterns is a list of regex patterns to detect filler comments in
 	// "filler" mode (and in non-source files). Default: built-in patterns for

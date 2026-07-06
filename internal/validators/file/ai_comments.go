@@ -59,8 +59,7 @@ var aiTodoMarker = regexp.MustCompile(
 // whitespace trimmed.
 var aiDirectiveMarker = regexp.MustCompile(
 	`(?i)^(` +
-		`[!/]` + // shebang (#!), Rust doc (///), Rust inner doc (//!)
-		`|go:` + // Go compiler directives
+		`go:` + // Go compiler directives
 		`|line\b|export\b` + // cgo //line, //export
 		`|\+build\b` + // legacy build tags
 		`|nolint\b` + // linter pragma
@@ -115,9 +114,12 @@ var aiExportedDecl = regexp.MustCompile(
 // (// or #) that is a real code-level comment, or -1 if the line has none. It
 // tracks single/double/backtick string state so a marker inside a string or URL
 // literal (e.g. the "//" in "https://…" or a " //" inside "a // b") is ignored,
-// and requires the marker to sit at line start or after whitespace.
-func findCommentStart(line string) int {
-	var inSingle, inDouble, inBack bool
+// and requires the marker to sit at line start or after whitespace. inBack is
+// the backtick-string state carried in from the previous line (Go raw strings
+// and JS template literals span lines); the updated state is returned so the
+// caller can thread it. Single/double quotes are treated as line-local.
+func findCommentStart(line string, inBack bool) (idx int, endInBack bool) {
+	var inSingle, inDouble bool
 
 	for i := 0; i < len(line); i++ {
 		c := line[i]
@@ -125,23 +127,31 @@ func findCommentStart(line string) int {
 		switch {
 		case (inSingle || inDouble) && c == '\\':
 			i++ // skip the escaped character
+		case c == '`' && !inSingle && !inDouble:
+			inBack = !inBack
 		case c == '\'' && !inDouble && !inBack:
 			inSingle = !inSingle
 		case c == '"' && !inSingle && !inBack:
 			inDouble = !inDouble
-		case c == '`' && !inSingle && !inDouble:
-			inBack = !inBack
 		case inSingle || inDouble || inBack:
 			// inside a string literal: markers here are not comments
 		case c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
-			return i
+			return i, inBack
 		case c == '/' && i+1 < len(line) && line[i+1] == '/' &&
 			(i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
-			return i
+			return i, inBack
 		}
 	}
 
-	return -1
+	return -1, inBack
+}
+
+// isShebangOrDocMarker reports whether the comment body (marker stripped, not
+// trimmed) is a shebang (#!), a Rust doc comment (///) or a Rust inner doc
+// comment (//!). These sit flush against the marker, so a leading space (an
+// ordinary comment like "// /tmp/foo") is intentionally not matched.
+func isShebangOrDocMarker(body string) bool {
+	return len(body) > 0 && (body[0] == '/' || body[0] == '!')
 }
 
 // commentBody returns the comment text after the marker at idx (the "//" or "#"
@@ -236,7 +246,14 @@ func (v *AICommentValidator) strictForPath(path string) bool {
 		return false
 	}
 
-	return !nonStrictExtensions[strings.ToLower(filepath.Ext(path))]
+	// filepath.Ext(".env") is "" — treat a leading-dot name with no other dot
+	// as its own extension so dotfiles like .env classify correctly.
+	ext := strings.ToLower(filepath.Ext(base))
+	if ext == "" && strings.HasPrefix(base, ".") {
+		ext = base
+	}
+
+	return !nonStrictExtensions[ext]
 }
 
 // findAICommentViolations reports blocked comments. Task markers, machine
@@ -248,8 +265,12 @@ func findAICommentViolations(content string, patterns []*regexp.Regexp, strict b
 
 	lines := strings.Split(content, "\n")
 
+	var inBack bool
+
 	for i, line := range lines {
-		idx := findCommentStart(line)
+		var idx int
+
+		idx, inBack = findCommentStart(line, inBack)
 		if idx < 0 {
 			continue
 		}
@@ -257,6 +278,7 @@ func findAICommentViolations(content string, patterns []*regexp.Regexp, strict b
 		body := commentBody(line, idx)
 
 		if aiTodoMarker.MatchString(body) ||
+			isShebangOrDocMarker(body) ||
 			aiDirectiveMarker.MatchString(strings.TrimLeft(body, " \t")) ||
 			aiExceptionToken.MatchString(body) {
 			continue
