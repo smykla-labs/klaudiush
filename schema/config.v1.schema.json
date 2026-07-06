@@ -13,6 +13,13 @@
         "rules_enabled": {
           "type": "boolean"
         },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "strict",
+            "filler"
+          ]
+        },
         "patterns": {
           "items": {
             "type": "string"
@@ -337,6 +344,45 @@
         "5m"
       ]
     },
+    "ElicitationConfig": {
+      "properties": {
+        "server": {
+          "$ref": "#/$defs/ElicitationServerConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ElicitationServerConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "rules_enabled": {
+          "type": "boolean"
+        },
+        "allowed_servers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "denied_servers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "block_url_mode": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ExceptionAuditConfig": {
       "properties": {
         "enabled": {
@@ -482,6 +528,18 @@
         },
         "ai_comments": {
           "$ref": "#/$defs/AICommentValidatorConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GeminiProviderConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "settings_path": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -923,6 +981,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "block_ai_attribution": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -1074,6 +1135,9 @@
         },
         "codex": {
           "$ref": "#/$defs/CodexProviderConfig"
+        },
+        "gemini": {
+          "$ref": "#/$defs/GeminiProviderConfig"
         }
       },
       "additionalProperties": false,
@@ -1097,6 +1161,12 @@
           "type": "array"
         },
         "allowed_remote_priority": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "blocked_branches": {
           "items": {
             "type": "string"
           },
@@ -1198,7 +1268,8 @@
           "type": "string",
           "enum": [
             "claude",
-            "codex"
+            "codex",
+            "gemini"
           ]
         },
         "repo_pattern": {
@@ -1276,12 +1347,17 @@
             "session_start",
             "turn_stop",
             "notification",
+            "pre_compress",
             "PreToolUse",
             "PostToolUse",
             "Notification",
             "SessionStart",
             "Stop",
-            "AfterToolUse"
+            "AfterToolUse",
+            "BeforeTool",
+            "AfterTool",
+            "SessionEnd",
+            "PreCompress"
           ]
         },
         "case_insensitive": {
@@ -1513,6 +1589,21 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "UpdateCheckConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "check_interval": {
+          "$ref": "#/$defs/Duration"
+        },
+        "notify": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ValidatorsConfig": {
       "properties": {
         "git": {
@@ -1532,6 +1623,9 @@
         },
         "shell": {
           "$ref": "#/$defs/ShellConfig"
+        },
+        "elicitation": {
+          "$ref": "#/$defs/ElicitationConfig"
         }
       },
       "additionalProperties": false,
@@ -1607,6 +1701,9 @@
     },
     "overrides": {
       "$ref": "#/$defs/OverridesConfig"
+    },
+    "update_check": {
+      "$ref": "#/$defs/UpdateCheckConfig"
     }
   },
   "additionalProperties": false,

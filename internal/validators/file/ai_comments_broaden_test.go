@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/smykla-skalski/klaudiush/internal/validators/file"
+	"github.com/smykla-skalski/klaudiush/pkg/config"
 	"github.com/smykla-skalski/klaudiush/pkg/hook"
 	"github.com/smykla-skalski/klaudiush/pkg/logger"
 )
@@ -43,7 +44,7 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 	)
 
 	DescribeTable(
-		"allows comments that are not filler",
+		"allows markers, directives and doc comments",
 		func(content string) {
 			ctx.ToolInput.Content = content
 			result := v.Validate(context.Background(), ctx)
@@ -51,13 +52,64 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		},
 		Entry("TODO marker", "// TODO: return the cached value\nreturn nil"),
 		Entry("FIXME marker", "// FIXME handle the retry path\nx := 1"),
+		Entry("NOTE marker", "// NOTE: keep in sync with the proto\nx := 1"),
 		Entry("exported Go func doc",
 			"// Returns the user for the given id.\nfunc GetUser(id string) *User { return nil }"),
 		Entry("exported JS function",
 			"// Creates a new widget instance.\nexport function makeWidget() {}"),
-		Entry("why comment",
-			"// Guard against nil to avoid a shutdown panic.\nif cli == nil {\n}"),
+		Entry("go:generate directive", "//go:generate mockgen -source=x.go\nx := 1"),
+		Entry("go:build constraint", "//go:build linux\npackage foo"),
+		Entry("exception token escape hatch",
+			"// EXC:FILE011:documents-a-load-bearing-invariant here\nreturn true"),
 	)
+
+	DescribeTable(
+		"strict mode blocks in-body prose that no pattern would catch",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			result := v.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		},
+		Entry("why comment", "// Guard against nil to avoid a shutdown panic.\nif cli == nil {\n}"),
+		Entry("multi-line rationalization",
+			"return false\n"+
+				"// Unreadable store: assume a tracker exists. Claiming this stub as\n"+
+				"// the only record would mint a second task for the same issue — the\n"+
+				"// exact duplication this helper prevents; a mislabeled stub is cheaper.\n"+
+				"s.logger.Error(\"scan\")"),
+		Entry("trailing narration", "x := compute()  // holds the running total"),
+		Entry("doc comment on unexported func",
+			"// helper does the thing.\nfunc helper() {}"),
+		Entry("prose starting with a slash is not a Rust doc",
+			"x := 1\n// /tmp is where we stash it for now"),
+	)
+
+	DescribeTable(
+		"does not mistake markers inside multi-line backtick strings for comments",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			result := v.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		},
+		Entry("go raw string spanning lines with // inside",
+			"q := `SELECT 1\nFROM t -- note\nWHERE u // not a comment`\nreturn q"),
+		Entry("go raw string with # inside",
+			"tmpl := `line one\n# not a comment here\nline three`\nreturn tmpl"),
+	)
+
+	It("allows Rust doc comments (///)", func() {
+		ctx.ToolInput.FilePath = "/repo/lib.rs"
+		ctx.ToolInput.Content = "/// Widget models a thing.\npub struct Widget;"
+		result := v.Validate(context.Background(), ctx)
+		Expect(result.Passed).To(BeTrue())
+	})
+
+	It("keeps .env dotfiles on pattern-based behaviour", func() {
+		ctx.ToolInput.FilePath = "/repo/.env"
+		ctx.ToolInput.Content = "# API host for the beta cohort\nHOST=localhost"
+		result := v.Validate(context.Background(), ctx)
+		Expect(result.Passed).To(BeTrue())
+	})
 
 	DescribeTable(
 		"still flags filler that is not a doc comment",
@@ -84,5 +136,46 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 			`u := "http://config.example.com/handle"`),
 		Entry("hash inside string literal",
 			`color := "#set0aa"`),
+		Entry("double-slash inside string literal",
+			`msg := "before // after"`),
 	)
+
+	DescribeTable(
+		"config/markup/data/shell files keep pattern-based behaviour",
+		func(path string) {
+			ctx.ToolInput.FilePath = path
+			ctx.ToolInput.Content = "# Feature flag for the beta cohort\nfoo = true"
+			result := v.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		},
+		Entry("toml config", "/repo/config.toml"),
+		Entry("yaml config", "/repo/values.yaml"),
+		Entry("shell script", "/repo/setup.sh"),
+		Entry("Makefile", "/repo/Makefile"),
+	)
+
+	It("strict mode blocks in-body comments in a .go file", func() {
+		ctx.ToolInput.FilePath = "/repo/svc.go"
+		ctx.ToolInput.Content = "x := f()\n// holds the running total"
+		result := v.Validate(context.Background(), ctx)
+		Expect(result.Passed).To(BeFalse())
+	})
+
+	It("filler mode opt-out allows a plain why comment", func() {
+		fv := file.NewAICommentValidator(
+			logger.NewNoOpLogger(),
+			&config.AICommentValidatorConfig{Mode: config.AICommentModeFiller},
+			nil,
+		)
+		fctx := &hook.Context{
+			EventType: hook.EventTypePreToolUse,
+			ToolName:  hook.ToolTypeWrite,
+			ToolInput: hook.ToolInput{
+				FilePath: "/repo/svc.go",
+				Content:  "// Guard against nil to avoid a panic.\nif c == nil {\n}",
+			},
+		}
+		result := fv.Validate(context.Background(), fctx)
+		Expect(result.Passed).To(BeTrue())
+	})
 })

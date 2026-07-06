@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -46,9 +47,54 @@ var defaultAICommentPatterns = []string{
 // These carry intent ("what still needs doing") rather than restating code and
 // are always allowed.
 var aiTodoMarker = regexp.MustCompile(
-	`(?i)^\s*(TODO|FIXME|HACK|XXX|BUG|WARNING|` +
+	`(?i)^\s*(TODO|FIXME|HACK|XXX|BUG|WARNING|NOTE|` +
 		`OPTIMI[SZ]E|REVIEW|DEPRECATED)\b|^\s*@\w+`,
 )
+
+// aiDirectiveMarker matches machine-readable directives and interpreter hints
+// that must never be treated as prose: shebangs, build constraints, codegen and
+// linter pragmas, and character-encoding cookies. These are load-bearing
+// (flagging them would break compilation or tooling), so they are always
+// allowed regardless of policy. Matched against the comment body with leading
+// whitespace trimmed.
+var aiDirectiveMarker = regexp.MustCompile(
+	`(?i)^(` +
+		`go:` + // Go compiler directives
+		`|line\b|export\b` + // cgo //line, //export
+		`|\+build\b` + // legacy build tags
+		`|nolint\b` + // linter pragma
+		`|-\*-|coding[:=]` + // character-encoding cookie
+		`|type:|noqa\b|pragma\b` + // Python type/coverage pragmas
+		`|(py(lint|right)|mypy|flake8|ruff|isort|fmt):` +
+		`|shellcheck\b|swiftlint:` +
+		`|eslint-|@ts-|prettier-ignore|biome-ignore|oxlint-|istanbul\b|c8\b|@flow\b` +
+		`)`,
+)
+
+// aiExceptionToken matches an inline EXC:<CODE>:<reason> escape token, letting a
+// genuinely load-bearing comment opt out of the block. Mirrors the exception
+// token format used elsewhere (see internal/exceptions).
+var aiExceptionToken = regexp.MustCompile(`(?:^|\s)EXC:[A-Z]{2,10}[0-9]{1,5}:\S`)
+
+// nonStrictExtensions are file types whose comments are ordinarily
+// human-authored documentation (config, markup, data, shell) rather than inline
+// code narration. For these the validator keeps pattern-based behaviour instead
+// of the strict block-all policy.
+var nonStrictExtensions = map[string]bool{
+	".toml": true, ".yaml": true, ".yml": true, ".json": true, ".jsonc": true,
+	".json5": true, ".md": true, ".markdown": true, ".mdx": true, ".txt": true,
+	".rst": true, ".ini": true, ".cfg": true, ".conf": true, ".config": true,
+	".env": true, ".properties": true, ".lock": true, ".csv": true, ".tsv": true,
+	".xml": true, ".html": true, ".htm": true, ".svg": true, ".sql": true,
+	".mk": true, ".sh": true, ".bash": true, ".zsh": true, ".fish": true,
+	".ksh": true, ".ps1": true,
+}
+
+// nonStrictBasenames are extension-less files whose comments are documentation.
+var nonStrictBasenames = map[string]bool{
+	"makefile": true, "gnumakefile": true, "dockerfile": true,
+	".gitignore": true, ".dockerignore": true, ".gitattributes": true,
+}
 
 // aiExportedDecl matches a source line that declares an exported/public symbol.
 // A leading comment block directly above such a line is its documentation and
@@ -64,13 +110,64 @@ var aiExportedDecl = regexp.MustCompile(
 		`)`,
 )
 
-// aiCommentMarker locates the start of a // or # comment on a line. It anchors
-// to line start or whitespace so markers inside string/URL literals (e.g. the
-// "//" in "https://…") are not treated as comments.
-var aiCommentMarker = regexp.MustCompile(`(^\s*|\s)(//|#)`)
+// findCommentStart returns the byte index of the first line-comment marker
+// (// or #) that is a real code-level comment, or -1 if the line has none. It
+// tracks single/double/backtick string state so a marker inside a string or URL
+// literal (e.g. the "//" in "https://…" or a " //" inside "a // b") is ignored,
+// and requires the marker to sit at line start or after whitespace. inBack is
+// the backtick-string state carried in from the previous line (Go raw strings
+// and JS template literals span lines); the updated state is returned so the
+// caller can thread it. Single/double quotes are treated as line-local.
+func findCommentStart(line string, inBack bool) (idx int, endInBack bool) {
+	var inSingle, inDouble bool
 
-// AICommentValidator flags filler comments that only restate adjacent code,
-// a pattern common in LLM-generated output.
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+
+		switch {
+		case (inSingle || inDouble) && c == '\\':
+			i++ // skip the escaped character
+		case c == '`' && !inSingle && !inDouble:
+			inBack = !inBack
+		case c == '\'' && !inDouble && !inBack:
+			inSingle = !inSingle
+		case c == '"' && !inSingle && !inBack:
+			inDouble = !inDouble
+		case inSingle || inDouble || inBack:
+			// inside a string literal: markers here are not comments
+		case c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
+			return i, inBack
+		case c == '/' && i+1 < len(line) && line[i+1] == '/' &&
+			(i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
+			return i, inBack
+		}
+	}
+
+	return -1, inBack
+}
+
+// isShebangOrDocMarker reports whether the comment body (marker stripped, not
+// trimmed) is a shebang (#!), a Rust doc comment (///) or a Rust inner doc
+// comment (//!). These sit flush against the marker, so a leading space (an
+// ordinary comment like "// /tmp/foo") is intentionally not matched.
+func isShebangOrDocMarker(body string) bool {
+	return len(body) > 0 && (body[0] == '/' || body[0] == '!')
+}
+
+// commentBody returns the comment text after the marker at idx (the "//" or "#"
+// characters stripped), preserving any leading whitespace.
+func commentBody(line string, idx int) string {
+	if line[idx] == '#' {
+		return line[idx+1:]
+	}
+
+	return line[idx+2:]
+}
+
+// AICommentValidator flags in-body comments. In strict mode (default) it blocks
+// every comment in a source file except task markers, machine directives, doc
+// comments on exported declarations, and comments carrying an EXC: token. In
+// filler mode it blocks only comments matching the configured patterns.
 type AICommentValidator struct {
 	validator.BaseValidator
 	config   *config.AICommentValidatorConfig
@@ -96,8 +193,15 @@ func NewAICommentValidator(
 // aiCommentHeader is the message header shown when a filler comment is blocked.
 const aiCommentHeader = "Filler comments that only restate the code are not allowed"
 
-// Validate checks for filler comments that restate adjacent code, allowing
-// task markers and doc comments on exported declarations.
+// aiCommentStrictHeader is shown when strict mode blocks an in-body comment.
+const aiCommentStrictHeader = "Inline comments are not allowed — write self-explanatory code instead.\n" +
+	"Allowed: TODO/FIXME/NOTE markers, doc comments on exported declarations,\n" +
+	"and machine directives. To keep a load-bearing comment, append an\n" +
+	"exception token, e.g. // EXC:FILE011:documents-a-non-obvious-invariant."
+
+// Validate blocks in-body comments per the configured mode, exempting task
+// markers, machine directives, doc comments on exported declarations, and
+// comments carrying an EXC: token.
 func (v *AICommentValidator) Validate(
 	ctx context.Context,
 	hookCtx *hook.Context,
@@ -111,35 +215,85 @@ func (v *AICommentValidator) Validate(
 		return validator.Pass()
 	}
 
-	violations := findAICommentViolations(content, v.patterns)
+	strict := v.strictForPath(hookCtx.GetFilePath())
+
+	violations := findAICommentViolations(content, v.patterns, strict)
 	if len(violations) == 0 {
 		return validator.Pass()
 	}
 
+	header := aiCommentHeader
+	if strict {
+		header = aiCommentStrictHeader
+	}
+
 	return validator.FailWithRef(
 		validator.RefAIComments,
-		formatPatternViolations(aiCommentHeader, violations),
+		formatPatternViolations(header, violations),
 	)
 }
 
-// findAICommentViolations reports filler comments while exempting task markers
-// and documentation on exported declarations.
-func findAICommentViolations(content string, patterns []*regexp.Regexp) []violation {
+// strictForPath reports whether the strict block-all policy applies to the given
+// file. Filler mode disables it, and config/markup/data/shell files always use
+// pattern-based behaviour so their ordinary documentation comments are allowed.
+func (v *AICommentValidator) strictForPath(path string) bool {
+	if v.config != nil && v.config.Mode == config.AICommentModeFiller {
+		return false
+	}
+
+	base := strings.ToLower(filepath.Base(path))
+	if nonStrictBasenames[base] {
+		return false
+	}
+
+	// filepath.Ext(".env") is "" — treat a leading-dot name with no other dot
+	// as its own extension so dotfiles like .env classify correctly.
+	ext := strings.ToLower(filepath.Ext(base))
+	if ext == "" && strings.HasPrefix(base, ".") {
+		ext = base
+	}
+
+	return !nonStrictExtensions[ext]
+}
+
+// findAICommentViolations reports blocked comments. Task markers, machine
+// directives, exception tokens, and doc comments on exported declarations are
+// always exempt. In strict mode every other comment is a violation; in filler
+// mode only comments matching a pattern are.
+func findAICommentViolations(content string, patterns []*regexp.Regexp, strict bool) []violation {
 	var violations []violation
 
 	lines := strings.Split(content, "\n")
 
+	var inBack bool
+
 	for i, line := range lines {
-		loc := aiCommentMarker.FindStringIndex(line)
-		if loc == nil {
+		var idx int
+
+		idx, inBack = findCommentStart(line, inBack)
+		if idx < 0 {
 			continue
 		}
 
-		if aiTodoMarker.MatchString(line[loc[1]:]) {
+		body := commentBody(line, idx)
+
+		if aiTodoMarker.MatchString(body) ||
+			isShebangOrDocMarker(body) ||
+			aiDirectiveMarker.MatchString(strings.TrimLeft(body, " \t")) ||
+			aiExceptionToken.MatchString(body) {
 			continue
 		}
 
 		if isFullLineComment(line) && precedesExportedDecl(lines, i) {
+			continue
+		}
+
+		if strict {
+			violations = append(violations, violation{
+				line:      i + 1,
+				directive: strings.TrimSpace(line[idx:]),
+			})
+
 			continue
 		}
 
