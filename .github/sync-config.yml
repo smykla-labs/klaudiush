@@ -26,6 +26,14 @@ sync:
           extends:
             - "customManagers:githubActionsVersions"
           packageRules:
+            - description: "Group Go version updates from gomod and mise into a single PR"
+              groupName: "go version"
+              matchDepNames:
+                - go
+              matchManagers:
+                - gomod
+                - mise
+              rangeStrategy: bump
             - description: "Group Charm Go modules"
               groupName: "Charm modules"
               matchManagers:
