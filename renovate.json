@@ -1,5 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "automergeStrategy": "squash",
   "extends": [
     "config:best-practices",
     ":semanticCommits",
@@ -13,19 +14,18 @@
     ":automergeLinters",
     ":automergeTesters",
     ":prConcurrentLimit20",
-    "customManagers:githubActionsVersions",
     "helpers:pinGitHubActionDigests",
     "security:openssf-scorecard",
-    "group:linters"
+    "group:linters",
+    "customManagers:githubActionsVersions"
   ],
+  "gitIgnoredAuthors": ["205507218+smyklot[bot]@users.noreply.github.com"],
   "ignorePaths": [
     "**/tmp/**",
     ".github/workflows/smyklot-pr-commands.yml",
     ".github/workflows/smyklot-poll.yml"
   ],
   "osvVulnerabilityAlerts": true,
-  "gitIgnoredAuthors": ["205507218+smyklot[bot]@users.noreply.github.com"],
-  "automergeStrategy": "squash",
   "packageRules": [
     {
       "addLabels": ["area/ci"],
@@ -46,32 +46,29 @@
         " Group dependency bumps from selected GitHub sources into a single PR across managers",
         " (e.g., mise and gomod) to avoid separate PRs per manager"
       ],
-      "matchSourceUrls": ["https://github.com/{onsi/ginkgo,golangci/golangci-lint}"],
-      "groupName": "{{{replace 'https://github\\.com/[a-z-]+/' '' sourceUrl}}}"
+      "groupName": "{{{replace 'https://github\\.com/[a-z-]+/' '' sourceUrl}}}",
+      "matchSourceUrls": [
+        "https://github.com/{onsi/ginkgo,golangci/golangci-lint}"
+      ]
     },
     {
-      "description": "Enable Go version updates in go.mod",
-      "matchManagers": ["gomod"],
+      "description": "Group Go version updates from gomod and mise into a single PR",
+      "groupName": "go version",
       "matchDepNames": ["go"],
+      "matchManagers": ["gomod", "mise"],
       "rangeStrategy": "bump"
-    },
-    {
-      "description": "Group Go version updates across mise and go.mod",
-      "groupName": "Go",
-      "matchPackageNames": ["go"],
-      "matchDatasources": ["golang-version"]
-    },
-    {
-      "description": "Group Charm Go modules",
-      "groupName": "Charm modules",
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["/^charm\\.land\\//"]
     },
     {
       "description": "Smyklot action managed by sync-smyklot workflow",
       "enabled": false,
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["smykla-skalski/smyklot"]
+    },
+    {
+      "description": "Group Charm Go modules",
+      "groupName": "Charm modules",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["/^charm\\.land\\//"]
     },
     {
       "description": "Update go-git only on Monday mornings (using pinned commit SHAs as v6 is not yet GA)",
