@@ -89,7 +89,7 @@ type CommitMessageConfig struct {
 	// Default: true
 	BlockPRReferences *bool `json:"block_pr_references,omitempty" koanf:"block_pr_references" toml:"block_pr_references,omitempty"`
 
-	// BlockAIAttribution blocks Claude AI attribution in commit messages.
+	// BlockAIAttribution blocks AI attribution in commit messages.
 	// Default: true
 	BlockAIAttribution *bool `json:"block_ai_attribution,omitempty" koanf:"block_ai_attribution" toml:"block_ai_attribution,omitempty"`
 
@@ -217,8 +217,8 @@ type PRValidatorConfig struct {
 	// Default: ["\\btmp/", "\\btmp\\b"] (blocks mentions of tmp directory)
 	ForbiddenPatterns []string `json:"forbidden_patterns,omitempty" koanf:"forbidden_patterns" toml:"forbidden_patterns,omitempty"`
 
-	// BlockAIAttribution blocks Claude AI attribution in PR title and body
-	// (e.g. "Generated with Claude Code" or a Claude markdown footer link).
+	// BlockAIAttribution blocks AI attribution in PR title and body
+	// (e.g. "Generated with Claude Code" or an AI markdown footer link).
 	// Default: true
 	BlockAIAttribution *bool `json:"block_ai_attribution,omitempty" koanf:"block_ai_attribution" toml:"block_ai_attribution,omitempty"`
 }
@@ -290,7 +290,7 @@ type MergeMessageConfig struct {
 	// Default: true
 	BlockPRReferences *bool `json:"block_pr_references,omitempty" koanf:"block_pr_references" toml:"block_pr_references,omitempty"`
 
-	// BlockAIAttribution blocks Claude AI attribution in PR body.
+	// BlockAIAttribution blocks AI attribution in PR body.
 	// Default: true
 	BlockAIAttribution *bool `json:"block_ai_attribution,omitempty" koanf:"block_ai_attribution" toml:"block_ai_attribution,omitempty"`
 

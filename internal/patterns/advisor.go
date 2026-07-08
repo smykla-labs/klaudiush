@@ -33,7 +33,7 @@ var codeDescriptions = map[string]string{
 	"GIT009":   "file not found",
 	codeGIT010: "missing flags",
 	"GIT011":   "PR ref in commit",
-	"GIT012":   "Claude attribution",
+	"GIT012":   "AI attribution",
 	codeGIT013: "conventional format",
 	"GIT014":   "forbidden pattern",
 	"GIT015":   "signoff mismatch",

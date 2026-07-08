@@ -17,7 +17,7 @@ var DefaultSuggestions = map[Reference]string{
 	RefGitNoBranch:           "Specify branch: git push <remote> <branch>",
 	RefGitFileNotExist:       "Verify the file exists before adding",
 	RefGitPRRef:              "Remove PR reference from commit message (use in PR body instead)",
-	RefGitClaudeAttr:         "Remove Claude attribution from commit message",
+	RefGitClaudeAttr:         "Remove AI attribution from commit message",
 	RefGitConventionalCommit: "Use format: type(scope): description (total title must be under 50 chars)",
 	RefGitForbiddenPattern:   "Remove forbidden pattern from commit message",
 	RefGitSignoffMismatch:    "Use correct signoff identity: git config user.name and user.email",
@@ -44,6 +44,7 @@ var DefaultSuggestions = map[Reference]string{
 	RefOxlintCheck:  "Run 'oxlint <file>' to see JavaScript/TypeScript code quality issues",
 	RefRustfmtCheck: "Run 'rustfmt <file>' to auto-fix formatting",
 	RefLinterIgnore: "Fix linter errors properly instead of suppressing them with ignore directives",
+	RefAIComments:   "Remove the comment or replace it with one that explains why, not what",
 
 	// Security suggestions
 	RefSecretsAPIKey:     "Remove API key and use environment variables or secret management",

@@ -848,6 +848,66 @@ EOF
 			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
 		})
 
+		It("should fail with Copilot attribution footer in body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+🤖 Generated with [GitHub Copilot](https://github.com/features/copilot)
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+		})
+
+		It("should fail with Codex attribution footer in body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body "$(cat <<'EOF'
+# PR Title
+
+## Motivation
+
+New feature description
+
+## Implementation information
+
+- Added endpoint
+- Updated documentation
+
+## Supporting documentation
+
+🤖 Generated with [Codex](https://openai.com/codex)
+EOF
+)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+		})
+
 		It("should fail with plain AI attribution phrase in body", func() {
 			ctx := &hook.Context{
 				EventType: hook.EventTypePreToolUse,

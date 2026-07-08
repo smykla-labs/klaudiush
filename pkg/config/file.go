@@ -29,6 +29,9 @@ type FileConfig struct {
 
 	// LinterIgnore validator configuration
 	LinterIgnore *LinterIgnoreValidatorConfig `json:"linter_ignore,omitempty" koanf:"linter_ignore" toml:"linter_ignore,omitempty"`
+
+	// AIComments validator configuration
+	AIComments *AICommentValidatorConfig `json:"ai_comments,omitempty" koanf:"ai_comments" toml:"ai_comments,omitempty"`
 }
 
 // MarkdownValidatorConfig configures the Markdown file validator.
@@ -338,5 +341,35 @@ type LinterIgnoreValidatorConfig struct {
 
 	// Patterns is a list of regex patterns to detect linter ignore directives.
 	// Default: built-in patterns for common languages (noqa, eslint-disable, nolint, etc.)
+	Patterns []string `json:"patterns,omitempty" koanf:"patterns" toml:"patterns,omitempty"`
+}
+
+// AI comment validator modes.
+const (
+	// AICommentModeStrict blocks every in-body comment in source files,
+	// allowing only task markers, machine directives, doc comments on
+	// exported declarations, and comments carrying an EXC: exception token.
+	// This is the default.
+	AICommentModeStrict = "strict"
+
+	// AICommentModeFiller keeps the lenient pattern-based behaviour: only
+	// comments matching a filler pattern (verb-first restatement, etc.) are
+	// blocked.
+	AICommentModeFiller = "filler"
+)
+
+// AICommentValidatorConfig configures the AI comment validator.
+type AICommentValidatorConfig struct {
+	ValidatorConfig `koanf:",squash"`
+
+	// Mode selects the detection policy: "strict" (default) blocks all
+	// in-body comments in source files except allowed forms; "filler" only
+	// blocks comments matching Patterns. Config, markup, data and shell files
+	// always use pattern-based behaviour regardless of Mode.
+	Mode string `json:"mode,omitempty" jsonschema:"enum=strict,enum=filler" koanf:"mode" toml:"mode,omitempty"`
+
+	// Patterns is a list of regex patterns to detect filler comments in
+	// "filler" mode (and in non-source files). Default: built-in patterns for
+	// verb-first restatements (initialize, loop through, etc.)
 	Patterns []string `json:"patterns,omitempty" koanf:"patterns" toml:"patterns,omitempty"`
 }
