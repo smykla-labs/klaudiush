@@ -26,6 +26,12 @@ sync:
           extends:
             - "customManagers:githubActionsVersions"
           packageRules:
+            - description: "Group Charm Go modules"
+              groupName: "Charm modules"
+              matchManagers:
+                - gomod
+              matchPackageNames:
+                - "/^charm\\.land\\//"
             - description: "Update go-git only on Monday mornings (using pinned commit SHAs as v6 is not yet GA)"
               extends:
                 - "schedule:earlyMondays"
