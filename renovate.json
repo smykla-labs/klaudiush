@@ -62,6 +62,12 @@
       "matchDatasources": ["golang-version"]
     },
     {
+      "description": "Group Charm Go modules",
+      "groupName": "Charm modules",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["/^charm\\.land\\//"]
+    },
+    {
       "description": "Smyklot action managed by sync-smyklot workflow",
       "enabled": false,
       "matchManagers": ["github-actions"],
