@@ -116,7 +116,7 @@ var aiDocDecl = regexp.MustCompile(
 	`^\s*(` +
 		`package\s+[A-Za-z_]` + // Go package doc
 		`|func\s+(\([^)]*\)\s*)?[A-Za-z_]` + // Go func or method
-		`|type\s+[A-Za-z_]` + // Go type
+		`|type\s+(\(|[A-Za-z_])` + // Go type or block
 		`|(const|var)\s+(\(|[A-Za-z_])` + // Go const/var or block
 		`|export\b` + // JS/TS export
 		`|(async\s+)?(def|class)\s+[A-Za-z_]` + // Python def/class

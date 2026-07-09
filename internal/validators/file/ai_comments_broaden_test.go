@@ -62,6 +62,8 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 				"func (s *statsCallbacks) maybeReportWindowDepletion(last lastSend) {}"),
 		Entry("Go package doc",
 			"// Package dispatcher validates hook events.\npackage dispatcher"),
+		Entry("Go type block doc",
+			"// Returns known validation states.\ntype (\n\tvalidationState string\n)"),
 		Entry("private Python def doc",
 			"# Returns the configured value.\ndef _get_value():\n    return value"),
 		Entry("exported JS function",
