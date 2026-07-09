@@ -26,6 +26,14 @@ sync:
           extends:
             - "customManagers:githubActionsVersions"
           packageRules:
+            - description: "Group golang.org/x Go modules"
+              groupName: "golang.org/x modules"
+              matchDepTypes:
+                - require
+              matchManagers:
+                - gomod
+              matchPackageNames:
+                - "/^golang\\.org\\/x\\//"
             - description: "Group Charm Go modules"
               groupName: "Charm modules"
               matchManagers:
