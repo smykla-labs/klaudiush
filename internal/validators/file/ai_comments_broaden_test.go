@@ -191,6 +191,18 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		Expect(result.Passed).To(BeTrue())
 	})
 
+	It("does not allow BDD phase markers as trailing comments in strict mode", func() {
+		sv := file.NewAICommentValidator(
+			logger.NewNoOpLogger(),
+			&config.AICommentValidatorConfig{Mode: config.AICommentModeStrict},
+			nil,
+		)
+		ctx.ToolInput.FilePath = "/repo/svc_test.go"
+		ctx.ToolInput.Content = "seed() // given a cached response"
+		result := sv.Validate(context.Background(), ctx)
+		Expect(result.Passed).To(BeFalse())
+	})
+
 	It("explicit strict mode blocks in-body comments in a .go file", func() {
 		sv := file.NewAICommentValidator(
 			logger.NewNoOpLogger(),

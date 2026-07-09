@@ -313,7 +313,8 @@ func findAICommentViolations(
 			continue
 		}
 
-		if allowTestPhaseMarkers && aiTestPhaseMarker.MatchString(body) {
+		if allowTestPhaseMarkers && isFullLineComment(line) &&
+			aiTestPhaseMarker.MatchString(body) {
 			continue
 		}
 
