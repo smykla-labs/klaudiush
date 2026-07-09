@@ -347,12 +347,11 @@ type LinterIgnoreValidatorConfig struct {
 // AI comment validator modes.
 const (
 	// AICommentModeStrict blocks every in-body comment in source files,
-	// allowing only task markers, machine directives, doc comments on
-	// exported declarations, and comments carrying an EXC: exception token.
-	// This is the default.
+	// allowing only task markers, machine directives, doc comments, Go test
+	// phase markers, and comments carrying an EXC: exception token.
 	AICommentModeStrict = "strict"
 
-	// AICommentModeFiller keeps the lenient pattern-based behaviour: only
+	// AICommentModeFiller keeps the default pattern-based behaviour: only
 	// comments matching a filler pattern (verb-first restatement, etc.) are
 	// blocked.
 	AICommentModeFiller = "filler"
@@ -362,8 +361,8 @@ const (
 type AICommentValidatorConfig struct {
 	ValidatorConfig `koanf:",squash"`
 
-	// Mode selects the detection policy: "strict" (default) blocks all
-	// in-body comments in source files except allowed forms; "filler" only
+	// Mode selects the detection policy: "strict" blocks all in-body comments
+	// in source files except allowed forms; "filler" (default when unset) only
 	// blocks comments matching Patterns. Config, markup, data and shell files
 	// always use pattern-based behaviour regardless of Mode.
 	Mode string `json:"mode,omitempty" jsonschema:"enum=strict,enum=filler" koanf:"mode" toml:"mode,omitempty"`

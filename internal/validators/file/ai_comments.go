@@ -38,10 +38,17 @@ var defaultAICommentPatterns = []string{
 		`(e|es|ed|d|s|ing|ping|ting|ning|ling|ging|ies|ied|y)?\b`,
 	// "This function/method/... does/is/handles/..." restatements.
 	`(?i)(^\s*|\s)(//|#)\s*this\s+(function|method|class|struct|interface|type|` +
-		`variable|field|constant|value|helper|wrapper)\s+` +
+		`variable|field|constant|value|helper|wrapper|package)\s+` +
 		`(does|is|are|will|handles?|returns?|sets?|gets?|` +
-		`represents?|holds?|stores?|contains?)\b`,
+		`represents?|holds?|stores?|contains?|provides?)\b`,
 }
+
+// aiGenericDocComment matches doc comments that avoid the declaration name and
+// instead narrate the declaration kind. These are still filler comments.
+var aiGenericDocComment = regexp.MustCompile(
+	`(?i)^\s*this\s+(function|method|class|struct|interface|type|` +
+		`variable|field|constant|value|helper|wrapper|package)\b`,
+)
 
 // aiTodoMarker matches a comment that opens with a task or annotation marker.
 // These carry intent ("what still needs doing") rather than restating code and
@@ -49,6 +56,12 @@ var defaultAICommentPatterns = []string{
 var aiTodoMarker = regexp.MustCompile(
 	`(?i)^\s*(TODO|FIXME|HACK|XXX|BUG|WARNING|NOTE|` +
 		`OPTIMI[SZ]E|REVIEW|DEPRECATED)\b|^\s*@\w+`,
+)
+
+// aiTestPhaseMarker matches BDD-style phase markers commonly used in tests.
+// They structure test intent rather than narrating implementation details.
+var aiTestPhaseMarker = regexp.MustCompile(
+	`(?i)^\s*(given|when|then|arrange|act|assert)\b`,
 )
 
 // aiDirectiveMarker matches machine-readable directives and interpreter hints
@@ -96,17 +109,17 @@ var nonStrictBasenames = map[string]bool{
 	".gitignore": true, ".dockerignore": true, ".gitattributes": true,
 }
 
-// aiExportedDecl matches a source line that declares an exported/public symbol.
+// aiDocDecl matches a source line that declares a symbol or package.
 // A leading comment block directly above such a line is its documentation and
-// is allowed even when it opens with a verb (Go requires doc comments on
-// exported identifiers).
-var aiExportedDecl = regexp.MustCompile(
+// is allowed even when it opens with a verb.
+var aiDocDecl = regexp.MustCompile(
 	`^\s*(` +
-		`func\s+(\([^)]*\)\s*)?[A-Z]` + // Go exported func or method
-		`|type\s+[A-Z]` + // Go exported type
-		`|(const|var)\s+[A-Z]` + // Go exported const/var
+		`package\s+[A-Za-z_]` + // Go package doc
+		`|func\s+(\([^)]*\)\s*)?[A-Za-z_]` + // Go func or method
+		`|type\s+(\(|[A-Za-z_])` + // Go type or block
+		`|(const|var)\s+(\(|[A-Za-z_])` + // Go const/var or block
 		`|export\b` + // JS/TS export
-		`|(async\s+)?(def|class)\s+[A-Za-z]` + // Python def/class (public: no leading _)
+		`|(async\s+)?(def|class)\s+[A-Za-z_]` + // Python def/class
 		`)`,
 )
 
@@ -164,10 +177,10 @@ func commentBody(line string, idx int) string {
 	return line[idx+2:]
 }
 
-// AICommentValidator flags in-body comments. In strict mode (default) it blocks
-// every comment in a source file except task markers, machine directives, doc
-// comments on exported declarations, and comments carrying an EXC: token. In
-// filler mode it blocks only comments matching the configured patterns.
+// AICommentValidator flags in-body comments. In strict mode it blocks every
+// comment in a source file except task markers, machine directives, doc
+// comments, Go test phase markers, and comments carrying an EXC: token. In filler
+// mode it blocks only comments matching the configured patterns.
 type AICommentValidator struct {
 	validator.BaseValidator
 	config   *config.AICommentValidatorConfig
@@ -195,13 +208,14 @@ const aiCommentHeader = "Filler comments that only restate the code are not allo
 
 // aiCommentStrictHeader is shown when strict mode blocks an in-body comment.
 const aiCommentStrictHeader = "Inline comments are not allowed — write self-explanatory code instead.\n" +
-	"Allowed: TODO/FIXME/NOTE markers, doc comments on exported declarations,\n" +
-	"and machine directives. To keep a load-bearing comment, append an\n" +
-	"exception token, e.g. // EXC:FILE011:documents-a-non-obvious-invariant."
+	"Allowed: task/annotation markers, non-generic declaration doc comments,\n" +
+	"standalone Go *_test.go phase markers, and machine directives. To keep a\n" +
+	"comment, append an exception token, e.g.\n" +
+	"// EXC:FILE011:documents-a-non-obvious-invariant."
 
 // Validate blocks in-body comments per the configured mode, exempting task
-// markers, machine directives, doc comments on exported declarations, and
-// comments carrying an EXC: token.
+// markers, machine directives, doc comments, Go test phase markers, and comments
+// carrying an EXC: token.
 func (v *AICommentValidator) Validate(
 	ctx context.Context,
 	hookCtx *hook.Context,
@@ -215,9 +229,11 @@ func (v *AICommentValidator) Validate(
 		return validator.Pass()
 	}
 
-	strict := v.strictForPath(hookCtx.GetFilePath())
+	path := hookCtx.GetFilePath()
+	strict := v.strictForPath(path)
+	allowTestPhaseMarkers := allowsTestPhaseMarkers(path)
 
-	violations := findAICommentViolations(content, v.patterns, strict)
+	violations := findAICommentViolations(content, v.patterns, strict, allowTestPhaseMarkers)
 	if len(violations) == 0 {
 		return validator.Pass()
 	}
@@ -237,7 +253,7 @@ func (v *AICommentValidator) Validate(
 // file. Filler mode disables it, and config/markup/data/shell files always use
 // pattern-based behaviour so their ordinary documentation comments are allowed.
 func (v *AICommentValidator) strictForPath(path string) bool {
-	if v.config != nil && v.config.Mode == config.AICommentModeFiller {
+	if v.config == nil || v.config.Mode != config.AICommentModeStrict {
 		return false
 	}
 
@@ -256,11 +272,24 @@ func (v *AICommentValidator) strictForPath(path string) bool {
 	return !nonStrictExtensions[ext]
 }
 
+// allowsTestPhaseMarkers reports whether BDD-style test phase comments should
+// be exempted for the given file.
+func allowsTestPhaseMarkers(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+
+	return strings.HasSuffix(base, "_test.go")
+}
+
 // findAICommentViolations reports blocked comments. Task markers, machine
-// directives, exception tokens, and doc comments on exported declarations are
-// always exempt. In strict mode every other comment is a violation; in filler
-// mode only comments matching a pattern are.
-func findAICommentViolations(content string, patterns []*regexp.Regexp, strict bool) []violation {
+// directives, exception tokens, doc comments, and Go test phase markers
+// are always exempt. In strict mode every other comment is a violation; in
+// filler mode only comments matching a pattern are.
+func findAICommentViolations(
+	content string,
+	patterns []*regexp.Regexp,
+	strict bool,
+	allowTestPhaseMarkers bool,
+) []violation {
 	var violations []violation
 
 	lines := strings.Split(content, "\n")
@@ -284,7 +313,13 @@ func findAICommentViolations(content string, patterns []*regexp.Regexp, strict b
 			continue
 		}
 
-		if isFullLineComment(line) && precedesExportedDecl(lines, i) {
+		if allowTestPhaseMarkers && isFullLineComment(line) &&
+			aiTestPhaseMarker.MatchString(body) {
+			continue
+		}
+
+		if isFullLineComment(line) && precedesDocDecl(lines, i) &&
+			!aiGenericDocComment.MatchString(body) {
 			continue
 		}
 
@@ -321,10 +356,10 @@ func isFullLineComment(line string) bool {
 	return strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#")
 }
 
-// precedesExportedDecl reports whether the comment at index i is part of a
-// leading comment block whose first non-comment line declares an exported
-// symbol. A blank line breaks the association (it is no longer a doc comment).
-func precedesExportedDecl(lines []string, i int) bool {
+// precedesDocDecl reports whether the comment at index i is part of a leading
+// comment block whose first non-comment line declares a symbol or package. A
+// blank line breaks the association (it is no longer a doc comment).
+func precedesDocDecl(lines []string, i int) bool {
 	for j := i + 1; j < len(lines); j++ {
 		trimmed := strings.TrimSpace(lines[j])
 		if trimmed == "" {
@@ -335,7 +370,7 @@ func precedesExportedDecl(lines []string, i int) bool {
 			continue
 		}
 
-		return aiExportedDecl.MatchString(lines[j])
+		return aiDocDecl.MatchString(lines[j])
 	}
 
 	return false
