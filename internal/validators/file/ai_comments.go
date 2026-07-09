@@ -179,7 +179,7 @@ func commentBody(line string, idx int) string {
 
 // AICommentValidator flags in-body comments. In strict mode it blocks every
 // comment in a source file except task markers, machine directives, doc
-// comments, test phase markers, and comments carrying an EXC: token. In filler
+// comments, Go test phase markers, and comments carrying an EXC: token. In filler
 // mode it blocks only comments matching the configured patterns.
 type AICommentValidator struct {
 	validator.BaseValidator
@@ -209,12 +209,12 @@ const aiCommentHeader = "Filler comments that only restate the code are not allo
 // aiCommentStrictHeader is shown when strict mode blocks an in-body comment.
 const aiCommentStrictHeader = "Inline comments are not allowed — write self-explanatory code instead.\n" +
 	"Allowed: TODO/FIXME/NOTE markers, doc comments on declarations,\n" +
-	"test phase markers, and machine directives. To keep a load-bearing\n" +
+	"Go *_test.go phase markers, and machine directives. To keep a load-bearing\n" +
 	"comment, append an exception token, e.g.\n" +
 	"// EXC:FILE011:documents-a-non-obvious-invariant."
 
 // Validate blocks in-body comments per the configured mode, exempting task
-// markers, machine directives, doc comments, test phase markers, and comments
+// markers, machine directives, doc comments, Go test phase markers, and comments
 // carrying an EXC: token.
 func (v *AICommentValidator) Validate(
 	ctx context.Context,

@@ -347,8 +347,8 @@ type LinterIgnoreValidatorConfig struct {
 // AI comment validator modes.
 const (
 	// AICommentModeStrict blocks every in-body comment in source files,
-	// allowing only task markers, machine directives, doc comments, test phase
-	// markers, and comments carrying an EXC: exception token.
+	// allowing only task markers, machine directives, doc comments, Go test
+	// phase markers, and comments carrying an EXC: exception token.
 	AICommentModeStrict = "strict"
 
 	// AICommentModeFiller keeps the default pattern-based behaviour: only
