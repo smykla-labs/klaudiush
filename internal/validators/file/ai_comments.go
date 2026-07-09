@@ -281,7 +281,7 @@ func allowsTestPhaseMarkers(path string) bool {
 }
 
 // findAICommentViolations reports blocked comments. Task markers, machine
-// directives, exception tokens, doc comments, and configured test phase markers
+// directives, exception tokens, doc comments, and Go test phase markers
 // are always exempt. In strict mode every other comment is a violation; in
 // filler mode only comments matching a pattern are.
 func findAICommentViolations(
