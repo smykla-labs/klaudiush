@@ -38,16 +38,16 @@ var defaultAICommentPatterns = []string{
 		`(e|es|ed|d|s|ing|ping|ting|ning|ling|ging|ies|ied|y)?\b`,
 	// "This function/method/... does/is/handles/..." restatements.
 	`(?i)(^\s*|\s)(//|#)\s*this\s+(function|method|class|struct|interface|type|` +
-		`variable|field|constant|value|helper|wrapper)\s+` +
+		`variable|field|constant|value|helper|wrapper|package)\s+` +
 		`(does|is|are|will|handles?|returns?|sets?|gets?|` +
-		`represents?|holds?|stores?|contains?)\b`,
+		`represents?|holds?|stores?|contains?|provides?)\b`,
 }
 
 // aiGenericDocComment matches doc comments that avoid the declaration name and
 // instead narrate the declaration kind. These are still filler comments.
 var aiGenericDocComment = regexp.MustCompile(
 	`(?i)^\s*this\s+(function|method|class|struct|interface|type|` +
-		`variable|field|constant|value|helper|wrapper)\b`,
+		`variable|field|constant|value|helper|wrapper|package)\b`,
 )
 
 // aiTodoMarker matches a comment that opens with a task or annotation marker.
@@ -208,7 +208,7 @@ const aiCommentHeader = "Filler comments that only restate the code are not allo
 
 // aiCommentStrictHeader is shown when strict mode blocks an in-body comment.
 const aiCommentStrictHeader = "Inline comments are not allowed — write self-explanatory code instead.\n" +
-	"Allowed: TODO/FIXME/NOTE markers, non-generic declaration doc comments,\n" +
+	"Allowed: task/annotation markers, non-generic declaration doc comments,\n" +
 	"standalone Go *_test.go phase markers, and machine directives. To keep a\n" +
 	"comment, append an exception token, e.g.\n" +
 	"// EXC:FILE011:documents-a-non-obvious-invariant."

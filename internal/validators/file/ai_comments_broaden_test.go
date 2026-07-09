@@ -154,6 +154,8 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		),
 		Entry("blank line breaks doc association",
 			"// Returns the user.\n\nfunc GetUser() {\n}"),
+		Entry("generic package doc",
+			"// This package provides validation helpers.\npackage dispatcher"),
 	)
 	DescribeTable(
 		"allows // or # inside string and URL literals",
