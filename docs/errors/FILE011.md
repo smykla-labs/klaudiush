@@ -40,7 +40,7 @@ if err != nil {
 ## Allowed (not flagged)
 
 - **Task and annotation markers**: `TODO`, `FIXME`, `HACK`, `XXX`, `BUG`, `WARNING`, `NOTE`, `OPTIMIZE`, `REVIEW`, `DEPRECATED`, and `@annotations`.
-- **Doc comments** directly above a declaration (Go package/func/type/const/var, JS/TS `export`, Python `def`/`class`). A blank line between the comment and the declaration breaks this exemption.
+- **Doc comments** directly above a declaration (Go package/func/type/const/var, JS/TS `export`, Python `def`/`class`). A blank line between the comment and the declaration breaks this exemption. Generic restatements such as `This function does ...` are still filler comments and can be flagged.
 - **BDD/test phase markers** in Go test files (`*_test.go`): `given`, `when`, `then`, `arrange`, `act`, and `assert`.
 - **Machine directives**: shebangs, Go compiler directives (build constraints, code generation), cgo directives, legacy build tags, character-encoding cookies, and the type/lint/coverage suppression comments recognised by language tooling.
 - **Exception tokens**: any comment containing `EXC:<CODE>:<reason>`.
