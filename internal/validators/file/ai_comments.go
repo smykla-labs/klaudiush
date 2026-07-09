@@ -119,7 +119,7 @@ var aiDocDecl = regexp.MustCompile(
 		`|type\s+[A-Za-z_]` + // Go type
 		`|(const|var)\s+(\(|[A-Za-z_])` + // Go const/var or block
 		`|export\b` + // JS/TS export
-		`|(async\s+)?(def|class)\s+[A-Za-z]` + // Python def/class (public: no leading _)
+		`|(async\s+)?(def|class)\s+[A-Za-z_]` + // Python def/class
 		`)`,
 )
 

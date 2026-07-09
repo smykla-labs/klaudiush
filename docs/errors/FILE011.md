@@ -79,7 +79,14 @@ enabled = false
 When this error is triggered, klaudiush writes JSON to stdout:
 
 **permissionDecisionReason** (shown to Claude):
+
+Default filler mode:
+
 `[FILE011] Filler comments that only restate the code are not allowed. ...`
+
+Strict mode:
+
+`[FILE011] Inline comments are not allowed — write self-explanatory code instead. ...`
 
 **systemMessage** (shown to user):
 Formatted error with fix hint and reference URL.
