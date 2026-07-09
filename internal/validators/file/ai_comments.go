@@ -208,8 +208,8 @@ const aiCommentHeader = "Filler comments that only restate the code are not allo
 
 // aiCommentStrictHeader is shown when strict mode blocks an in-body comment.
 const aiCommentStrictHeader = "Inline comments are not allowed — write self-explanatory code instead.\n" +
-	"Allowed: TODO/FIXME/NOTE markers, doc comments on declarations,\n" +
-	"Go *_test.go phase markers, and machine directives. To keep a load-bearing\n" +
+	"Allowed: TODO/FIXME/NOTE markers, non-generic declaration doc comments,\n" +
+	"standalone Go *_test.go phase markers, and machine directives. To keep a\n" +
 	"comment, append an exception token, e.g.\n" +
 	"// EXC:FILE011:documents-a-non-obvious-invariant."
 
