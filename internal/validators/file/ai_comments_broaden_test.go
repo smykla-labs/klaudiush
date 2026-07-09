@@ -55,6 +55,13 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		Entry("NOTE marker", "// NOTE: keep in sync with the proto\nx := 1"),
 		Entry("exported Go func doc",
 			"// Returns the user for the given id.\nfunc GetUser(id string) *User { return nil }"),
+		Entry("unexported Go func doc",
+			"// maybeReportWindowDepletion emits the warning log and increments the\n"+
+				"// counter when the most recent send on a now-closed stream matches the\n"+
+				"// receive-window-depletion signature.\n"+
+				"func (s *statsCallbacks) maybeReportWindowDepletion(last lastSend) {}"),
+		Entry("Go package doc",
+			"// Package dispatcher validates hook events.\npackage dispatcher"),
 		Entry("exported JS function",
 			"// Creates a new widget instance.\nexport function makeWidget() {}"),
 		Entry("go:generate directive", "//go:generate mockgen -source=x.go\nx := 1"),
@@ -64,11 +71,11 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 	)
 
 	DescribeTable(
-		"strict mode blocks in-body prose that no pattern would catch",
+		"default mode allows why-comments that no filler pattern catches",
 		func(content string) {
 			ctx.ToolInput.Content = content
 			result := v.Validate(context.Background(), ctx)
-			Expect(result.Passed).To(BeFalse())
+			Expect(result.Passed).To(BeTrue())
 		},
 		Entry("why comment", "// Guard against nil to avoid a shutdown panic.\nif cli == nil {\n}"),
 		Entry("multi-line rationalization",
@@ -77,9 +84,28 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 				"// the only record would mint a second task for the same issue — the\n"+
 				"// exact duplication this helper prevents; a mislabeled stub is cheaper.\n"+
 				"s.logger.Error(\"scan\")"),
+		Entry("preview build explanation",
+			"// Preview builds report version 0.0.0-preview.* which sorts below every\n"+
+				"// released version; treat them as latest rather than legacy.\n"+
+				"latest := embeddedDNS"),
+		Entry("prose starting with a slash is not a Rust doc",
+			"x := 1\n// /tmp is where we stash it for now"),
+	)
+
+	DescribeTable(
+		"explicit strict mode blocks in-body prose that no pattern catches",
+		func(content string) {
+			sv := file.NewAICommentValidator(
+				logger.NewNoOpLogger(),
+				&config.AICommentValidatorConfig{Mode: config.AICommentModeStrict},
+				nil,
+			)
+			ctx.ToolInput.Content = content
+			result := sv.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		},
+		Entry("why comment", "// Guard against nil to avoid a shutdown panic.\nif cli == nil {\n}"),
 		Entry("trailing narration", "x := compute()  // holds the running total"),
-		Entry("doc comment on unexported func",
-			"// helper does the thing.\nfunc helper() {}"),
 		Entry("prose starting with a slash is not a Rust doc",
 			"x := 1\n// /tmp is where we stash it for now"),
 	)
@@ -118,8 +144,10 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 			result := v.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
 		},
-		Entry("unexported func",
-			"// Returns the user for the given id.\nfunc getUser(id string) *User { return nil }"),
+		Entry(
+			"in-body return narration",
+			"if id == \"\" {\n\treturn nil\n}\n// Returns the user for the given id.\nreturn getUser(id)",
+		),
 		Entry("blank line breaks doc association",
 			"// Returns the user.\n\nfunc GetUser() {\n}"),
 	)
@@ -154,10 +182,22 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		Entry("Makefile", "/repo/Makefile"),
 	)
 
-	It("strict mode blocks in-body comments in a .go file", func() {
+	It("allows BDD phase markers in Go tests", func() {
+		ctx.ToolInput.FilePath = "/repo/svc_test.go"
+		ctx.ToolInput.Content = "func TestFlow(t *testing.T) {\n// given a cached response\nseed()\n// when loading data\nload()\n// then status is fresh\nassertFresh()\n}"
+		result := v.Validate(context.Background(), ctx)
+		Expect(result.Passed).To(BeTrue())
+	})
+
+	It("explicit strict mode blocks in-body comments in a .go file", func() {
+		sv := file.NewAICommentValidator(
+			logger.NewNoOpLogger(),
+			&config.AICommentValidatorConfig{Mode: config.AICommentModeStrict},
+			nil,
+		)
 		ctx.ToolInput.FilePath = "/repo/svc.go"
 		ctx.ToolInput.Content = "x := f()\n// holds the running total"
-		result := v.Validate(context.Background(), ctx)
+		result := sv.Validate(context.Background(), ctx)
 		Expect(result.Passed).To(BeFalse())
 	})
 

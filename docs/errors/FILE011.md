@@ -1,20 +1,19 @@
-# FILE011: Inline comment not allowed
+# FILE011: Filler comment not allowed
 
 ## Error
 
-Code being written or edited to a **source file** contains an in-body comment
-that is not an allowed form (see below). By default klaudiush runs in **strict**
-mode: every comment inside source code is blocked unless it is a task marker, a
-machine directive, a doc comment on an exported declaration, or carries an
-exception token.
+Code being written or edited contains a comment that looks like filler: prose
+that only restates what the adjacent code already says.
+
+If `mode = "strict"` is configured for source files, klaudiush also blocks
+in-body comments unless they are an allowed form: a task marker, machine
+directive, doc comment on a declaration, test phase marker, or exception token.
 
 ## Why this matters
 
-LLM-generated code tends to narrate itself — restating *what* a line does, or
-padding a one-line decision with several lines of rationalization. Well-named
-identifiers already communicate the "what", and load-bearing "why" explanations
-are rare. Blocking inline comments by default pushes toward self-explanatory
-code and keeps the few genuinely-needed explanations explicit and reviewable.
+LLM-generated code tends to narrate itself by restating *what* a line does.
+Well-named identifiers already communicate the "what"; comments should carry
+intent, invariants, protocol notes, or test structure.
 
 ## How to fix
 
@@ -29,8 +28,8 @@ count := 0 // holds the running total
 runningTotal := 0
 ```
 
-If a comment is genuinely load-bearing (documents a non-obvious invariant),
-append an exception token so it is allowed:
+In strict mode, if a non-doc in-body comment is genuinely load-bearing
+(documents a non-obvious invariant), append an exception token so it is allowed:
 
 ```go
 if err != nil {
@@ -41,30 +40,31 @@ if err != nil {
 ## Allowed (not flagged)
 
 - **Task and annotation markers**: `TODO`, `FIXME`, `HACK`, `XXX`, `BUG`, `WARNING`, `NOTE`, `OPTIMIZE`, `REVIEW`, `DEPRECATED`, and `@annotations`.
-- **Doc comments** directly above an exported/public declaration (Go exported func/type/const/var, JS/TS `export`, Python public `def`/`class`). A blank line between the comment and the declaration breaks this exemption; comments on **unexported** declarations are not exempt.
+- **Doc comments** directly above a declaration (Go package/func/type/const/var, JS/TS `export`, Python `def`/`class`). A blank line between the comment and the declaration breaks this exemption.
+- **BDD/test phase markers** in Go test files (`*_test.go`): `given`, `when`, `then`, `arrange`, `act`, and `assert`.
 - **Machine directives**: shebangs, Go compiler directives (build constraints, code generation), cgo directives, legacy build tags, character-encoding cookies, and the type/lint/coverage suppression comments recognised by language tooling.
 - **Exception tokens**: any comment containing `EXC:<CODE>:<reason>`.
 - **All comments in non-source files**: config, markup, data and shell files (`.toml`, `.yaml`, `.json`, `.md`, `.ini`, `.env`, `.sh`, `Makefile`, `Dockerfile`, ...) use the lenient pattern-based behaviour instead.
 
 ## Modes
 
-- **strict** (default): blocks all in-body comments in source files except the allowed forms above.
-- **filler**: blocks only comments matching a filler pattern — a verb-first restatement (initialize, loop, return, configure, handle, parse, encode, ...) or a "This function/method/... does/is/handles/..." restatement. Legitimate "why" comments are allowed. This is the pre-1.36 behaviour and is also used for non-source files regardless of mode.
+- **filler** (default): blocks only comments matching a filler pattern — a verb-first restatement (initialize, loop, return, configure, handle, parse, encode, ...) or a "This function/method/... does/is/handles/..." restatement. Legitimate "why" comments are allowed.
+- **strict**: blocks all in-body comments in source files except the allowed forms above. Non-source files still use filler behavior.
 
 ## Configuration
 
 ```toml
 [validators.file.ai_comments]
 enabled = true
-mode = "strict"   # "strict" (default) or "filler"
+mode = "filler"   # "filler" (default) or "strict"
 patterns = []     # custom filler-mode patterns (overrides defaults when set)
 ```
 
-Restore the old lenient behaviour:
+Enable strict block-all behavior for source files:
 
 ```toml
 [validators.file.ai_comments]
-mode = "filler"
+mode = "strict"
 ```
 
 Disable the validator entirely:
@@ -79,7 +79,7 @@ enabled = false
 When this error is triggered, klaudiush writes JSON to stdout:
 
 **permissionDecisionReason** (shown to Claude):
-`[FILE011] Inline comments are not allowed — write self-explanatory code instead. ...`
+`[FILE011] Filler comments that only restate the code are not allowed. ...`
 
 **systemMessage** (shown to user):
 Formatted error with fix hint and reference URL.
