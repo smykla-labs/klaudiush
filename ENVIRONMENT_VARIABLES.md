@@ -592,6 +592,21 @@ export KLAUDIUSH_PATTERNS_ENABLED=true
 export KLAUDIUSH_PATTERNS_MIN_COUNT=3
 ```
 
+## Bypass Permissions
+
+Controls validation when the session runs without approval prompts (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`, `--yolo`). Validation stays on unless you opt out.
+
+```bash
+# Skip validation while approval prompts are off
+export KLAUDIUSH_BYPASS_PERMISSIONS_SKIP_VALIDATION=true
+
+# Hide the reminder shown while validating in those modes
+export KLAUDIUSH_BYPASS_PERMISSIONS_NOTIFY=false
+
+# Replace the permission modes treated as bypass modes
+export KLAUDIUSH_BYPASS_PERMISSIONS_MODES=bypassPermissions,dontAsk
+```
+
 ## Standard Environment Variables
 
 These are not prefixed with `KLAUDIUSH_` but affect klaudiush behavior:

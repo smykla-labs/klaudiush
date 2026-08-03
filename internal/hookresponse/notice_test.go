@@ -8,13 +8,13 @@ import (
 	"github.com/smykla-skalski/klaudiush/pkg/hook"
 )
 
-var _ = Describe("UpdateNotification", func() {
+var _ = Describe("Notice", func() {
 	msg := "Update available: klaudiush 1.0.0 -> 2.0.0. Run 'klaudiush update' to install."
 
-	Describe("BuildUpdateNotification", func() {
+	Describe("BuildNotice", func() {
 		It("builds HookResponse for Claude provider", func() {
 			ctx := &hook.Context{Provider: hook.ProviderClaude}
-			resp := hookresponse.BuildUpdateNotification(ctx, msg)
+			resp := hookresponse.BuildNotice(ctx, msg)
 
 			hr, ok := resp.(*hookresponse.HookResponse)
 			Expect(ok).To(BeTrue())
@@ -24,7 +24,7 @@ var _ = Describe("UpdateNotification", func() {
 
 		It("builds CodexCommandResponse for Codex provider", func() {
 			ctx := &hook.Context{Provider: hook.ProviderCodex}
-			resp := hookresponse.BuildUpdateNotification(ctx, msg)
+			resp := hookresponse.BuildNotice(ctx, msg)
 
 			cr, ok := resp.(*hookresponse.CodexCommandResponse)
 			Expect(ok).To(BeTrue())
@@ -34,7 +34,7 @@ var _ = Describe("UpdateNotification", func() {
 
 		It("builds GeminiCommandResponse for Gemini provider", func() {
 			ctx := &hook.Context{Provider: hook.ProviderGemini}
-			resp := hookresponse.BuildUpdateNotification(ctx, msg)
+			resp := hookresponse.BuildNotice(ctx, msg)
 
 			gr, ok := resp.(*hookresponse.GeminiCommandResponse)
 			Expect(ok).To(BeTrue())
@@ -42,7 +42,7 @@ var _ = Describe("UpdateNotification", func() {
 		})
 
 		It("builds HookResponse for nil context", func() {
-			resp := hookresponse.BuildUpdateNotification(nil, msg)
+			resp := hookresponse.BuildNotice(nil, msg)
 
 			hr, ok := resp.(*hookresponse.HookResponse)
 			Expect(ok).To(BeTrue())
@@ -50,29 +50,59 @@ var _ = Describe("UpdateNotification", func() {
 		})
 	})
 
-	Describe("AppendUpdateNotification", func() {
+	Describe("AppendNotice", func() {
 		It("appends to HookResponse", func() {
 			resp := &hookresponse.HookResponse{SystemMessage: "existing error"}
-			hookresponse.AppendUpdateNotification(resp, msg)
+			hookresponse.AppendNotice(resp, msg)
 			Expect(resp.SystemMessage).To(Equal("existing error\n\n" + msg))
 		})
 
 		It("appends to CodexCommandResponse", func() {
 			resp := &hookresponse.CodexCommandResponse{SystemMessage: "existing"}
-			hookresponse.AppendUpdateNotification(resp, msg)
+			hookresponse.AppendNotice(resp, msg)
 			Expect(resp.SystemMessage).To(Equal("existing\n\n" + msg))
 		})
 
 		It("appends to GeminiCommandResponse", func() {
 			resp := &hookresponse.GeminiCommandResponse{SystemMessage: "existing"}
-			hookresponse.AppendUpdateNotification(resp, msg)
+			hookresponse.AppendNotice(resp, msg)
 			Expect(resp.SystemMessage).To(Equal("existing\n\n" + msg))
 		})
 
 		It("appends to ElicitationHookResponse", func() {
 			resp := &hookresponse.ElicitationHookResponse{SystemMessage: "existing"}
-			hookresponse.AppendUpdateNotification(resp, msg)
+			hookresponse.AppendNotice(resp, msg)
 			Expect(resp.SystemMessage).To(Equal("existing\n\n" + msg))
+		})
+
+		It("skips the separator when there is no existing message", func() {
+			resp := &hookresponse.HookResponse{}
+			hookresponse.AppendNotice(resp, msg)
+			Expect(resp.SystemMessage).To(Equal(msg))
+		})
+	})
+
+	Describe("IsEmpty", func() {
+		It("reports an untyped nil as empty", func() {
+			Expect(hookresponse.IsEmpty(nil)).To(BeTrue())
+		})
+
+		It("reports typed nil pointers as empty", func() {
+			var (
+				claude      *hookresponse.HookResponse
+				codex       *hookresponse.CodexCommandResponse
+				gemini      *hookresponse.GeminiCommandResponse
+				elicitation *hookresponse.ElicitationHookResponse
+			)
+
+			Expect(hookresponse.IsEmpty(claude)).To(BeTrue())
+			Expect(hookresponse.IsEmpty(codex)).To(BeTrue())
+			Expect(hookresponse.IsEmpty(gemini)).To(BeTrue())
+			Expect(hookresponse.IsEmpty(elicitation)).To(BeTrue())
+		})
+
+		It("reports built responses as non-empty", func() {
+			Expect(hookresponse.IsEmpty(&hookresponse.HookResponse{})).To(BeFalse())
 		})
 	})
 })

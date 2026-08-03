@@ -1,0 +1,31 @@
+# Test: validation runs in bypassPermissions mode and the user gets a reminder
+# This tests that --dangerously-skip-permissions no longer short-circuits hooks
+
+exec git init --initial-branch=main
+exec git config user.email "test@test.com"
+exec git config user.name "Test User"
+
+cp file.go staged.go
+exec git add staged.go
+
+stdin input.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+stdout 'missing required flag.*-s'
+stdout 'klaudiush still validates with approval prompts off'
+stdout 'klaudiush bypass skip'
+
+-- file.go --
+package main
+
+func main() {}
+
+-- input.json --
+{
+  "session_id": "sess-bypass-1",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -S -m 'feat(api): add user endpoint'"
+  }
+}

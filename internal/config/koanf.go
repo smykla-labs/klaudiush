@@ -371,6 +371,7 @@ var envHierarchy = map[string][]string{
 		sectionPatterns,
 		"plugins",
 		"overrides",
+		sectionBypassPerms,
 	},
 	"overrides":       {"entries"},
 	sectionValidators: {sectionGit, sectionFile, sectionNotification, sectionSecrets, sectionShell},

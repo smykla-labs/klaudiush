@@ -1,0 +1,39 @@
+#:schema https://klaudiu.sh/schema/v1/config.json
+# Bypass permissions
+# Controls validation when the session runs without approval prompts:
+# Claude --dangerously-skip-permissions, Codex
+# --dangerously-bypass-approvals-and-sandbox, Gemini --yolo.
+
+[bypass_permissions]
+# Skip every validator while a bypass permission mode is active
+# Leave false to keep enforcing hooks no matter how the session was started
+# Prefer the CLI: klaudiush bypass skip [--global] [--duration 4h]
+# Default: false
+skip_validation = false
+
+# Show a user-only reminder (systemMessage) while klaudiush validates a session
+# that runs without approval prompts. The AI never sees it, and it appears once
+# per session
+# Default: true
+notify = true
+
+# Permission mode values treated as bypass modes
+# Setting this replaces the built-in list rather than extending it
+# Default: ["bypassPermissions", "danger-full-access", "yolo"]
+modes = ["bypassPermissions", "danger-full-access", "yolo"]
+
+# The remaining fields are written by "klaudiush bypass skip" and are only
+# meaningful when skip_validation is true.
+
+# Why validation is skipped
+# reason = "throwaway spike"
+
+# RFC3339 timestamp when skipping was enabled
+# skipped_at = "2026-08-03T09:00:00Z"
+
+# RFC3339 timestamp when skipping stops applying, empty means permanent
+# Set with: klaudiush bypass skip --duration 4h
+# expires_at = "2026-08-03T13:00:00Z"
+
+# Who enabled skipping
+# skipped_by = "cli"

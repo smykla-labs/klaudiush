@@ -35,6 +35,10 @@ func mainFunc() {
 	fixFlag = false
 	categoryFlag = []string{}
 	validatorFilter = ""
+	bypassReason = ""
+	bypassDuration = ""
+	bypassGlobal = false
+	bypassAll = false
 
 	// Reset git repository cache so each test discovers its own repo
 	gitpkg.ResetRepositoryCache()
@@ -93,6 +97,13 @@ func TestScriptMarkdown(t *testing.T) {
 func TestScriptDebug(t *testing.T) {
 	testscript.Run(t, testscript.Params{
 		Dir:   "testdata/scripts/debug",
+		Setup: setupTestEnv,
+	})
+}
+
+func TestScriptBypass(t *testing.T) {
+	testscript.Run(t, testscript.Params{
+		Dir:   "testdata/scripts/bypass",
 		Setup: setupTestEnv,
 	})
 }

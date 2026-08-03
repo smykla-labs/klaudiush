@@ -23,6 +23,7 @@ const (
 	sectionExceptions   = "exceptions"
 	sectionPatterns     = "patterns"
 	sectionCrashDump    = "crash_dump"
+	sectionBypassPerms  = "bypass_permissions"
 	sectionGit          = "git"
 	sectionFile         = "file"
 	sectionNotification = "notification"

@@ -48,6 +48,13 @@ klaudiush debug crash clean --dry-run             # show what would be removed
 ./bin/klaudiush audit stats                       # show statistics
 ./bin/klaudiush audit cleanup                     # remove old entries
 
+# Bypass (validation when approval prompts are off)
+./bin/klaudiush bypass status                     # show effective setting
+./bin/klaudiush bypass skip --reason "spike"      # stop validating in bypass modes
+./bin/klaudiush bypass skip --duration 4h         # time-boxed opt-out
+./bin/klaudiush bypass enforce                    # restore the default
+./bin/klaudiush bypass notify off                 # keep validating, hide the reminder
+
 # Build & Install
 mise run build                        # dev build
 mise run build:prod                   # prod build (validates signoff)
@@ -187,6 +194,20 @@ min_reason_length = 10
 ```
 
 **Documentation**: See `docs/EXCEPTIONS_GUIDE.md` for complete guide. Example configs in `examples/exceptions/`.
+
+### Bypass Permissions (`internal/bypass/`)
+
+Decides what happens when the session runs without approval prompts (Claude `--dangerously-skip-permissions` → `bypassPermissions`, Codex `--dangerously-bypass-approvals-and-sandbox` → `danger-full-access`, Gemini `--yolo` → `yolo`).
+
+**Default**: validation runs in every permission mode. The dispatcher only short-circuits when `dispatcher.WithBypassPolicy` gets a policy whose config sets `skip_validation = true`.
+
+**Components**: `Policy` (`policy.go`) answers `ModeActive`/`SkipValidation`/`NotifyEnabled`, `Notice` (`notice.go`) builds the reminder, `NoticeTracker` (`tracker.go`) keeps it to once per session via `$XDG_STATE_HOME/klaudiush/bypass_notice.json`.
+
+**Reminder**: emitted in `systemMessage` only, so the AI never sees it and cannot act on it. Suppressed by `notify = false`, by an active skip, and after the first hook of a session.
+
+**CLI**: `klaudiush bypass status|skip|enforce|notify` (`cmd/klaudiush/bypass.go`), with `--global`, `--reason`, and `--duration` mirroring the overrides commands.
+
+**Documentation**: See `docs/BYPASS_GUIDE.md`. Example config in `examples/config/bypass-permissions.toml`.
 
 ### Linter Abstractions (`internal/linters/`)
 
@@ -329,6 +350,12 @@ Exception workflow guide available in `docs/EXCEPTIONS_GUIDE.md` with example co
 - **development.toml** - Relaxed limits for development environments
 
 Debug exceptions with: `klaudiush debug exceptions`
+
+## Bypass Permissions Documentation
+
+Guide available in `docs/BYPASS_GUIDE.md` with a commented example in `examples/config/bypass-permissions.toml`.
+
+Inspect the current setting with: `klaudiush bypass status --all`
 
 ## Backup Documentation
 

@@ -73,7 +73,7 @@ func versionString() string {
 				}
 			}
 
-			if setting.Key == "vcs.modified" && setting.Value == "true" {
+			if setting.Key == "vcs.modified" && setting.Value == valueTrue {
 				b.WriteString("  modified:  true\n")
 			}
 		}

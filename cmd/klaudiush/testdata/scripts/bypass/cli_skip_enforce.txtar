@@ -1,0 +1,52 @@
+# Test: the bypass CLI writes, reports, and clears the project setting
+
+# Default state
+exec klaudiush bypass status
+stdout 'Bypass permissions \(project\)'
+stdout '\(not configured\)'
+stdout 'ENFORCED in every permission mode'
+stdout 'Bypass modes: bypassPermissions, danger-full-access, yolo'
+
+# Opt out
+exec klaudiush bypass skip --reason 'throwaway spike'
+stdout 'Validation SKIPPED while approval prompts are off'
+stdout 'Reason: throwaway spike'
+stdout 'Undo with: klaudiush bypass enforce'
+
+exec klaudiush bypass status
+stdout 'SKIPPED in bypass permission modes'
+stdout 'Reason: throwaway spike'
+
+grep 'skip_validation = true' .klaudiush/config.toml
+grep 'skipped_by = .cli.' .klaudiush/config.toml
+
+# Expiring opt-out records the deadline
+exec klaudiush bypass skip --duration 4h
+exec klaudiush bypass status
+stdout 'Expires: '
+
+# Back to the default
+exec klaudiush bypass enforce
+stdout 'Validation ENFORCED'
+
+exec klaudiush bypass status
+stdout '\(not configured\)'
+
+! grep 'skip_validation' .klaudiush/config.toml
+
+# Reminder toggle
+exec klaudiush bypass notify off
+stdout 'Bypass reminder off'
+
+exec klaudiush bypass status
+stdout 'Reminder: off'
+
+exec klaudiush bypass notify on
+stdout 'Bypass reminder on'
+
+exec klaudiush bypass status
+stdout '\(not configured\)'
+
+# Invalid argument
+! exec klaudiush bypass notify maybe
+stderr 'expected "on" or "off"'

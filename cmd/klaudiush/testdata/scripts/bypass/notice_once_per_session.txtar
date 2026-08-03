@@ -1,0 +1,72 @@
+# Test: the bypass reminder is shown once per session, and notify off silences it
+
+exec git init --initial-branch=main
+exec git config user.email "test@test.com"
+exec git config user.name "Test User"
+
+cp file.go staged.go
+exec git add staged.go
+
+# First invocation of the session carries the reminder
+stdin input.json
+exec klaudiush --hook-type PreToolUse
+stdout 'klaudiush still validates with approval prompts off'
+
+# Second invocation of the same session does not
+stdin input.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+! stdout 'klaudiush still validates with approval prompts off'
+
+# A different session is reminded again
+stdin other-session.json
+exec klaudiush --hook-type PreToolUse
+stdout 'klaudiush still validates with approval prompts off'
+
+# With notify off, a fresh session stays quiet
+mkdir .klaudiush
+cp config.toml .klaudiush/config.toml
+
+stdin third-session.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+! stdout 'klaudiush still validates with approval prompts off'
+
+-- config.toml --
+[bypass_permissions]
+notify = false
+
+-- file.go --
+package main
+
+func main() {}
+
+-- input.json --
+{
+  "session_id": "sess-notice-1",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -S -m 'feat(api): add user endpoint'"
+  }
+}
+
+-- other-session.json --
+{
+  "session_id": "sess-notice-2",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -S -m 'feat(api): add user endpoint'"
+  }
+}
+
+-- third-session.json --
+{
+  "session_id": "sess-notice-3",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -S -m 'feat(api): add user endpoint'"
+  }
+}
