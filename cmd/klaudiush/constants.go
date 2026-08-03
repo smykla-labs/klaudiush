@@ -6,3 +6,11 @@ const (
 	cmdUsePatterns  = "patterns"
 	cmdUseOverrides = "overrides"
 )
+
+// Literal values shared across command output and argument parsing.
+const (
+	valueOn      = "on"
+	valueOff     = "off"
+	valueTrue    = "true"
+	scopeProject = "project"
+)

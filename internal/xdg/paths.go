@@ -144,6 +144,11 @@ func HookSessionStateFile() string {
 	return filepath.Join(StateDir(), "hook_sessions", "state.json")
 }
 
+// BypassNoticeStateFile returns StateDir()/bypass_notice.json.
+func BypassNoticeStateFile() string {
+	return filepath.Join(StateDir(), "bypass_notice.json")
+}
+
 // CrashDumpDir returns DataDir()/crash_dumps.
 func CrashDumpDir() string {
 	return filepath.Join(DataDir(), "crash_dumps")

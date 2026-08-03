@@ -41,6 +41,9 @@ type Config struct {
 
 	// UpdateCheck contains configuration for automatic update checking.
 	UpdateCheck *UpdateCheckConfig `json:"update_check,omitempty" koanf:"update_check" toml:"update_check,omitempty"`
+
+	// BypassPermissions controls behavior when the session skips approval prompts.
+	BypassPermissions *BypassPermissionsConfig `json:"bypass_permissions,omitempty" koanf:"bypass_permissions" toml:"bypass_permissions,omitempty"`
 }
 
 // ValidatorsConfig groups all validator configurations by category.
@@ -255,4 +258,14 @@ func (c *Config) GetUpdateCheck() *UpdateCheckConfig {
 	}
 
 	return c.UpdateCheck
+}
+
+// GetBypassPermissions returns the bypass permissions config, creating it if it
+// doesn't exist.
+func (c *Config) GetBypassPermissions() *BypassPermissionsConfig {
+	if c.BypassPermissions == nil {
+		c.BypassPermissions = &BypassPermissionsConfig{}
+	}
+
+	return c.BypassPermissions
 }

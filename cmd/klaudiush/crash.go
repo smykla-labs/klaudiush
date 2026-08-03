@@ -104,7 +104,7 @@ func runDebugCrashView(cmd *cobra.Command, args []string) error {
 func runDebugCrashClean(cmd *cobra.Command, _ []string) error {
 	dryRunStr := "false"
 	if dryRun {
-		dryRunStr = "true"
+		dryRunStr = valueTrue
 	}
 
 	cfg, err := setupDebugContext(loggerFromCmd(cmd), "debug crash clean", "dryRun", dryRunStr)

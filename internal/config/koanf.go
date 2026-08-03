@@ -338,13 +338,22 @@ func mergeRules(globalRules, projectRules []config.RuleConfig) []config.RuleConf
 
 // loadTOMLFile loads a TOML configuration file with security checks.
 func (l *KoanfLoader) loadTOMLFile(path string) error {
-	// Check if file exists
+	if err := checkConfigPermissions(path); err != nil {
+		return err
+	}
+
+	return l.k.Load(file.Provider(path), tomlparser.Parser(), deepMergeOpt)
+}
+
+// checkConfigPermissions rejects world-writable config files. Every path that
+// reads a config must go through this, including the isolated loaders the
+// rewriting commands use.
+func checkConfigPermissions(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
 
-	// Security check: reject world-writable files
 	if info.Mode().Perm()&0o002 != 0 {
 		return errors.Wrapf(
 			ErrInvalidPermissions,
@@ -354,7 +363,7 @@ func (l *KoanfLoader) loadTOMLFile(path string) error {
 		)
 	}
 
-	return l.k.Load(file.Provider(path), tomlparser.Parser(), deepMergeOpt)
+	return nil
 }
 
 // envHierarchy maps each valid parent path to its known child segment names.
@@ -371,6 +380,7 @@ var envHierarchy = map[string][]string{
 		sectionPatterns,
 		"plugins",
 		"overrides",
+		sectionBypassPerms,
 	},
 	"overrides":       {"entries"},
 	sectionValidators: {sectionGit, sectionFile, sectionNotification, sectionSecrets, sectionShell},
@@ -563,6 +573,10 @@ func (l *KoanfLoader) LoadProjectConfigOnly() (*config.Config, string, error) {
 		return nil, "", nil
 	}
 
+	if err := checkConfigPermissions(projectPath); err != nil {
+		return nil, projectPath, errors.Wrap(err, "failed to read project config")
+	}
+
 	// Create a fresh koanf instance for isolated loading
 	k := koanf.New(".")
 
@@ -588,6 +602,43 @@ func (l *KoanfLoader) LoadProjectConfigOnly() (*config.Config, string, error) {
 	}
 
 	return &cfg, projectPath, nil
+}
+
+// LoadGlobalConfigOnly loads the global config file in isolation, without
+// defaults, project config, environment variables, or flags merged in.
+// Returns a nil config when no global file exists.
+//
+// Commands that rewrite the global config must read it through this so the
+// rest of the file survives the round trip.
+func (l *KoanfLoader) LoadGlobalConfigOnly() (*config.Config, string, error) {
+	globalPath := l.GlobalConfigPath()
+
+	if err := checkConfigPermissions(globalPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, "", nil
+		}
+
+		return nil, globalPath, errors.Wrap(err, "failed to read global config")
+	}
+
+	// Create a fresh koanf instance for isolated loading
+	k := koanf.New(".")
+
+	if err := k.Load(file.Provider(globalPath), tomlparser.Parser()); err != nil {
+		return nil, globalPath, errors.Wrap(err, "failed to load global config")
+	}
+
+	var cfg config.Config
+
+	if err := k.UnmarshalWithConf("", &cfg, l.tomlOpts); err != nil {
+		return nil, globalPath, errors.Wrap(err, "failed to unmarshal global config")
+	}
+
+	if cfg.Version == 0 {
+		cfg.Version = config.CurrentConfigVersion
+	}
+
+	return &cfg, globalPath, nil
 }
 
 // flagsToConfig converts CLI flags to a configuration map.

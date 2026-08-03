@@ -1,0 +1,52 @@
+# Test: skip_validation opts out of validation in bypass permission modes
+# This tests the configured escape hatch, and that other modes keep validating
+
+exec git init --initial-branch=main
+exec git config user.email "test@test.com"
+exec git config user.name "Test User"
+
+cp file.go staged.go
+exec git add staged.go
+
+mkdir .klaudiush
+cp config.toml .klaudiush/config.toml
+
+# Bypass mode: no validation, no output at all
+stdin bypass.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+# Ordinary mode: still validated
+stdin default.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+
+-- config.toml --
+[bypass_permissions]
+skip_validation = true
+reason = "throwaway spike"
+
+-- file.go --
+package main
+
+func main() {}
+
+-- bypass.json --
+{
+  "session_id": "sess-bypass-2",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -S -m 'feat(api): add user endpoint'"
+  }
+}
+
+-- default.json --
+{
+  "session_id": "sess-bypass-2",
+  "permission_mode": "default",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -S -m 'feat(api): add user endpoint'"
+  }
+}

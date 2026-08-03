@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/smykla-skalski/klaudiush/internal/bypass"
 	"github.com/smykla-skalski/klaudiush/internal/dispatcher"
 	"github.com/smykla-skalski/klaudiush/internal/exceptions"
 	"github.com/smykla-skalski/klaudiush/internal/validator"
@@ -129,7 +130,32 @@ var _ = Describe("Dispatcher Exception Integration", func() {
 			disp = dispatcher.NewDispatcher(reg, log)
 		})
 
-		It("skips all validation when permission mode is bypassPermissions", func() {
+		It("validates when permission mode is bypassPermissions", func() {
+			hookCtx := &hook.Context{
+				EventType:      hook.EventTypePreToolUse,
+				ToolName:       hook.ToolTypeBash,
+				PermissionMode: hook.PermissionModeBypass,
+				ToolInput: hook.ToolInput{
+					Command: "git push origin main",
+				},
+			}
+
+			errors := disp.Dispatch(context.Background(), hookCtx)
+			Expect(errors).To(HaveLen(1))
+			Expect(errors[0].ShouldBlock).To(BeTrue())
+		})
+
+		It("skips validation when the bypass policy opts out", func() {
+			skip := true
+			policy := bypass.NewPolicy(&config.BypassPermissionsConfig{SkipValidation: &skip})
+
+			disp = dispatcher.NewDispatcherWithOptions(
+				reg,
+				log,
+				dispatcher.NewSequentialExecutor(log),
+				dispatcher.WithBypassPolicy(policy),
+			)
+
 			hookCtx := &hook.Context{
 				EventType:      hook.EventTypePreToolUse,
 				ToolName:       hook.ToolTypeBash,
@@ -141,6 +167,31 @@ var _ = Describe("Dispatcher Exception Integration", func() {
 
 			errors := disp.Dispatch(context.Background(), hookCtx)
 			Expect(errors).To(BeEmpty())
+		})
+
+		It("validates other permission modes when the policy opts out", func() {
+			skip := true
+			policy := bypass.NewPolicy(&config.BypassPermissionsConfig{SkipValidation: &skip})
+
+			disp = dispatcher.NewDispatcherWithOptions(
+				reg,
+				log,
+				dispatcher.NewSequentialExecutor(log),
+				dispatcher.WithBypassPolicy(policy),
+			)
+
+			hookCtx := &hook.Context{
+				EventType:      hook.EventTypePreToolUse,
+				ToolName:       hook.ToolTypeBash,
+				PermissionMode: "acceptEdits",
+				ToolInput: hook.ToolInput{
+					Command: "git push origin main",
+				},
+			}
+
+			errors := disp.Dispatch(context.Background(), hookCtx)
+			Expect(errors).To(HaveLen(1))
+			Expect(errors[0].ShouldBlock).To(BeTrue())
 		})
 
 		It("still validates when permission mode is not bypassPermissions", func() {

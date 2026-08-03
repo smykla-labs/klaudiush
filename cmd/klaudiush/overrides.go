@@ -4,7 +4,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -128,7 +127,7 @@ func runOverridesAdd(targets []string, disabled bool) error {
 	}
 
 	// Load config
-	cfg, err := loadOverrideConfig(overrideGlobal)
+	cfg, err := loadScopedConfig(overrideGlobal)
 	if err != nil {
 		return err
 	}
@@ -162,7 +161,7 @@ func runOverridesAdd(targets []string, disabled bool) error {
 	}
 
 	// Write config
-	if err := writeOverrideConfig(cfg, overrideGlobal); err != nil {
+	if err := writeScopedConfig(cfg, overrideGlobal); err != nil {
 		return err
 	}
 
@@ -185,7 +184,7 @@ func runOverridesAdd(targets []string, disabled bool) error {
 		}
 	}
 
-	scope := "project"
+	scope := scopeProject
 	if overrideGlobal {
 		scope = scopeGlobal
 	}
@@ -200,12 +199,12 @@ func runOverridesList(_ *cobra.Command, _ []string) error {
 	showGlobal := overrideGlobal || overrideAll
 
 	if showProject {
-		cfg, err := loadOverrideConfig(false)
+		cfg, err := loadScopedConfig(false)
 		if err != nil {
 			return err
 		}
 
-		displayScopedOverrides("project", cfg.Overrides)
+		displayScopedOverrides(scopeProject, cfg.Overrides)
 	}
 
 	if showGlobal {
@@ -213,7 +212,7 @@ func runOverridesList(_ *cobra.Command, _ []string) error {
 			fmt.Println("")
 		}
 
-		cfg, err := loadOverrideConfig(true)
+		cfg, err := loadScopedConfig(true)
 		if err != nil {
 			return err
 		}
@@ -225,7 +224,7 @@ func runOverridesList(_ *cobra.Command, _ []string) error {
 }
 
 func runEnable(_ *cobra.Command, args []string) error {
-	cfg, err := loadOverrideConfig(overrideGlobal)
+	cfg, err := loadScopedConfig(overrideGlobal)
 	if err != nil {
 		return err
 	}
@@ -259,11 +258,11 @@ func runEnable(_ *cobra.Command, args []string) error {
 		cfg.Overrides = nil
 	}
 
-	if err := writeOverrideConfig(cfg, overrideGlobal); err != nil {
+	if err := writeScopedConfig(cfg, overrideGlobal); err != nil {
 		return err
 	}
 
-	scope := "project"
+	scope := scopeProject
 	if overrideGlobal {
 		scope = scopeGlobal
 	}
@@ -273,8 +272,8 @@ func runEnable(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-// loadOverrideConfig loads the config for the given scope (project or global) in isolation.
-func loadOverrideConfig(global bool) (*config.Config, error) {
+// loadScopedConfig loads the config for the given scope (project or global) in isolation.
+func loadScopedConfig(global bool) (*config.Config, error) {
 	loader, err := internalconfig.NewKoanfLoader()
 	if err != nil {
 		return nil, errors.Wrap(err, "creating config loader")
@@ -304,30 +303,7 @@ func loadOverrideConfig(global bool) (*config.Config, error) {
 // loadGlobalConfigOnly loads only the global config file without merging defaults
 // or other sources. Returns an empty config if no global file exists.
 func loadGlobalConfigOnly(loader *internalconfig.KoanfLoader) (*config.Config, error) {
-	globalPath := loader.GlobalConfigPath()
-
-	if _, err := os.Stat(globalPath); os.IsNotExist(err) {
-		return &config.Config{}, nil
-	}
-
-	// Use a fresh loader pointed at the global config dir as "project" dir
-	// so LoadProjectConfigOnly reads the global file. Instead, just load it
-	// with the full merged loader for reading purposes, then isolate.
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, errors.Wrap(err, "getting home directory")
-	}
-
-	// Create a loader with the global config dir as the work dir
-	// so LoadProjectConfigOnly picks up the global config.toml
-	globalDir := filepath.Join(homeDir, internalconfig.GlobalConfigDir)
-
-	isolatedLoader, err := internalconfig.NewKoanfLoaderWithDirs(homeDir, globalDir)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating isolated loader")
-	}
-
-	cfg, _, err := isolatedLoader.LoadProjectConfigOnly()
+	cfg, _, err := loader.LoadGlobalConfigOnly()
 	if err != nil {
 		return nil, errors.Wrap(err, "loading global config")
 	}
@@ -343,8 +319,8 @@ func loadGlobalConfigOnly(loader *internalconfig.KoanfLoader) (*config.Config, e
 	return cfg, nil
 }
 
-// writeOverrideConfig writes the config back to the appropriate file.
-func writeOverrideConfig(cfg *config.Config, global bool) error {
+// writeScopedConfig writes the config back to the appropriate file.
+func writeScopedConfig(cfg *config.Config, global bool) error {
 	writer := internalconfig.NewWriter()
 
 	if global {

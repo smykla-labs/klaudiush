@@ -174,6 +174,20 @@ Exceptions require explicit policy configuration per error code, enforce rate li
 
 Exceptions only apply to blocking `before_tool` command flows. They are not used for Codex lifecycle hooks.
 
+### Skipping approval prompts
+
+Sessions started with `--dangerously-skip-permissions` (Claude), `--dangerously-bypass-approvals-and-sandbox` (Codex), or `--yolo` (Gemini) are still validated. Skipping prompts says how much you want to be asked, not which commit conventions apply.
+
+```bash
+klaudiush bypass status              # What happens in those modes right now
+klaudiush bypass skip --duration 4h  # Opt out, expires on its own
+klaudiush bypass skip --global       # Opt out everywhere
+klaudiush bypass enforce             # Back to the default
+klaudiush bypass notify off          # Keep validating, hide the reminder
+```
+
+While validating such a session, klaudiush shows a reminder in `systemMessage` once per session. That field goes to you, not to the model, so the agent cannot act on it. See the [bypass guide](docs/BYPASS_GUIDE.md).
+
 ## Performance
 
 End-to-end binary execution on Apple M3 Max (hyperfine, 30 runs, CLI git backend):

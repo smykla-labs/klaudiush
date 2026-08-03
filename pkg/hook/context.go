@@ -3,6 +3,7 @@ package hook
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 )
 
@@ -196,12 +197,32 @@ type Context struct {
 	CompactTrigger string
 }
 
-// PermissionModeBypass is the permission mode value when --dangerously-skip-permissions is active.
-const PermissionModeBypass = "bypassPermissions"
+// Permission mode values that turn off interactive approval prompts.
+const (
+	// PermissionModeBypass is the Claude Code mode set by --dangerously-skip-permissions.
+	PermissionModeBypass = "bypassPermissions"
 
-// IsBypassPermissions returns true if the session is running with --dangerously-skip-permissions.
+	// PermissionModeDangerFullAccess is the Codex sandbox mode set by
+	// --dangerously-bypass-approvals-and-sandbox.
+	PermissionModeDangerFullAccess = "danger-full-access"
+
+	// PermissionModeYolo is the Gemini CLI approval mode set by --yolo.
+	PermissionModeYolo = "yolo"
+)
+
+// DefaultBypassModes returns the permission modes treated as approval bypass modes
+// when the configuration does not list its own.
+func DefaultBypassModes() []string {
+	return []string{
+		PermissionModeBypass,
+		PermissionModeDangerFullAccess,
+		PermissionModeYolo,
+	}
+}
+
+// IsBypassPermissions returns true if the session runs without approval prompts.
 func (c *Context) IsBypassPermissions() bool {
-	return c.PermissionMode == PermissionModeBypass
+	return slices.Contains(DefaultBypassModes(), c.PermissionMode)
 }
 
 // GetCommand returns the command from ToolInput.

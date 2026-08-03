@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smykla-skalski/klaudiush/internal/backup"
+	"github.com/smykla-skalski/klaudiush/internal/bypass"
 	internalconfig "github.com/smykla-skalski/klaudiush/internal/config"
 	"github.com/smykla-skalski/klaudiush/internal/config/factory"
 	"github.com/smykla-skalski/klaudiush/internal/crashdump"
@@ -256,13 +257,17 @@ func run(cmd *cobra.Command, _ []string) error {
 	// Create and initialize exception checker if enabled
 	exceptionHandler, exceptionChecker := initExceptionChecker(cfg, workDir, log)
 
-	// Create dispatcher with exception checker and overrides
+	// Permission bypass modes still validate unless the user opted out
+	bypassPolicy := bypass.NewPolicy(cfg.BypassPermissions)
+
+	// Create dispatcher with exception checker, overrides, and bypass policy
 	disp := dispatcher.NewDispatcherWithOptions(
 		registry,
 		log,
 		dispatcher.NewSequentialExecutor(log),
 		dispatcher.WithExceptionChecker(exceptionChecker),
 		dispatcher.WithOverrides(cfg.Overrides),
+		dispatcher.WithBypassPolicy(bypassPolicy),
 	)
 
 	// Dispatch validation
@@ -278,11 +283,11 @@ func run(cmd *cobra.Command, _ []string) error {
 	// Run failure pattern tracking
 	patternWarnings := runPatternTracking(cfg, ctx, errs, workDir, log)
 
-	// Check for updates
-	updateMsg := checkForUpdates(cfg, log)
+	// Collect user-only notices (bypass reminder, update availability)
+	notices := collectNotices(bypassPolicy, cfg, ctx, log)
 
 	// Build and write response
-	writeErr := writeResponse(ctx, errs, patternWarnings, updateMsg, log)
+	writeErr := writeResponse(ctx, errs, patternWarnings, notices, log)
 
 	sessionCleanup()
 
@@ -360,23 +365,74 @@ func savePersistentState(
 	}
 }
 
+// collectNotices gathers user-only messages to surface in systemMessage.
+// The AI never sees these.
+func collectNotices(
+	policy *bypass.Policy,
+	cfg *config.Config,
+	hookCtx *hook.Context,
+	log logger.Logger,
+) []string {
+	var notices []string
+
+	if msg := bypassNotice(policy, hookCtx, log); msg != "" {
+		notices = append(notices, msg)
+	}
+
+	if msg := checkForUpdates(cfg, log); msg != "" {
+		notices = append(notices, msg)
+	}
+
+	return notices
+}
+
+// bypassNotice returns the reminder shown while klaudiush keeps validating a
+// session that runs without approval prompts. Shown once per session.
+func bypassNotice(
+	policy *bypass.Policy,
+	hookCtx *hook.Context,
+	log logger.Logger,
+) string {
+	if !policy.ModeActive(hookCtx) || policy.SkipValidation(hookCtx) || !policy.NotifyEnabled() {
+		return ""
+	}
+
+	first, err := bypass.NewNoticeTracker().MarkNotified(hookCtx.ProviderName(), hookCtx.SessionID)
+	if err != nil {
+		log.Info("failed to record bypass notice state", "error", err)
+	}
+
+	if !first {
+		return ""
+	}
+
+	log.Info("validating under bypass permission mode", "mode", hookCtx.PermissionMode)
+
+	return bypass.Notice(hookCtx.PermissionMode)
+}
+
 // writeResponse builds and writes the JSON hook response to stdout.
 func writeResponse(
 	hookCtx *hook.Context,
 	errs []*dispatcher.ValidationError,
 	patternWarnings []string,
-	updateNotification string,
+	notices []string,
 	log logger.Logger,
 ) error {
 	response := hookresponse.BuildForContext(hookCtx, errs, patternWarnings)
+	if hookresponse.IsEmpty(response) {
+		response = nil
+	}
 
-	// Inject update notification into response
-	if updateNotification != "" {
+	// Inject user-only notices into the response
+	for _, notice := range notices {
 		if response == nil {
-			response = hookresponse.BuildUpdateNotification(hookCtx, updateNotification)
-		} else {
-			hookresponse.AppendUpdateNotification(response, updateNotification)
+			response = hookresponse.BuildNotice(hookCtx, notice)
+
+			continue
 		}
+
+		hookresponse.AppendNotice(response, notice)
 	}
 
 	if response == nil {

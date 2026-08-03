@@ -153,6 +153,36 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "BypassPermissionsConfig": {
+      "properties": {
+        "skip_validation": {
+          "type": "boolean"
+        },
+        "notify": {
+          "type": "boolean"
+        },
+        "modes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "skipped_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "skipped_by": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ByteSize": {
       "type": "integer",
       "minimum": 0,
@@ -1704,6 +1734,9 @@
     },
     "update_check": {
       "$ref": "#/$defs/UpdateCheckConfig"
+    },
+    "bypass_permissions": {
+      "$ref": "#/$defs/BypassPermissionsConfig"
     }
   },
   "additionalProperties": false,

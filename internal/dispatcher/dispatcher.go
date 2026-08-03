@@ -66,6 +66,13 @@ func shortName(name string) string {
 	return strings.TrimPrefix(name, "validate-")
 }
 
+// BypassPolicy decides whether a context escapes validation because the
+// session runs without approval prompts.
+type BypassPolicy interface {
+	// SkipValidation reports whether validation should be skipped entirely.
+	SkipValidation(hookCtx *hook.Context) bool
+}
+
 // Dispatcher orchestrates validation of hook contexts.
 type Dispatcher struct {
 	registry         *validator.Registry
@@ -73,6 +80,7 @@ type Dispatcher struct {
 	executor         Executor
 	exceptionChecker ExceptionChecker
 	overrides        *config.OverridesConfig
+	bypassPolicy     BypassPolicy
 }
 
 // NewDispatcher creates a new Dispatcher with sequential execution.
@@ -116,6 +124,16 @@ func WithOverrides(overrides *config.OverridesConfig) DispatcherOption {
 	}
 }
 
+// WithBypassPolicy sets the permission bypass policy. Without one, validation
+// runs regardless of the session permission mode.
+func WithBypassPolicy(policy BypassPolicy) DispatcherOption {
+	return func(d *Dispatcher) {
+		if policy != nil {
+			d.bypassPolicy = policy
+		}
+	}
+}
+
 // NewDispatcherWithOptions creates a new Dispatcher with options.
 func NewDispatcherWithOptions(
 	registry *validator.Registry,
@@ -144,8 +162,10 @@ func (d *Dispatcher) Dispatch(ctx context.Context, hookCtx *hook.Context) []*Val
 		"tool", hookCtx.ToolName,
 	)
 
-	if hookCtx.IsBypassPermissions() {
-		d.logger.Info("skipping validation: bypass permissions mode active")
+	if d.bypassPolicy != nil && d.bypassPolicy.SkipValidation(hookCtx) {
+		d.logger.Info("skipping validation: configured to skip in bypass permission mode",
+			"permissionMode", hookCtx.PermissionMode,
+		)
 
 		return nil
 	}

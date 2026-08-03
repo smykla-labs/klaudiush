@@ -1,0 +1,63 @@
+# Test: the bypass CLI writes, reports, and clears the project setting
+
+# Default state
+exec klaudiush bypass status
+stdout 'Bypass permissions \(project\)'
+stdout '\(not configured\)'
+stdout 'ENFORCED in every permission mode'
+stdout 'Bypass modes: bypassPermissions, danger-full-access, yolo'
+
+# Opt out
+exec klaudiush bypass skip --reason 'throwaway spike'
+stdout 'Validation SKIPPED while approval prompts are off'
+stdout 'Reason: throwaway spike'
+stdout 'Undo with: klaudiush bypass enforce'
+stdout 'Effective now: SKIPPED in bypass permission modes'
+
+exec klaudiush bypass status
+stdout 'SKIPPED in bypass permission modes'
+stdout 'Reason: throwaway spike'
+
+grep 'skip_validation = true' .klaudiush/config.toml
+grep 'skipped_by = .cli.' .klaudiush/config.toml
+
+# Expiring opt-out records the deadline
+exec klaudiush bypass skip --duration 4h
+exec klaudiush bypass status
+stdout 'Expires: '
+
+# Back to the default. The explicit false must be written, not just dropped,
+# so the scope can still win against a skip set elsewhere.
+exec klaudiush bypass enforce
+stdout 'Validation ENFORCED'
+stdout 'Effective now: ENFORCED in every permission mode'
+
+exec klaudiush bypass status
+stdout 'ENFORCED in every permission mode'
+
+grep 'skip_validation = false' .klaudiush/config.toml
+! grep 'skipped_by' .klaudiush/config.toml
+! grep 'expires_at' .klaudiush/config.toml
+
+# Reminder toggle
+exec klaudiush bypass notify off
+stdout 'Bypass reminder off'
+stdout 'Effective now: reminder off'
+
+exec klaudiush bypass status
+stdout 'Reminder: off'
+
+grep 'notify = false' .klaudiush/config.toml
+
+exec klaudiush bypass notify on
+stdout 'Bypass reminder on'
+stdout 'Effective now: reminder on'
+
+exec klaudiush bypass status
+stdout 'Reminder: on'
+
+grep 'notify = true' .klaudiush/config.toml
+
+# Invalid argument
+! exec klaudiush bypass notify maybe
+stderr 'expected "on" or "off"'
