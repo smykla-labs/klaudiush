@@ -1,8 +1,10 @@
 package bypass
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -87,8 +89,78 @@ func TestNoticeTrackerRecoversFromCorruptState(t *testing.T) {
 
 	tracker := NewNoticeTracker(WithStateFile(stateFile))
 
-	if _, err := tracker.MarkNotified("claude", "sess-1"); err == nil {
-		t.Error("MarkNotified() error = nil for corrupt state, want error")
+	first, err := tracker.MarkNotified("claude", "sess-1")
+	if err != nil {
+		t.Fatalf("MarkNotified() error = %v, want nil for corrupt state", err)
+	}
+
+	if !first {
+		t.Error("MarkNotified() = false for corrupt state, want true")
+	}
+
+	// The corrupt file must be repaired, not left in place, or the notice
+	// would repeat on every hook invocation forever.
+	again, err := tracker.MarkNotified("claude", "sess-1")
+	if err != nil {
+		t.Fatalf("MarkNotified() error = %v", err)
+	}
+
+	if again {
+		t.Error("MarkNotified() = true after repair, want false")
+	}
+
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	if !json.Valid(data) {
+		t.Errorf("state file still invalid JSON after repair: %s", data)
+	}
+}
+
+func TestNoticeTrackerShowsNoticeWhenStateIsUnreadable(t *testing.T) {
+	// A directory where the state file should be: ReadFile fails with an
+	// error that persistence cannot recover from.
+	stateFile := filepath.Join(t.TempDir(), "bypass_notice.json")
+	if err := os.Mkdir(stateFile, 0o755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+
+	tracker := NewNoticeTracker(WithStateFile(stateFile))
+
+	first, err := tracker.MarkNotified("claude", "sess-1")
+	if err == nil {
+		t.Error("MarkNotified() error = nil for unreadable state, want error")
+	}
+
+	if !first {
+		t.Error("MarkNotified() = false for unreadable state, want true (fail open)")
+	}
+}
+
+func TestNoticeTrackerLeavesNoTempFiles(t *testing.T) {
+	dir := t.TempDir()
+	tracker := NewNoticeTracker(WithStateFile(filepath.Join(dir, "bypass_notice.json")))
+
+	for i := range 3 {
+		if _, err := tracker.MarkNotified("claude", strconv.Itoa(i)); err != nil {
+			t.Fatalf("MarkNotified() error = %v", err)
+		}
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir() error = %v", err)
+	}
+
+	if len(entries) != 1 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+
+		t.Errorf("state dir holds %v, want only the state file", names)
 	}
 }
 
