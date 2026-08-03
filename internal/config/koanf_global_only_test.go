@@ -99,4 +99,32 @@ enabled = false
 		_, _, err := loader.LoadGlobalConfigOnly()
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("rejects a world-writable global config", func() {
+		loader, homeDir := newGlobalOnlyLoader()
+
+		DeferCleanup(func() { os.RemoveAll(homeDir) })
+
+		writeGlobalConfig(homeDir, "version = 1\n")
+		Expect(os.Chmod(loader.GlobalConfigPath(), 0o666)).To(Succeed())
+
+		_, _, err := loader.LoadGlobalConfigOnly()
+		Expect(err).To(MatchError(ErrInvalidPermissions))
+	})
+
+	It("rejects a world-writable project config", func() {
+		loader, homeDir := newGlobalOnlyLoader()
+
+		DeferCleanup(func() { os.RemoveAll(homeDir) })
+
+		workDir := filepath.Join(homeDir, "projects", "myrepo")
+		writeConfigAt(workDir, "version = 1\n")
+		Expect(os.Chmod(
+			filepath.Join(workDir, ProjectConfigDir, ProjectConfigFile),
+			0o666,
+		)).To(Succeed())
+
+		_, _, err := loader.LoadProjectConfigOnly()
+		Expect(err).To(MatchError(ErrInvalidPermissions))
+	})
 })

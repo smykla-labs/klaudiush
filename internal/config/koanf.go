@@ -338,13 +338,22 @@ func mergeRules(globalRules, projectRules []config.RuleConfig) []config.RuleConf
 
 // loadTOMLFile loads a TOML configuration file with security checks.
 func (l *KoanfLoader) loadTOMLFile(path string) error {
-	// Check if file exists
+	if err := checkConfigPermissions(path); err != nil {
+		return err
+	}
+
+	return l.k.Load(file.Provider(path), tomlparser.Parser(), deepMergeOpt)
+}
+
+// checkConfigPermissions rejects world-writable config files. Every path that
+// reads a config must go through this, including the isolated loaders the
+// rewriting commands use.
+func checkConfigPermissions(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
 
-	// Security check: reject world-writable files
 	if info.Mode().Perm()&0o002 != 0 {
 		return errors.Wrapf(
 			ErrInvalidPermissions,
@@ -354,7 +363,7 @@ func (l *KoanfLoader) loadTOMLFile(path string) error {
 		)
 	}
 
-	return l.k.Load(file.Provider(path), tomlparser.Parser(), deepMergeOpt)
+	return nil
 }
 
 // envHierarchy maps each valid parent path to its known child segment names.
@@ -564,6 +573,10 @@ func (l *KoanfLoader) LoadProjectConfigOnly() (*config.Config, string, error) {
 		return nil, "", nil
 	}
 
+	if err := checkConfigPermissions(projectPath); err != nil {
+		return nil, projectPath, errors.Wrap(err, "failed to read project config")
+	}
+
 	// Create a fresh koanf instance for isolated loading
 	k := koanf.New(".")
 
@@ -600,12 +613,12 @@ func (l *KoanfLoader) LoadProjectConfigOnly() (*config.Config, string, error) {
 func (l *KoanfLoader) LoadGlobalConfigOnly() (*config.Config, string, error) {
 	globalPath := l.GlobalConfigPath()
 
-	if _, err := os.Stat(globalPath); err != nil {
+	if err := checkConfigPermissions(globalPath); err != nil {
 		if os.IsNotExist(err) {
 			return nil, "", nil
 		}
 
-		return nil, globalPath, errors.Wrap(err, "failed to stat global config")
+		return nil, globalPath, errors.Wrap(err, "failed to read global config")
 	}
 
 	// Create a fresh koanf instance for isolated loading
