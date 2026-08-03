@@ -149,7 +149,7 @@ func runBypassSkip(_ *cobra.Command, _ []string) error {
 	fmt.Printf("\nWritten to %s config. Undo with: klaudiush bypass enforce%s\n",
 		scopeName(bypassGlobal), globalFlagSuffix(bypassGlobal))
 
-	return nil
+	return reportEffectiveValidation()
 }
 
 func runBypassEnforce(_ *cobra.Command, _ []string) error {
@@ -158,14 +158,14 @@ func runBypassEnforce(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// Store the explicit false rather than dropping the section: an absent
+	// setting inherits, so it cannot turn off a skip set in the other scope.
 	bypassCfg := cfg.GetBypassPermissions()
-	bypassCfg.SkipValidation = nil
+	bypassCfg.SkipValidation = new(false)
 	bypassCfg.Reason = ""
 	bypassCfg.SkippedAt = ""
 	bypassCfg.ExpiresAt = ""
 	bypassCfg.SkippedBy = ""
-
-	pruneBypassConfig(cfg)
 
 	if err := writeScopedConfig(cfg, bypassGlobal); err != nil {
 		return err
@@ -174,7 +174,7 @@ func runBypassEnforce(_ *cobra.Command, _ []string) error {
 	fmt.Println("Validation ENFORCED, including while approval prompts are off.")
 	fmt.Printf("\nWritten to %s config.\n", scopeName(bypassGlobal))
 
-	return nil
+	return reportEffectiveValidation()
 }
 
 func runBypassNotify(_ *cobra.Command, args []string) error {
@@ -188,25 +188,52 @@ func runBypassNotify(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	bypassCfg := cfg.GetBypassPermissions()
+	// Stored either way, for the same reason as enforce.
+	cfg.GetBypassPermissions().Notify = &notify
 
-	if notify {
-		// Notifying is the default, so drop the entry instead of storing true.
-		bypassCfg.Notify = nil
-	} else {
-		bypassCfg.Notify = &notify
-	}
-
-	pruneBypassConfig(cfg)
-
-	if err := writeScopedConfig(cfg, bypassGlobal); err != nil {
-		return err
+	if writeErr := writeScopedConfig(cfg, bypassGlobal); writeErr != nil {
+		return writeErr
 	}
 
 	fmt.Printf("Bypass reminder %s.\n", onOffLabel(notify))
 	fmt.Printf("\nWritten to %s config.\n", scopeName(bypassGlobal))
 
+	merged, err := mergedBypassConfig()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Effective now: reminder %s\n", onOffLabel(merged.IsNotifyEnabled()))
+
 	return nil
+}
+
+// reportEffectiveValidation prints the merged setting the hook will apply,
+// so a scope that loses to another one is visible rather than assumed.
+func reportEffectiveValidation() error {
+	merged, err := mergedBypassConfig()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Effective now: %s\n", validationLabel(merged))
+
+	return nil
+}
+
+// mergedBypassConfig loads the bypass settings with full precedence applied.
+func mergedBypassConfig() (*config.BypassPermissionsConfig, error) {
+	loader, err := internalconfig.NewKoanfLoader()
+	if err != nil {
+		return nil, errors.Wrap(err, "creating config loader")
+	}
+
+	cfg, err := loader.Load(nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "loading merged config")
+	}
+
+	return cfg.BypassPermissions, nil
 }
 
 func runBypassStatus(_ *cobra.Command, _ []string) error {
@@ -274,21 +301,9 @@ func displayBypassScope(scope string, cfg *config.BypassPermissionsConfig) {
 
 // displayBypassEffective renders the merged setting the hook actually applies.
 func displayBypassEffective() error {
-	loader, err := internalconfig.NewKoanfLoader()
+	bypassCfg, err := mergedBypassConfig()
 	if err != nil {
-		return errors.Wrap(err, "creating config loader")
-	}
-
-	cfg, err := loader.Load(nil)
-	if err != nil {
-		return errors.Wrap(err, "loading merged config")
-	}
-
-	bypassCfg := cfg.BypassPermissions
-
-	modes := bypassCfg.GetModes()
-	if len(modes) == 0 {
-		modes = hook.DefaultBypassModes()
+		return err
 	}
 
 	fmt.Println("")
@@ -297,40 +312,50 @@ func displayBypassEffective() error {
 	fmt.Println("")
 	fmt.Printf("  Validation: %s\n", validationLabel(bypassCfg))
 	fmt.Printf("  Reminder: %s\n", onOffLabel(bypassCfg.IsNotifyEnabled()))
-	fmt.Printf("  Bypass modes: %s\n", strings.Join(modes, ", "))
+	fmt.Printf("  Bypass modes: %s\n", strings.Join(effectiveModes(bypassCfg), ", "))
 
 	return nil
 }
 
-// validationLabel describes what happens in bypass permission modes.
+// validationLabel describes what happens in the configured permission modes.
 func validationLabel(cfg *config.BypassPermissionsConfig) string {
 	if cfg.IsSkipValidation() {
-		return "SKIPPED in bypass permission modes"
+		return "SKIPPED in " + modesPhrase(cfg)
 	}
 
-	if cfg != nil && cfg.IsExpired() {
-		return "ENFORCED (skip expired)"
+	if !skipRequested(cfg) {
+		return "ENFORCED in every permission mode"
 	}
 
-	return "ENFORCED in every permission mode"
+	if cfg.HasInvalidExpiry() {
+		return "ENFORCED (expires_at is not RFC3339, skip ignored)"
+	}
+
+	return "ENFORCED (skip expired)"
 }
 
-// pruneBypassConfig drops the bypass section when nothing is left to store.
-func pruneBypassConfig(cfg *config.Config) {
-	bypassCfg := cfg.BypassPermissions
-	if bypassCfg == nil {
-		return
+// modesPhrase names the modes a skip applies to, spelling out custom lists
+// so a setting that reaches beyond prompt-free sessions is not hidden.
+func modesPhrase(cfg *config.BypassPermissionsConfig) string {
+	if len(cfg.GetModes()) == 0 {
+		return "bypass permission modes"
 	}
 
-	if bypassCfg.SkipValidation == nil &&
-		bypassCfg.Notify == nil &&
-		len(bypassCfg.Modes) == 0 &&
-		bypassCfg.Reason == "" &&
-		bypassCfg.SkippedAt == "" &&
-		bypassCfg.ExpiresAt == "" &&
-		bypassCfg.SkippedBy == "" {
-		cfg.BypassPermissions = nil
+	return "permission modes: " + strings.Join(cfg.GetModes(), ", ")
+}
+
+// effectiveModes returns the modes in force, falling back to the defaults.
+func effectiveModes(cfg *config.BypassPermissionsConfig) []string {
+	if modes := cfg.GetModes(); len(modes) > 0 {
+		return modes
 	}
+
+	return hook.DefaultBypassModes()
+}
+
+// skipRequested reports whether the config asks to skip, expiry aside.
+func skipRequested(cfg *config.BypassPermissionsConfig) bool {
+	return cfg != nil && cfg.SkipValidation != nil && *cfg.SkipValidation
 }
 
 // parseOnOff converts an on/off argument to a boolean.

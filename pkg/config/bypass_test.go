@@ -50,12 +50,38 @@ var _ = Describe("BypassPermissionsConfig", func() {
 			Expect(cfg.IsSkipValidation()).To(BeFalse())
 		})
 
-		It("returns true when the expiry cannot be parsed", func() {
+		It("returns false when the expiry cannot be parsed", func() {
+			// A typo must resume validation, not skip it forever.
 			cfg := &config.BypassPermissionsConfig{
 				SkipValidation: &trueValue,
-				ExpiresAt:      "not-a-timestamp",
+				ExpiresAt:      "2026-08-03 13:00:00",
 			}
-			Expect(cfg.IsSkipValidation()).To(BeTrue())
+			Expect(cfg.IsSkipValidation()).To(BeFalse())
+		})
+	})
+
+	Describe("HasInvalidExpiry", func() {
+		It("returns false for nil config", func() {
+			var cfg *config.BypassPermissionsConfig
+			Expect(cfg.HasInvalidExpiry()).To(BeFalse())
+		})
+
+		It("returns false when no expiry is set", func() {
+			cfg := &config.BypassPermissionsConfig{}
+			Expect(cfg.HasInvalidExpiry()).To(BeFalse())
+		})
+
+		It("returns false for a valid timestamp", func() {
+			cfg := &config.BypassPermissionsConfig{
+				ExpiresAt: time.Now().Format(time.RFC3339),
+			}
+			Expect(cfg.HasInvalidExpiry()).To(BeFalse())
+		})
+
+		It("returns true for a malformed timestamp", func() {
+			cfg := &config.BypassPermissionsConfig{ExpiresAt: "2026-08-03 13:00:00"}
+			Expect(cfg.HasInvalidExpiry()).To(BeTrue())
+			Expect(cfg.IsExpired()).To(BeTrue())
 		})
 	})
 

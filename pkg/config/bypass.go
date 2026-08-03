@@ -59,6 +59,8 @@ func (b *BypassPermissionsConfig) IsNotifyEnabled() bool {
 }
 
 // IsExpired returns true if the skip entry has an expiry and it has passed.
+// An expiry that cannot be parsed counts as expired, so a typo resumes
+// validation instead of silently skipping it forever.
 func (b *BypassPermissionsConfig) IsExpired() bool {
 	if b == nil || b.ExpiresAt == "" {
 		return false
@@ -66,10 +68,22 @@ func (b *BypassPermissionsConfig) IsExpired() bool {
 
 	t, err := time.Parse(time.RFC3339, b.ExpiresAt)
 	if err != nil {
-		return false
+		return true
 	}
 
 	return time.Now().After(t)
+}
+
+// HasInvalidExpiry reports whether ExpiresAt is set but is not a valid RFC3339
+// timestamp. Callers surface this so the user learns why the skip stopped.
+func (b *BypassPermissionsConfig) HasInvalidExpiry() bool {
+	if b == nil || b.ExpiresAt == "" {
+		return false
+	}
+
+	_, err := time.Parse(time.RFC3339, b.ExpiresAt)
+
+	return err != nil
 }
 
 // GetModes returns the configured bypass permission modes, or nil when the

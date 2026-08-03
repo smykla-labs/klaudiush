@@ -19,6 +19,8 @@ notify = true
 
 # Permission mode values treated as bypass modes
 # Setting this replaces the built-in list rather than extending it
+# Nothing restricts the values: listing an ordinary mode such as "default"
+# alongside skip_validation = true turns klaudiush off for ordinary sessions
 # Default: ["bypassPermissions", "danger-full-access", "yolo"]
 modes = ["bypassPermissions", "danger-full-access", "yolo"]
 
@@ -32,6 +34,7 @@ modes = ["bypassPermissions", "danger-full-access", "yolo"]
 # skipped_at = "2026-08-03T09:00:00Z"
 
 # RFC3339 timestamp when skipping stops applying, empty means permanent
+# A value that is not valid RFC3339 counts as expired, so validation resumes
 # Set with: klaudiush bypass skip --duration 4h
 # expires_at = "2026-08-03T13:00:00Z"
 

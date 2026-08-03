@@ -69,11 +69,13 @@ Writes `skip_validation = true` to the project config, or the global config with
 | `--duration`, `-d` | How long the opt-out lasts (`4h`, `7d`), stored as `expires_at` |
 | `--global` | Write to the global config instead of the project one |
 
-An expired opt-out stops applying without any cleanup - validation resumes on its own, and `klaudiush bypass status` reports `ENFORCED (skip expired)`.
+An expired opt-out stops applying without any cleanup - validation resumes on its own, and `klaudiush bypass status` reports `ENFORCED (skip expired)`. An `expires_at` that is not valid RFC3339 counts as expired, so a typo resumes validation rather than skipping forever; `status` says `ENFORCED (expires_at is not RFC3339, skip ignored)`.
 
 ### klaudiush bypass enforce
 
-Removes the opt-out and restores the default. The `[bypass_permissions]` section is dropped from the config file when nothing is left in it.
+Restores the default by writing `skip_validation = false`. The value is stored explicitly rather than removed, because an absent setting inherits from the wider scope - a project that merely omits the setting cannot override `klaudiush bypass skip --global`.
+
+Every write prints the merged result as `Effective now:`, so a setting that loses to another scope is visible instead of assumed.
 
 ### klaudiush bypass notify
 
@@ -130,6 +132,8 @@ modes = ["bypassPermissions", "danger-full-access", "yolo", "dontAsk"]
 
 The permission mode arrives in the hook payload as `permission_mode`. Anything the provider does not send leaves the field empty, and an empty mode is never treated as a bypass.
 
+Nothing restricts `modes` to prompt-free modes. Listing an ordinary mode such as `default` alongside `skip_validation = true` turns klaudiush off for ordinary sessions - the same reach a rule with `action = "allow"` already has, and worth knowing before committing either to a shared repo. `klaudiush bypass status` spells the list out (`SKIPPED in permission modes: default, acceptEdits`) rather than reporting the generic bypass-mode wording.
+
 ## Environment variables
 
 ```bash
@@ -150,7 +154,9 @@ Check which scope holds the setting and whether it expired:
 klaudiush bypass status --all
 ```
 
-A project config wins over a global one, so a project-level `skip_validation = false` overrides `klaudiush bypass skip --global`.
+A project config wins over a global one, so a project-level `skip_validation = false` overrides `klaudiush bypass skip --global`. That is what `klaudiush bypass enforce` writes.
+
+Check the expiry too - an `expires_at` in the past, or one that is not valid RFC3339, makes the skip stop applying.
 
 ### The reminder does not appear
 

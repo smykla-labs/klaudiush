@@ -2,8 +2,14 @@
 # Regression: the global scope used to read from a path that never matched the
 # file the writer targets, so every --global write replaced the whole file.
 
+# $HOME is $WORK, so working inside a subdirectory keeps the global config
+# distinct from the project one. Without this, a --global write that silently
+# targeted the project file would satisfy every assertion below.
+mkdir $WORK/project
+cd $WORK/project
+
 mkdir $HOME/.klaudiush
-cp global.toml $HOME/.klaudiush/config.toml
+cp $WORK/global.toml $HOME/.klaudiush/config.toml
 
 # The global scope reads what is actually on disk
 exec klaudiush bypass status --global
@@ -29,6 +35,9 @@ exec klaudiush disable GIT014 --global --reason 'still here'
 grep 'required_flags' $HOME/.klaudiush/config.toml
 grep 'skip_validation' $HOME/.klaudiush/config.toml
 grep 'GIT014' $HOME/.klaudiush/config.toml
+
+# The project config was never the target
+! exists $WORK/project/.klaudiush/config.toml
 
 -- global.toml --
 version = 1

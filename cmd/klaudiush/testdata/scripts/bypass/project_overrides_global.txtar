@@ -1,0 +1,56 @@
+# Test: a project-scope enforce beats a global-scope skip
+# Regression: enforce used to drop the section instead of writing the explicit
+# false, so it printed success while the global skip still won.
+
+# $HOME is $WORK, so working inside a subdirectory keeps the global config
+# ($HOME/.klaudiush/config.toml) distinct from the project one.
+mkdir $WORK/project
+cd $WORK/project
+
+exec git init --initial-branch=main
+exec git config user.email "test@test.com"
+exec git config user.name "Test User"
+
+cp $WORK/file.go staged.go
+exec git add staged.go
+
+# Global opt-out: validation stops in bypass modes
+exec klaudiush bypass skip --global --reason 'org wide opt-out'
+stdout 'Effective now: SKIPPED in bypass permission modes'
+
+stdin $WORK/input.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+# Project enforce must win
+exec klaudiush bypass enforce
+stdout 'Validation ENFORCED'
+stdout 'Effective now: ENFORCED in every permission mode'
+
+grep 'skip_validation = false' $WORK/project/.klaudiush/config.toml
+grep 'skip_validation = true' $HOME/.klaudiush/config.toml
+
+stdin $WORK/input.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+
+# Both scopes are visible
+exec klaudiush bypass status --all
+stdout 'Bypass permissions \(project\)'
+stdout 'Bypass permissions \(global\)'
+stdout 'Effective'
+
+-- file.go --
+package main
+
+func main() {}
+
+-- input.json --
+{
+  "session_id": "sess-scope-1",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -S -m 'feat(api): add user endpoint'"
+  }
+}
