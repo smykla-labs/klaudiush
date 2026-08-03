@@ -591,6 +591,43 @@ func (l *KoanfLoader) LoadProjectConfigOnly() (*config.Config, string, error) {
 	return &cfg, projectPath, nil
 }
 
+// LoadGlobalConfigOnly loads the global config file in isolation, without
+// defaults, project config, environment variables, or flags merged in.
+// Returns a nil config when no global file exists.
+//
+// Commands that rewrite the global config must read it through this so the
+// rest of the file survives the round trip.
+func (l *KoanfLoader) LoadGlobalConfigOnly() (*config.Config, string, error) {
+	globalPath := l.GlobalConfigPath()
+
+	if _, err := os.Stat(globalPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, "", nil
+		}
+
+		return nil, globalPath, errors.Wrap(err, "failed to stat global config")
+	}
+
+	// Create a fresh koanf instance for isolated loading
+	k := koanf.New(".")
+
+	if err := k.Load(file.Provider(globalPath), tomlparser.Parser()); err != nil {
+		return nil, globalPath, errors.Wrap(err, "failed to load global config")
+	}
+
+	var cfg config.Config
+
+	if err := k.UnmarshalWithConf("", &cfg, l.tomlOpts); err != nil {
+		return nil, globalPath, errors.Wrap(err, "failed to unmarshal global config")
+	}
+
+	if cfg.Version == 0 {
+		cfg.Version = config.CurrentConfigVersion
+	}
+
+	return &cfg, globalPath, nil
+}
+
 // flagsToConfig converts CLI flags to a configuration map.
 func (*KoanfLoader) flagsToConfig(flags map[string]any) map[string]any {
 	result := make(map[string]any)

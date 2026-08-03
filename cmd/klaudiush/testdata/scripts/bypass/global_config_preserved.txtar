@@ -1,0 +1,47 @@
+# Test: writing a --global setting keeps the rest of the global config
+# Regression: the global scope used to read from a path that never matched the
+# file the writer targets, so every --global write replaced the whole file.
+
+mkdir $HOME/.klaudiush
+cp global.toml $HOME/.klaudiush/config.toml
+
+# The global scope reads what is actually on disk
+exec klaudiush bypass status --global
+stdout 'Bypass permissions \(global\)'
+stdout '\(not configured\)'
+
+exec klaudiush bypass skip --global --reason 'global opt-out'
+stdout 'Written to global config'
+
+# The new setting landed
+exec klaudiush bypass status --global
+stdout 'SKIPPED in bypass permission modes'
+stdout 'Reason: global opt-out'
+
+# Everything else survived the round trip
+grep 'required_flags' $HOME/.klaudiush/config.toml
+grep 'title_max_length' $HOME/.klaudiush/config.toml
+grep 'markdown' $HOME/.klaudiush/config.toml
+grep 'bell' $HOME/.klaudiush/config.toml
+
+# Same for the overrides commands, which share the loader
+exec klaudiush disable GIT014 --global --reason 'still here'
+grep 'required_flags' $HOME/.klaudiush/config.toml
+grep 'skip_validation' $HOME/.klaudiush/config.toml
+grep 'GIT014' $HOME/.klaudiush/config.toml
+
+-- global.toml --
+version = 1
+
+[validators.git.commit]
+enabled = true
+required_flags = ["-s", "-S"]
+
+[validators.git.commit.message]
+title_max_length = 50
+
+[validators.file.markdown]
+enabled = false
+
+[validators.notification.bell]
+enabled = true

@@ -4,7 +4,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -304,30 +303,7 @@ func loadScopedConfig(global bool) (*config.Config, error) {
 // loadGlobalConfigOnly loads only the global config file without merging defaults
 // or other sources. Returns an empty config if no global file exists.
 func loadGlobalConfigOnly(loader *internalconfig.KoanfLoader) (*config.Config, error) {
-	globalPath := loader.GlobalConfigPath()
-
-	if _, err := os.Stat(globalPath); os.IsNotExist(err) {
-		return &config.Config{}, nil
-	}
-
-	// Use a fresh loader pointed at the global config dir as "project" dir
-	// so LoadProjectConfigOnly reads the global file. Instead, just load it
-	// with the full merged loader for reading purposes, then isolate.
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, errors.Wrap(err, "getting home directory")
-	}
-
-	// Create a loader with the global config dir as the work dir
-	// so LoadProjectConfigOnly picks up the global config.toml
-	globalDir := filepath.Join(homeDir, internalconfig.GlobalConfigDir)
-
-	isolatedLoader, err := internalconfig.NewKoanfLoaderWithDirs(homeDir, globalDir)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating isolated loader")
-	}
-
-	cfg, _, err := isolatedLoader.LoadProjectConfigOnly()
+	cfg, _, err := loader.LoadGlobalConfigOnly()
 	if err != nil {
 		return nil, errors.Wrap(err, "loading global config")
 	}
