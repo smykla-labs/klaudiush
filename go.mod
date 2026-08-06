@@ -19,17 +19,17 @@ require (
 	github.com/invopop/jsonschema v0.14.0
 	github.com/knadh/koanf/maps v0.1.2
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.2
-	github.com/knadh/koanf/providers/confmap v1.0.0
+	github.com/knadh/koanf/providers/confmap v1.0.1
 	github.com/knadh/koanf/providers/env/v2 v2.0.1
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/v2 v2.3.6
-	github.com/mattn/go-runewidth v0.0.24
+	github.com/mattn/go-runewidth v0.0.27
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/rogpeppe/go-internal v1.15.0
+	github.com/rogpeppe/go-internal v1.16.0
 	github.com/spf13/cobra v1.10.2
 	go.uber.org/mock v0.6.0
 	golang.org/x/sync v0.22.0
