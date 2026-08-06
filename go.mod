@@ -12,7 +12,7 @@ require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/dmarkham/enumer v1.6.3
 	github.com/dustin/go-humanize v1.0.1
-	github.com/go-git/go-git/v6 v6.0.0-alpha.4
+	github.com/go-git/go-git/v6 v6.0.0-alpha.5
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/go-github/v89 v89.0.0
 	github.com/google/go-github/v90 v90.0.0
@@ -70,7 +70,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/getsentry/sentry-go v0.46.0 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
-	github.com/go-git/go-billy/v6 v6.0.0-alpha.1 // indirect
+	github.com/go-git/go-billy/v6 v6.0.0-alpha.2 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -100,11 +100,11 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
-	golang.org/x/mod v0.36.0 // indirect
-	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
-	golang.org/x/tools v0.45.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
