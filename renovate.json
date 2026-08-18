@@ -19,7 +19,9 @@
     "group:linters",
     "customManagers:githubActionsVersions"
   ],
-  "gitIgnoredAuthors": ["205507218+smyklot[bot]@users.noreply.github.com"],
+  "gitIgnoredAuthors": [
+    "205507218+smyklot[bot]@users.noreply.github.com"
+  ],
   "ignorePaths": [
     "**/tmp/**",
     ".github/workflows/smyklot-pr-commands.yml",
@@ -28,18 +30,28 @@
   "osvVulnerabilityAlerts": true,
   "packageRules": [
     {
-      "addLabels": ["area/ci"],
+      "addLabels": [
+        "area/ci"
+      ],
       "commitMessageTopic": "{{depName}} action",
       "description": "GitHub Actions dependencies",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "semanticCommitType": "ci"
     },
     {
       "description": "Group Go tool dependencies",
       "groupName": "Go tooling",
-      "matchDepTypes": ["require"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["/^golang.org/x/tools/"]
+      "matchDepTypes": [
+        "require"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "/^golang.org/x/tools/"
+      ]
     },
     {
       "description": [
@@ -54,34 +66,59 @@
     {
       "description": "Group Go version updates from gomod and mise into a single PR",
       "groupName": "go version",
-      "matchDepNames": ["go"],
-      "matchManagers": ["gomod", "mise"],
+      "matchDepNames": [
+        "go"
+      ],
+      "matchManagers": [
+        "gomod",
+        "mise"
+      ],
       "rangeStrategy": "bump"
     },
     {
       "description": "Smyklot action managed by sync-smyklot workflow",
       "enabled": false,
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["smykla-skalski/smyklot"]
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "smykla-skalski/smyklot"
+      ]
     },
     {
       "description": "Group golang.org/x Go modules",
       "groupName": "golang.org/x modules",
-      "matchDepTypes": ["require"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["/^golang\\.org\\/x\\//"]
+      "matchDepTypes": [
+        "require"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "/^golang\\.org\\/x\\//"
+      ]
     },
     {
       "description": "Group Charm Go modules",
       "groupName": "Charm modules",
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["/^charm\\.land\\//"]
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "/^charm\\.land\\//"
+      ]
     },
     {
       "description": "Update go-git only on Monday mornings (using pinned commit SHAs as v6 is not yet GA)",
-      "extends": ["schedule:earlyMondays"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["github.com/go-git/go-git/v6"]
+      "extends": [
+        "schedule:earlyMondays"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/go-git/go-git/v6"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
