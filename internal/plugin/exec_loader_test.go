@@ -399,8 +399,8 @@ var _ = Describe("ExecLoader", func() {
 				}
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 				}
 
 				resp, err := adapter.Validate(ctx, req)
@@ -452,8 +452,8 @@ var _ = Describe("ExecLoader", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 				}
 
 				_, err = adapter2.Validate(ctx, req)
@@ -509,8 +509,8 @@ var _ = Describe("ExecLoader", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 					Config: map[string]any{
 						"existing": "value",
 					},
@@ -568,8 +568,8 @@ var _ = Describe("ExecLoader", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 				}
 
 				// Should timeout since execution takes 200ms but timeout is 100ms
@@ -597,8 +597,8 @@ var _ = Describe("ExecLoader", func() {
 				}
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 				}
 
 				_, err := adapter.Validate(cancelledCtx, req)
@@ -620,8 +620,8 @@ var _ = Describe("ExecLoader", func() {
 				}
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 				}
 
 				_, err := adapter.Validate(ctx, req)
@@ -644,8 +644,8 @@ var _ = Describe("ExecLoader", func() {
 				}
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 				}
 
 				_, err := adapter.Validate(ctx, req)
@@ -674,8 +674,8 @@ var _ = Describe("ExecLoader", func() {
 				}
 
 				req := &pluginapi.ValidateRequest{
-					EventType: "PreToolUse",
-					ToolName:  "Bash",
+					EventType: "PreToolUse", //nolint:staticcheck // SA1019: verifies legacy field normalization
+					ToolName:  "Bash",       //nolint:staticcheck // SA1019: verifies legacy field normalization
 					Command:   "git commit",
 				}
 
