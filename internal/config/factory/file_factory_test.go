@@ -31,7 +31,7 @@ var _ = Describe("FileValidatorFactory", func() {
 			It("should create Python validator when enabled", func() {
 				enabled := true
 				cfg.Validators.File.Python = &config.PythonValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: &enabled},
+					Enabled: &enabled,
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -41,7 +41,7 @@ var _ = Describe("FileValidatorFactory", func() {
 			It("should not create Python validator when disabled", func() {
 				enabled := false
 				cfg.Validators.File.Python = &config.PythonValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: &enabled},
+					Enabled: &enabled,
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -62,11 +62,11 @@ var _ = Describe("FileValidatorFactory", func() {
 				useRuff := true
 				contextLines := 5
 				cfg.Validators.File.Python = &config.PythonValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: &enabled},
-					UseRuff:         &useRuff,
-					ContextLines:    &contextLines,
-					RuffConfig:      "/path/to/ruff.toml",
-					ExcludeRules:    []string{"F401"},
+					Enabled:      &enabled,
+					UseRuff:      &useRuff,
+					ContextLines: &contextLines,
+					RuffConfig:   "/path/to/ruff.toml",
+					ExcludeRules: []string{"F401"},
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -85,7 +85,7 @@ var _ = Describe("FileValidatorFactory", func() {
 		Context("Gofumpt validator", func() {
 			It("should create gofumpt validator when enabled", func() {
 				cfg.Validators.File.Gofumpt = &config.GofumptValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: new(true)},
+					Enabled: new(true),
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -95,10 +95,10 @@ var _ = Describe("FileValidatorFactory", func() {
 			It("should configure gofumpt validator with options", func() {
 				extraRules := true
 				cfg.Validators.File.Gofumpt = &config.GofumptValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: new(true)},
-					ExtraRules:      &extraRules,
-					Lang:            "go1.21",
-					ModPath:         "github.com/example/repo",
+					Enabled:    new(true),
+					ExtraRules: &extraRules,
+					Lang:       "go1.21",
+					ModPath:    "github.com/example/repo",
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -107,7 +107,7 @@ var _ = Describe("FileValidatorFactory", func() {
 
 			It("should not create gofumpt validator when disabled", func() {
 				cfg.Validators.File.Gofumpt = &config.GofumptValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: new(false)},
+					Enabled: new(false),
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -125,7 +125,7 @@ var _ = Describe("FileValidatorFactory", func() {
 		Context("LinterIgnore validator", func() {
 			It("should create linter ignore validator when enabled", func() {
 				cfg.Validators.File.LinterIgnore = &config.LinterIgnoreValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: new(true)},
+					Enabled: new(true),
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -134,7 +134,7 @@ var _ = Describe("FileValidatorFactory", func() {
 
 			It("should not create linter ignore validator when disabled", func() {
 				cfg.Validators.File.LinterIgnore = &config.LinterIgnoreValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: new(false)},
+					Enabled: new(false),
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -143,8 +143,8 @@ var _ = Describe("FileValidatorFactory", func() {
 
 			It("should create linter ignore validator with custom patterns", func() {
 				cfg.Validators.File.LinterIgnore = &config.LinterIgnoreValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: new(true)},
-					Patterns:        []string{`custom-pattern`, `another-pattern`},
+					Enabled:  new(true),
+					Patterns: []string{`custom-pattern`, `another-pattern`},
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -163,13 +163,13 @@ var _ = Describe("FileValidatorFactory", func() {
 			It("should create multiple validators when enabled", func() {
 				enabled := true
 				cfg.Validators.File.Python = &config.PythonValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: &enabled},
+					Enabled: &enabled,
 				}
 				cfg.Validators.File.Markdown = &config.MarkdownValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: &enabled},
+					Enabled: &enabled,
 				}
 				cfg.Validators.File.ShellScript = &config.ShellScriptValidatorConfig{
-					ValidatorConfig: config.ValidatorConfig{Enabled: &enabled},
+					Enabled: &enabled,
 				}
 
 				validators := fileFactory.CreateValidators(cfg)
@@ -193,7 +193,7 @@ var _ = Describe("FileValidatorFactory", func() {
 					Validators: &config.ValidatorsConfig{
 						File: &config.FileConfig{
 							Gofumpt: &config.GofumptValidatorConfig{
-								ValidatorConfig: config.ValidatorConfig{Enabled: new(true)},
+								Enabled: new(true),
 							},
 						},
 					},

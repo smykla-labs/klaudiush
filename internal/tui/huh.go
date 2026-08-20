@@ -118,9 +118,7 @@ func buildConfigFromResult(result *InitFormResult) *pkgConfig.Config {
 	// Set bell notification
 	cfg.Validators.Notification = &pkgConfig.NotificationConfig{
 		Bell: &pkgConfig.BellValidatorConfig{
-			ValidatorConfig: pkgConfig.ValidatorConfig{
-				Enabled: &result.BellEnabled,
-			},
+			Enabled: &result.BellEnabled,
 		},
 	}
 

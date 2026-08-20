@@ -54,9 +54,7 @@ var _ = Describe("init provider updates", func() {
 				Validators: &pkgConfig.ValidatorsConfig{
 					Notification: &pkgConfig.NotificationConfig{
 						Bell: &pkgConfig.BellValidatorConfig{
-							ValidatorConfig: pkgConfig.ValidatorConfig{
-								Enabled: &bellEnabled,
-							},
+							Enabled: &bellEnabled,
 						},
 					},
 				},
