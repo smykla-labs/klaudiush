@@ -543,9 +543,7 @@ var _ = Describe("Validator", func() {
 				Validators: &config.ValidatorsConfig{
 					Git: &config.GitConfig{
 						Commit: &config.CommitValidatorConfig{
-							ValidatorConfig: config.ValidatorConfig{
-								Severity: config.Severity(99),
-							},
+							Severity: config.Severity(99),
 						},
 					},
 				},
@@ -561,9 +559,7 @@ var _ = Describe("Validator", func() {
 				Validators: &config.ValidatorsConfig{
 					Git: &config.GitConfig{
 						Commit: &config.CommitValidatorConfig{
-							ValidatorConfig: config.ValidatorConfig{
-								Severity: config.SeverityError,
-							},
+							Severity: config.SeverityError,
 						},
 					},
 				},
@@ -578,9 +574,7 @@ var _ = Describe("Validator", func() {
 				Validators: &config.ValidatorsConfig{
 					Git: &config.GitConfig{
 						Commit: &config.CommitValidatorConfig{
-							ValidatorConfig: config.ValidatorConfig{
-								Severity: config.SeverityWarning,
-							},
+							Severity: config.SeverityWarning,
 						},
 					},
 				},
@@ -595,9 +589,7 @@ var _ = Describe("Validator", func() {
 				Validators: &config.ValidatorsConfig{
 					Git: &config.GitConfig{
 						Commit: &config.CommitValidatorConfig{
-							ValidatorConfig: config.ValidatorConfig{
-								Severity: config.SeverityUnknown,
-							},
+							Severity: config.SeverityUnknown,
 						},
 					},
 				},

@@ -183,10 +183,8 @@ func DefaultCommitValidatorConfig() *config.CommitValidatorConfig {
 	checkStagingArea := true
 
 	return &config.CommitValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:          &enabled,
+		Severity:         config.SeverityError,
 		RequiredFlags:    []string{flagSignoff, flagGPGSign},
 		CheckStagingArea: &checkStagingArea,
 		Message:          DefaultCommitMessageConfig(),
@@ -238,10 +236,8 @@ func DefaultPushValidatorConfig() *config.PushValidatorConfig {
 	requireTracking := true
 
 	return &config.PushValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:         &enabled,
+		Severity:        config.SeverityError,
 		BlockedRemotes:  []string{},
 		BlockedBranches: []string{},
 		RequireTracking: &requireTracking,
@@ -253,10 +249,8 @@ func DefaultFetchValidatorConfig() *config.FetchValidatorConfig {
 	enabled := true
 
 	return &config.FetchValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:  &enabled,
+		Severity: config.SeverityError,
 	}
 }
 
@@ -265,10 +259,8 @@ func DefaultAddValidatorConfig() *config.AddValidatorConfig {
 	enabled := true
 
 	return &config.AddValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:         &enabled,
+		Severity:        config.SeverityError,
 		BlockedPatterns: []string{"tmp/*"},
 	}
 }
@@ -283,10 +275,8 @@ func DefaultPRValidatorConfig() *config.PRValidatorConfig {
 	requireBody := true
 
 	return &config.PRValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:                  &enabled,
+		Severity:                 config.SeverityError,
 		TitleMaxLength:           &titleMaxLength,
 		TitleConventionalCommits: &titleConventionalCommits,
 		RequireChangelog:         &requireChangelog,
@@ -316,10 +306,8 @@ func DefaultBranchValidatorConfig() *config.BranchValidatorConfig {
 	allowUppercase := false
 
 	return &config.BranchValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:           &enabled,
+		Severity:          config.SeverityError,
 		ProtectedBranches: []string{branchMain, "master"},
 		RequireType:       &requireType,
 		AllowUppercase:    &allowUppercase,
@@ -343,10 +331,8 @@ func DefaultNoVerifyValidatorConfig() *config.NoVerifyValidatorConfig {
 	enabled := true
 
 	return &config.NoVerifyValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:  &enabled,
+		Severity: config.SeverityError,
 	}
 }
 
@@ -360,10 +346,8 @@ func DefaultMarkdownValidatorConfig() *config.MarkdownValidatorConfig {
 	useMarkdownlint := true
 
 	return &config.MarkdownValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:             &enabled,
+		Severity:            config.SeverityError,
 		Timeout:             config.Duration(DefaultTimeout),
 		ContextLines:        &contextLines,
 		HeadingSpacing:      &headingSpacing,
@@ -384,10 +368,8 @@ func DefaultShellScriptValidatorConfig() *config.ShellScriptValidatorConfig {
 	useShellcheck := true
 
 	return &config.ShellScriptValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:            &enabled,
+		Severity:           config.SeverityError,
 		Timeout:            config.Duration(DefaultTimeout),
 		ContextLines:       &contextLines,
 		UseShellcheck:      &useShellcheck,
@@ -405,10 +387,8 @@ func DefaultTerraformValidatorConfig() *config.TerraformValidatorConfig {
 	useTflint := true
 
 	return &config.TerraformValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:        &enabled,
+		Severity:       config.SeverityError,
 		Timeout:        config.Duration(DefaultTimeout),
 		ContextLines:   &contextLines,
 		ToolPreference: valueAuto,
@@ -429,10 +409,8 @@ func DefaultWorkflowValidatorConfig() *config.WorkflowValidatorConfig {
 	useActionlint := true
 
 	return &config.WorkflowValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:               &enabled,
+		Severity:              config.SeverityError,
 		Timeout:               config.Duration(DefaultTimeout),
 		GHAPITimeout:          config.Duration(DefaultGHAPITimeout),
 		EnforceDigestPinning:  &enforceDigestPinning,
@@ -450,10 +428,8 @@ func DefaultPythonValidatorConfig() *config.PythonValidatorConfig {
 	useRuff := true
 
 	return &config.PythonValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:      &enabled,
+		Severity:     config.SeverityError,
 		Timeout:      config.Duration(DefaultTimeout),
 		ContextLines: &contextLines,
 		UseRuff:      &useRuff,
@@ -470,10 +446,8 @@ func DefaultJavaScriptValidatorConfig() *config.JavaScriptValidatorConfig {
 	useOxlint := true
 
 	return &config.JavaScriptValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:      &enabled,
+		Severity:     config.SeverityError,
 		Timeout:      config.Duration(DefaultTimeout),
 		ContextLines: &contextLines,
 		UseOxlint:    &useOxlint,
@@ -488,10 +462,8 @@ func DefaultLinterIgnoreValidatorConfig() *config.LinterIgnoreValidatorConfig {
 	enabled := true
 
 	return &config.LinterIgnoreValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:  &enabled,
+		Severity: config.SeverityError,
 		Patterns: []string{}, // Empty = use built-in defaults
 	}
 }
@@ -501,10 +473,8 @@ func DefaultBellValidatorConfig() *config.BellValidatorConfig {
 	enabled := true
 
 	return &config.BellValidatorConfig{
-		ValidatorConfig: config.ValidatorConfig{
-			Enabled:  &enabled,
-			Severity: config.SeverityError,
-		},
+		Enabled:       &enabled,
+		Severity:      config.SeverityError,
 		CustomCommand: "",
 	}
 }

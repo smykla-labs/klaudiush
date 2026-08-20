@@ -45,7 +45,7 @@ var _ = Describe("SecretsValidator", func() {
 		detector = secrets.NewDefaultPatternDetector()
 		gitleaks = &mockGitleaksChecker{available: false}
 		cfg = &config.SecretsValidatorConfig{
-			ValidatorConfig: config.ValidatorConfig{Enabled: new(true)},
+			Enabled: new(true),
 		}
 		v = secrets.NewSecretsValidator(logger.NewNoOpLogger(), detector, gitleaks, cfg, nil)
 		hookCtx = &hook.Context{

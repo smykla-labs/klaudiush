@@ -82,7 +82,7 @@ var _ = Describe("Collector", func() {
 					},
 					File: &config.FileConfig{
 						Python: &config.PythonValidatorConfig{
-							ValidatorConfig: config.ValidatorConfig{Enabled: &disabled},
+							Enabled: &disabled,
 						},
 					},
 					Secrets: &config.SecretsConfig{
