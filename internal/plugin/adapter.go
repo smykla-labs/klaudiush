@@ -40,10 +40,10 @@ func (a *ValidatorAdapter) Validate(ctx context.Context, hookCtx *hook.Context) 
 		Provider:      hookCtx.ProviderName(),
 		EventName:     string(hookCtx.Event),
 		RawEventName:  hookCtx.EventName(),
-		EventType:     hookCtx.EventType.String(),
+		EventType:     hookCtx.EventType.String(), //nolint:staticcheck // SA1019: kept for plugins reading the legacy field
 		ToolFamily:    string(hookCtx.ToolFamily),
 		RawToolName:   hookCtx.RawToolName,
-		ToolName:      hookCtx.ToolName.String(),
+		ToolName:      hookCtx.ToolName.String(), //nolint:staticcheck // SA1019: kept for plugins reading the legacy field
 		Command:       hookCtx.GetCommand(),
 		FilePath:      hookCtx.GetFilePath(),
 		Content:       hookCtx.GetContent(),
