@@ -16,8 +16,10 @@ var (
 		"pre_compress", "post_compact", "user_prompt_submit",
 		"PreToolUse", "PostToolUse", "Notification", "SessionStart", "Stop", "AfterToolUse",
 		"BeforeTool", "AfterTool", "SessionEnd", "PreCompress",
-		"tool.execute.before", "tool.execute.after", "permission.ask", "chat.message",
+		"UserPromptSubmit",
+		"tool.execute.before", "tool.execute.after", "chat.message",
 		"session.created", "session.idle", "session.compacting", "session.compacted",
+		"permission.asked",
 	}
 
 	// ValidToolTypes are the valid tool types for rules (case-insensitive matching supported).

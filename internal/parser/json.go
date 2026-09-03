@@ -333,17 +333,15 @@ func parseToolInput(
 		switch key {
 		case "command":
 			_ = json.Unmarshal(value, &toolInput.Command)
-		// opencode names tool arguments in camelCase; accept both spellings so
-		// any opencode payload parses, not just klaudiush's own bridge plugin.
-		case "file_path", "filePath":
+		case "file_path":
 			_ = json.Unmarshal(value, &toolInput.FilePath)
 		case "path":
 			_ = json.Unmarshal(value, &toolInput.Path)
 		case "content":
 			_ = json.Unmarshal(value, &toolInput.Content)
-		case "old_string", "oldString":
+		case "old_string":
 			_ = json.Unmarshal(value, &toolInput.OldString)
-		case "new_string", "newString":
+		case "new_string":
 			_ = json.Unmarshal(value, &toolInput.NewString)
 		case "pattern":
 			_ = json.Unmarshal(value, &toolInput.Pattern)
@@ -355,11 +353,51 @@ func parseToolInput(
 		}
 	}
 
+	applyToolInputAliases(&toolInput)
+
 	if len(toolInput.Additional) == 0 {
 		toolInput.Additional = nil
 	}
 
 	return toolInput
+}
+
+// applyToolInputAliases fills fields the canonical snake_case keys did not set.
+// opencode names tool arguments in camelCase, and its edit approval metadata
+// uses an all-lowercase "filepath".
+//
+// Resolved after the decode loop rather than inside it: the loop walks a map,
+// whose iteration order Go randomizes, so a payload carrying two spellings of
+// one argument would otherwise parse to a different value on each run.
+func applyToolInputAliases(toolInput *hook.ToolInput) {
+	for _, alias := range []struct {
+		field *string
+		keys  []string
+	}{
+		{&toolInput.FilePath, []string{"filePath", "filepath"}},
+		{&toolInput.OldString, []string{"oldString"}},
+		{&toolInput.NewString, []string{"newString"}},
+	} {
+		if *alias.field != "" {
+			continue
+		}
+
+		for _, key := range alias.keys {
+			raw, ok := toolInput.Additional[key]
+			if !ok {
+				continue
+			}
+
+			var value string
+			if err := json.Unmarshal(raw, &value); err != nil || value == "" {
+				continue
+			}
+
+			*alias.field = value
+
+			break
+		}
+	}
 }
 
 func assignProviderSpecificInput(

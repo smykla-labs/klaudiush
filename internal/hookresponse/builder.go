@@ -281,7 +281,7 @@ func BuildOpenCode(
 	}
 
 	switch hookCtx.Event {
-	case hook.CanonicalEventBeforeTool, hook.CanonicalEventUserPromptSubmit:
+	case hook.CanonicalEventBeforeTool:
 		if len(blocking) > 0 {
 			resp.Decision = decisionDeny
 			resp.Reason = formatDecisionReason(blocking)
@@ -293,9 +293,12 @@ func BuildOpenCode(
 			resp.Decision = decisionBlock
 			resp.Reason = formatDecisionReason(blocking)
 		}
-	case hook.CanonicalEventAfterTool, hook.CanonicalEventSessionStart,
-		hook.CanonicalEventNotification, hook.CanonicalEventPreCompress,
-		hook.CanonicalEventPostCompact:
+	// A submitted prompt cannot be refused: opencode's chat.message hook
+	// returns void and exposes no decision channel, so findings here are
+	// reported to the user rather than enforced.
+	case hook.CanonicalEventUserPromptSubmit, hook.CanonicalEventAfterTool,
+		hook.CanonicalEventSessionStart, hook.CanonicalEventNotification,
+		hook.CanonicalEventPreCompress, hook.CanonicalEventPostCompact:
 	default:
 		if len(blocking) > 0 {
 			resp.Decision = decisionDeny
@@ -305,7 +308,7 @@ func BuildOpenCode(
 		}
 	}
 
-	if additionalContext != "" {
+	if additionalContext != "" && openCodeConsumesContext(hookCtx.Event) {
 		resp.HookSpecificOutput = &OpenCodeHookSpecificOutput{
 			HookEventName:     hookCtx.EventName(),
 			AdditionalContext: additionalContext,
@@ -313,6 +316,18 @@ func BuildOpenCode(
 	}
 
 	return resp
+}
+
+// openCodeConsumesContext reports whether opencode gives the bridge plugin
+// anywhere to put model-facing text for an event.
+//
+// Only two hooks do: tool.execute.after can append to the tool result, and the
+// compaction hook can push onto the compaction prompt. The pre-execution and
+// lifecycle hooks expose no such field, so emitting additionalContext for them
+// would promise the model context it can never receive. Those findings still
+// reach the user through systemMessage.
+func openCodeConsumesContext(event hook.CanonicalEvent) bool {
+	return event == hook.CanonicalEventAfterTool || event == hook.CanonicalEventPreCompress
 }
 
 // BuildElicitation constructs an ElicitationHookResponse.

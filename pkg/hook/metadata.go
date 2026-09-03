@@ -112,22 +112,25 @@ const (
 const (
 	openCodeEventBeforeTool       = "tool.execute.before"
 	openCodeEventAfterTool        = "tool.execute.after"
-	openCodeEventPermissionAsk    = "permission.ask"
 	openCodeEventUserPromptSubmit = "chat.message"
 	openCodeEventSessionStart     = "session.created"
 	openCodeEventTurnStop         = "session.idle"
-	openCodeEventNotification     = "permission.updated"
+	openCodeEventNotification     = "permission.asked"
 	openCodeEventPreCompress      = "session.compacting"
 	openCodeEventPostCompact      = "session.compacted"
 )
 
 // OpenCodeEventNames returns the opencode hook identifiers the bridge plugin
 // forwards to klaudiush, in registration order.
+//
+// permission.ask is deliberately absent. opencode gates every tool call through
+// tool.execute.before regardless of approval outcome, so forwarding the
+// approval prompt as well would validate each call twice and double-charge the
+// exception rate limiter for one operation.
 func OpenCodeEventNames() []string {
 	return []string{
 		openCodeEventBeforeTool,
 		openCodeEventAfterTool,
-		openCodeEventPermissionAsk,
 		openCodeEventUserPromptSubmit,
 		openCodeEventSessionStart,
 		openCodeEventTurnStop,
@@ -156,9 +159,10 @@ func ParseProvider(s string) (Provider, error) {
 // NormalizeEventName converts provider-specific event names to canonical names.
 func NormalizeEventName(name string) CanonicalEvent {
 	switch normalizeToken(name) {
-	// "permissionask" is opencode's decisive approval gate. It carries the tool
-	// and its arguments, so it normalizes onto before_tool to let every
-	// pre-execution validator run and deny.
+	// An approval request carries the tool and its arguments, so it normalizes
+	// onto before_tool: a hand-written plugin that forwards it still gets every
+	// pre-execution validator. klaudiush's own bridge does not forward it, to
+	// avoid validating the same call twice — see OpenCodeEventNames.
 	case "beforetool", "pretooluse", "toolexecutebefore", "permissionask",
 		"permissionrequest":
 		return CanonicalEventBeforeTool
@@ -170,10 +174,10 @@ func NormalizeEventName(name string) CanonicalEvent {
 	case "turnstop", "stop", "sessionend", "sessionidle", "sessionerror",
 		"stopfailure", "subagentstop":
 		return CanonicalEventTurnStop
-	// permission.updated announces a pending approval: the session is waiting on
-	// the user, which is what a Claude Notification reports. Distinct from
-	// permission.ask above, which is the decisive gate.
-	case "notification", "permissionupdated":
+	// A pending approval means the session is waiting on the user, which is what
+	// a Claude Notification reports. opencode has renamed this event across
+	// versions, so both spellings are accepted.
+	case "notification", "permissionasked", "permissionupdated":
 		return CanonicalEventNotification
 	case "precompress", "sessioncompacting":
 		return CanonicalEventPreCompress

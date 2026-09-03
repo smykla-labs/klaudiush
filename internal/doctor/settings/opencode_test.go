@@ -34,16 +34,40 @@ var _ = Describe("opencode bridge plugin", func() {
 			Expect(string(rendered)).NotTo(ContainSubstring("{{"))
 		})
 
-		It("forwards every advertised opencode event", func() {
+		// Asserting on registration rather than on any mention of the name:
+		// every forwarded event also appears as an invoke() argument, so a
+		// substring check would pass even with all subscriptions deleted.
+		It("subscribes to every advertised opencode event", func() {
 			rendered, err := settings.RenderOpenCodePlugin(binaryPath)
 			Expect(err).NotTo(HaveOccurred())
 
+			source := string(rendered)
+
 			for _, eventName := range hook.OpenCodeEventNames() {
-				Expect(string(rendered)).To(
-					ContainSubstring(`"`+eventName+`"`),
-					"event %s missing from plugin", eventName,
+				subscribed := strings.Contains(source, `"`+eventName+`":`) ||
+					strings.Contains(source, `"experimental.`+eventName+`":`) ||
+					strings.Contains(source, `case "`+eventName+`":`)
+
+				Expect(subscribed).To(
+					BeTrue(),
+					"event %s is named but not subscribed to", eventName,
 				)
 			}
+		})
+
+		// permission.ask fires for a subset of calls that tool.execute.before
+		// already covers; registering both validates one call twice.
+		It("does not register the redundant approval hook", func() {
+			rendered, err := settings.RenderOpenCodePlugin(binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(rendered)).NotTo(ContainSubstring(`"permission.ask":`))
+		})
+
+		// A silent fail-open is indistinguishable from a clean pass.
+		It("reports invocation failures on stderr", func() {
+			rendered, err := settings.RenderOpenCodePlugin(binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(rendered)).To(ContainSubstring("console.error"))
 		})
 
 		It("passes the opencode provider on the command line", func() {
@@ -117,6 +141,20 @@ var _ = Describe("opencode bridge plugin", func() {
 		It("surfaces a missing plugin from Read", func() {
 			_, err := settings.NewOpenCodePluginParser(pluginPath).Read()
 			Expect(err).To(MatchError(settings.ErrPluginNotFound))
+		})
+
+		// The compaction hook is registered behind opencode's experimental
+		// prefix, and four events arrive on the shared bus as case labels, so
+		// the checker must recognise all three subscription forms.
+		It("does not credit an event that is only mentioned", func() {
+			_, err := settings.InstallOpenCodeDispatcher(pluginPath, binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			parser := settings.NewOpenCodePluginParser(pluginPath)
+
+			hasHook, err := parser.HasEventHook("permission.ask", binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(hasHook).To(BeFalse())
 		})
 
 		It("detects the installed dispatcher and its events", func() {

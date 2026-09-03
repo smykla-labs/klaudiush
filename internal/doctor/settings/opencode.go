@@ -100,7 +100,32 @@ func (p *OpenCodePluginParser) HasEventHook(eventName, dispatcherPath string) (b
 		return false, nil
 	}
 
-	return strings.Contains(source, `"`+eventName+`"`), nil
+	return pluginRegistersEvent(source, eventName), nil
+}
+
+// pluginRegistersEvent reports whether the plugin source actually subscribes to
+// an event, as opposed to merely mentioning its name.
+//
+// A plain substring search is not enough: every forwarded event appears as an
+// argument to invoke(), so any such search reports an event as configured even
+// when nothing is listening for it. The plugin subscribes in exactly two ways,
+// and this checks for both:
+//
+//   - a hook key, `"tool.execute.before":`, optionally behind opencode's
+//     `experimental.` prefix for hooks that are still unstable
+//   - a case label on the shared event bus, `case "session.idle":`
+func pluginRegistersEvent(source, eventName string) bool {
+	for _, form := range []string{
+		`"` + eventName + `":`,
+		`"experimental.` + eventName + `":`,
+		`case "` + eventName + `":`,
+	} {
+		if strings.Contains(source, form) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // InstallOpenCodeDispatcher renders the bridge plugin for the given binary.

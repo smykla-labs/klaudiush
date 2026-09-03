@@ -4,6 +4,18 @@
 // Bridges opencode's plugin hooks onto the klaudiush validator. opencode has no
 // declarative hook config, so the integration ships as this plugin instead of a
 // JSON settings block like Claude, Codex, and Gemini use.
+//
+// What each hook can do about a finding is fixed by opencode's hook signatures:
+//
+//   tool.execute.before   can refuse, by throwing
+//   tool.execute.after    can add model-facing text, by appending to the result
+//   session.compacting    can add model-facing text, by pushing onto the prompt
+//   chat.message, event   neither; findings reach the user as a toast only
+//
+// permission.ask is intentionally not registered. Every tool call already
+// passes through tool.execute.before whatever the approval outcome, so
+// forwarding the approval prompt too would validate one call twice and
+// double-charge the exception rate limiter.
 import { execFileSync } from "node:child_process"
 
 const BINARY = "{{ .BinaryPath }}"
@@ -50,7 +62,12 @@ function invoke(event: string, payload: Payload): KlaudiushResponse | null {
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: MAX_OUTPUT_BYTES,
     })
-  } catch {
+  } catch (error) {
+    // Loud on stderr, which opencode captures, because a silent fail-open is
+    // indistinguishable from "everything passed": a moved or deleted binary
+    // would otherwise disable validation for the whole session with no signal.
+    console.error(`klaudiush: ${event} hook failed, skipping validation:`, error)
+
     return null
   }
 
@@ -62,7 +79,9 @@ function invoke(event: string, payload: Payload): KlaudiushResponse | null {
 
   try {
     return JSON.parse(trimmed) as KlaudiushResponse
-  } catch {
+  } catch (error) {
+    console.error(`klaudiush: ${event} hook returned unparseable output:`, error)
+
     return null
   }
 }
@@ -142,29 +161,6 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
       await toast(resp, "warning")
     },
 
-    // Second decisive gate: opencode's own approval prompt. Denying here stops
-    // the call even when a permission rule would otherwise auto-allow it.
-    "permission.ask": async (input: any, output: any) => {
-      const resp = invoke("permission.ask", {
-        ...base("permission.ask", input.sessionID),
-        tool_name: input.type,
-        tool_input: input.metadata,
-        // Top-level command is the parser's fallback when metadata carries none.
-        command: typeof input.title === "string" ? input.title : "",
-        tool_use_id: input.callID,
-      })
-
-      if (isBlocked(resp)) {
-        output.status = "deny"
-
-        await toast(resp, "error")
-
-        return
-      }
-
-      await toast(resp, "warning")
-    },
-
     // Advisory: the tool already ran. Findings are appended to the tool output
     // so the model reads them as part of the result.
     "tool.execute.after": async (input: any, output: any) => {
@@ -183,11 +179,19 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
       await toast(resp, isBlocked(resp) ? "warning" : "info")
     },
 
+    // Advisory only: this hook returns void, so a prompt cannot be refused.
+    // The prompt text lives in the sibling parts array, not on the message,
+    // which carries only ids and metadata.
     "chat.message": async (input: any, output: any) => {
+      const promptText = (output.parts ?? [])
+        .filter((part: any) => part?.type === "text" && typeof part.text === "string")
+        .map((part: any) => part.text)
+        .join("\n")
+
       await report("chat.message", {
         ...base("chat.message", input.sessionID),
         model: input.model ? input.model.providerID + "/" + input.model.modelID : "",
-        tool_input: { content: output.message?.id ?? "" },
+        tool_input: { content: promptText },
       })
     },
 
@@ -243,10 +247,12 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
         }
 
         // A pending approval is opencode's closest analogue to a Claude
-        // Notification: the session is waiting on the user.
+        // Notification: the session is waiting on the user. The event has been
+        // renamed across opencode versions, so both spellings are handled.
+        case "permission.asked":
         case "permission.updated": {
-          await report("permission.updated", {
-            ...base("permission.updated", event.properties?.sessionID),
+          await report("permission.asked", {
+            ...base("permission.asked", event.properties?.sessionID),
             notification_type: event.properties?.type ?? "",
             message: event.properties?.title ?? "",
           })

@@ -34,6 +34,8 @@ func TestNormalizeEventName_OpenCodeHookIDs(t *testing.T) {
 		{"session compacting", "session.compacting", CanonicalEventPreCompress},
 		{"session compacted", "session.compacted", CanonicalEventPostCompact},
 		{"chat message", "chat.message", CanonicalEventUserPromptSubmit},
+		{"permission asked", "permission.asked", CanonicalEventNotification},
+		{"permission updated legacy spelling", "permission.updated", CanonicalEventNotification},
 		{"claude user prompt alias", "UserPromptSubmit", CanonicalEventUserPromptSubmit},
 		{"subagent start folds onto session start", "SubagentStart", CanonicalEventSessionStart},
 		{"subagent stop folds onto turn stop", "SubagentStop", CanonicalEventTurnStop},
@@ -75,7 +77,7 @@ func TestDisplayEventName_OpenCodeRoundTrip(t *testing.T) {
 		{CanonicalEventUserPromptSubmit, "chat.message"},
 		{CanonicalEventSessionStart, "session.created"},
 		{CanonicalEventTurnStop, "session.idle"},
-		{CanonicalEventNotification, "permission.updated"},
+		{CanonicalEventNotification, "permission.asked"},
 		{CanonicalEventPreCompress, "session.compacting"},
 		{CanonicalEventPostCompact, "session.compacted"},
 	}

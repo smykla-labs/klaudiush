@@ -70,7 +70,61 @@ var _ = Describe("JSONParser opencode payloads", func() {
 		Expect(ctx.AffectedPaths).To(ContainElement("/repo/main.go"))
 	})
 
-	It("treats permission.ask as a decisive pre-execution gate", func() {
+	// Go randomizes map iteration, so a payload carrying two spellings of one
+	// argument must still resolve to the same field on every run.
+	It("prefers the canonical spelling when both are present", func() {
+		input := `{
+			"hook_event_name": "tool.execute.before",
+			"session_id": "ses_123",
+			"cwd": "/repo",
+			"tool_name": "edit",
+			"tool_input": {
+				"file_path": "/repo/canonical.go",
+				"filePath": "/repo/alias.go",
+				"old_string": "canonical-old",
+				"oldString": "alias-old",
+				"new_string": "canonical-new",
+				"newString": "alias-new"
+			}
+		}`
+
+		for range 25 {
+			ctx := parse(input, "tool.execute.before")
+			Expect(ctx.ToolInput.FilePath).To(Equal("/repo/canonical.go"))
+			Expect(ctx.ToolInput.OldString).To(Equal("canonical-old"))
+			Expect(ctx.ToolInput.NewString).To(Equal("canonical-new"))
+		}
+	})
+
+	// opencode's edit approval metadata spells the key all-lowercase.
+	It("reads the all-lowercase filepath spelling", func() {
+		input := `{
+			"hook_event_name": "tool.execute.before",
+			"session_id": "ses_123",
+			"cwd": "/repo",
+			"tool_name": "edit",
+			"tool_input": {"filepath": "/repo/lower.go", "diff": "@@"}
+		}`
+
+		ctx := parse(input, "tool.execute.before")
+		Expect(ctx.ToolInput.FilePath).To(Equal("/repo/lower.go"))
+		Expect(ctx.AffectedPaths).To(ContainElement("/repo/lower.go"))
+	})
+
+	It("ignores an empty alias rather than blanking the canonical value", func() {
+		input := `{
+			"hook_event_name": "tool.execute.before",
+			"session_id": "ses_123",
+			"cwd": "/repo",
+			"tool_name": "edit",
+			"tool_input": {"filePath": "", "filepath": "/repo/real.go"}
+		}`
+
+		ctx := parse(input, "tool.execute.before")
+		Expect(ctx.ToolInput.FilePath).To(Equal("/repo/real.go"))
+	})
+
+	It("treats a hand-written permission.ask forward as a pre-execution gate", func() {
 		input := `{
 			"hook_event_name": "permission.ask",
 			"session_id": "ses_123",
@@ -94,6 +148,7 @@ var _ = Describe("JSONParser opencode payloads", func() {
 			"session.idle":       hook.CanonicalEventTurnStop,
 			"session.compacted":  hook.CanonicalEventPostCompact,
 			"session.compacting": hook.CanonicalEventPreCompress,
+			"permission.asked":   hook.CanonicalEventNotification,
 			"permission.updated": hook.CanonicalEventNotification,
 			"chat.message":       hook.CanonicalEventUserPromptSubmit,
 			"tool.execute.after": hook.CanonicalEventAfterTool,

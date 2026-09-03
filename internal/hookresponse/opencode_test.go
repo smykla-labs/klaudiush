@@ -89,7 +89,7 @@ var _ = Describe("BuildOpenCode", func() {
 		Expect(resp.HookSpecificOutput.HookEventName).To(Equal("tool.execute.after"))
 	})
 
-	It("passes warnings through as context without a decision", func() {
+	It("allows a warning through without a decision", func() {
 		resp := hookresponse.BuildOpenCode(
 			ctxFor(hook.CanonicalEventBeforeTool),
 			warningErrs(),
@@ -99,8 +99,39 @@ var _ = Describe("BuildOpenCode", func() {
 		Expect(resp).NotTo(BeNil())
 		Expect(resp.Decision).To(BeEmpty())
 		Expect(resp.Continue).To(BeTrue())
-		Expect(resp.HookSpecificOutput).NotTo(BeNil())
-		Expect(resp.HookSpecificOutput.AdditionalContext).NotTo(BeEmpty())
+		// The warning still reaches the user, who is the only recipient this
+		// hook can address.
+		Expect(resp.SystemMessage).NotTo(BeEmpty())
+	})
+
+	// opencode's pre-execution and lifecycle hooks expose no field for
+	// model-facing text, so promising context there would be a dead letter.
+	It("only emits additionalContext on hooks that can deliver it", func() {
+		consuming := []hook.CanonicalEvent{
+			hook.CanonicalEventAfterTool,
+			hook.CanonicalEventPreCompress,
+		}
+
+		for _, event := range consuming {
+			resp := hookresponse.BuildOpenCode(ctxFor(event), warningErrs(), nil)
+			Expect(resp).NotTo(BeNil())
+			Expect(resp.HookSpecificOutput).NotTo(BeNil(), "event %s", event)
+			Expect(resp.HookSpecificOutput.AdditionalContext).NotTo(BeEmpty(), "event %s", event)
+		}
+
+		for _, event := range []hook.CanonicalEvent{
+			hook.CanonicalEventBeforeTool,
+			hook.CanonicalEventUserPromptSubmit,
+			hook.CanonicalEventSessionStart,
+			hook.CanonicalEventTurnStop,
+			hook.CanonicalEventNotification,
+			hook.CanonicalEventPostCompact,
+		} {
+			resp := hookresponse.BuildOpenCode(ctxFor(event), warningErrs(), nil)
+			Expect(resp).NotTo(BeNil())
+			Expect(resp.HookSpecificOutput).To(BeNil(), "event %s", event)
+			Expect(resp.SystemMessage).NotTo(BeEmpty(), "event %s", event)
+		}
 	})
 
 	It("keeps lifecycle events advisory", func() {
@@ -116,7 +147,9 @@ var _ = Describe("BuildOpenCode", func() {
 		}
 	})
 
-	It("denies a blocking user prompt", func() {
+	// chat.message returns void, so a submitted prompt cannot be refused.
+	// Emitting a deny here would be a decision nothing can act on.
+	It("does not pretend it can refuse a submitted prompt", func() {
 		resp := hookresponse.BuildOpenCode(
 			ctxFor(hook.CanonicalEventUserPromptSubmit),
 			blockingErrs(),
@@ -124,7 +157,9 @@ var _ = Describe("BuildOpenCode", func() {
 		)
 
 		Expect(resp).NotTo(BeNil())
-		Expect(resp.Decision).To(Equal("deny"))
+		Expect(resp.Decision).To(BeEmpty())
+		Expect(resp.Continue).To(BeTrue())
+		Expect(resp.SystemMessage).NotTo(BeEmpty())
 	})
 
 	It("is selected by BuildForContext for opencode contexts", func() {

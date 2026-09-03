@@ -9,7 +9,7 @@
 
 A validation dispatcher for AI coding-agent hooks. Klaudiush supports Claude Code hooks today, experimental Codex command hooks, and an opencode bridge plugin, enforcing git workflow standards, commit conventions, and code quality rules.
 
-For Claude, klaudiush runs in blocking `before_tool` flows (`PreToolUse`). For Codex, it can also participate in experimental `session_start`, `after_tool`, and `turn_stop` command hooks. For opencode, it blocks in both `tool.execute.before` and `permission.ask`, and observes the session lifecycle. It parses Bash commands via `mvdan.cc/sh`, detects file operations, and validates them against project-specific rules.
+For Claude, klaudiush runs in blocking `before_tool` flows (`PreToolUse`). For Codex, it can also participate in experimental `session_start`, `after_tool`, and `turn_stop` command hooks. For opencode, it blocks in `tool.execute.before` and observes the session lifecycle. It parses Bash commands via `mvdan.cc/sh`, detects file operations, and validates them against project-specific rules.
 
 - Git workflow validation (commits, pushes, branches, PRs)
 - Code quality checks (shellcheck, terraform fmt, actionlint, gofumpt, ruff, oxlint, rustfmt)
@@ -111,7 +111,13 @@ klaudiush doctor --fix
 ```
 
 Regenerate the opencode plugin after upgrading klaudiush, since it embeds the
-resolved binary path.
+resolved binary path. `klaudiush doctor` reports a stale plugin as an
+unregistered dispatcher.
+
+Only `tool.execute.before` can refuse a call in opencode, by aborting the tool.
+`tool.execute.after` and the compaction hook can add text the model reads;
+opencode's remaining hooks expose no such channel, so findings on those reach
+you as a notification instead.
 
 ## How it works
 
