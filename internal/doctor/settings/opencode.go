@@ -3,6 +3,7 @@ package settings
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,26 +21,34 @@ var openCodePluginTemplate embed.FS
 const (
 	openCodePluginTemplatePath = "templates/opencode_plugin.ts"
 
-	// openCodePluginRelPath is the plugin location under the opencode config
-	// directory. opencode loads every file in this directory at startup.
-	openCodePluginRelPath = ".config/opencode/plugin/klaudiush.ts"
-
-	// openCodePluginPermissions keeps the generated plugin readable by the
-	// opencode runtime, which runs as the same user but re-reads the file.
-	openCodePluginPermissions = 0o640
+	// openCodePluginRelPath is the plugin location under the XDG config home.
+	// opencode loads every file in this directory at startup.
+	openCodePluginRelPath = "opencode/plugin/klaudiush.ts"
 )
 
 // ErrPluginNotFound is returned when the opencode bridge plugin is absent.
 var ErrPluginNotFound = errors.New("opencode plugin not found")
 
 // DefaultOpenCodePluginPath returns the default bridge plugin location.
+//
+// Resolved through the XDG config home rather than a hardcoded ~/.config,
+// because opencode honours XDG_CONFIG_HOME when locating its plugin directory
+// and a custom root would otherwise get a plugin opencode never loads.
 func DefaultOpenCodePluginPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	return filepath.Join(xdg.ConfigHome(), openCodePluginRelPath)
+}
+
+// ResolveOpenCodePluginPath returns the path the bridge plugin is installed to.
+//
+// plugin_path is optional: enabling the provider is enough, so an empty
+// configured value resolves to the default location. Diagnostics and installers
+// share this helper so they cannot disagree about where the plugin lives.
+func ResolveOpenCodePluginPath(configured string) string {
+	if configured != "" {
+		return configured
 	}
 
-	return filepath.Join(home, openCodePluginRelPath)
+	return DefaultOpenCodePluginPath()
 }
 
 // OpenCodePluginParser inspects the generated opencode bridge plugin.
@@ -82,7 +91,7 @@ func (p *OpenCodePluginParser) IsDispatcherRegistered(dispatcherPath string) (bo
 		return false, err
 	}
 
-	return strings.Contains(source, dispatcherPath), nil
+	return pluginReferencesBinary(source, dispatcherPath)
 }
 
 // HasEventHook reports whether the plugin forwards the given opencode event.
@@ -96,11 +105,28 @@ func (p *OpenCodePluginParser) HasEventHook(eventName, dispatcherPath string) (b
 		return false, err
 	}
 
-	if !strings.Contains(source, dispatcherPath) {
+	referenced, err := pluginReferencesBinary(source, dispatcherPath)
+	if err != nil {
+		return false, err
+	}
+
+	if !referenced {
 		return false, nil
 	}
 
 	return pluginRegistersEvent(source, eventName), nil
+}
+
+// pluginReferencesBinary reports whether the plugin invokes this dispatcher.
+// The comparison is against the encoded literal the template emits, so a path
+// needing escapes still matches.
+func pluginReferencesBinary(source, binaryPath string) (bool, error) {
+	literal, err := openCodeBinaryLiteral(binaryPath)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.Contains(source, literal), nil
 }
 
 // pluginRegistersEvent reports whether the plugin source actually subscribes to
@@ -169,12 +195,17 @@ func RenderOpenCodePlugin(binaryPath string) ([]byte, error) {
 
 	var buf bytes.Buffer
 
+	literal, err := openCodeBinaryLiteral(binaryPath)
+	if err != nil {
+		return nil, err
+	}
+
 	data := struct {
-		BinaryPath string
-		TimeoutMs  int
+		BinaryLiteral string
+		TimeoutMs     int
 	}{
-		BinaryPath: binaryPath,
-		TimeoutMs:  DefaultCommandHookTimeout * millisecondsPerSecond,
+		BinaryLiteral: literal,
+		TimeoutMs:     DefaultCommandHookTimeout * millisecondsPerSecond,
 	}
 
 	if err := tmpl.Execute(&buf, data); err != nil {
@@ -182,6 +213,27 @@ func RenderOpenCodePlugin(binaryPath string) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// openCodeBinaryLiteral encodes a path as a quoted JavaScript string literal.
+//
+// Interpolating the raw path would emit broken source for any path containing a
+// quote or a backslash: a Windows path such as C:\Users\me reads as escape
+// sequences, and the generated bridge could not launch klaudiush at all. JSON
+// string syntax is a subset of JavaScript's, so encoding produces a literal
+// that is both valid and decodes back to the original path.
+func openCodeBinaryLiteral(binaryPath string) (string, error) {
+	var buf bytes.Buffer
+
+	encoder := json.NewEncoder(&buf)
+	// Paths are not HTML; escaping <, > and & would only obscure them.
+	encoder.SetEscapeHTML(false)
+
+	if err := encoder.Encode(binaryPath); err != nil {
+		return "", errors.Wrap(err, "failed to encode opencode binary path")
+	}
+
+	return strings.TrimSpace(buf.String()), nil
 }
 
 // OpenCodeEventNames returns the opencode events the bridge plugin forwards.
@@ -195,16 +247,14 @@ func readFileAt(path string) ([]byte, error) {
 	return os.ReadFile(path) //nolint:gosec // path comes from operator config
 }
 
+// writeOpenCodePlugin replaces the plugin atomically.
+//
+// A direct write truncates the live file first, so an interrupted doctor --fix
+// or a full disk would leave a half-written plugin behind. opencode would then
+// fail to load it and every hook would silently stop validating. No backup is
+// kept: the file is generated and can be re-rendered at any time.
 func writeOpenCodePlugin(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), defaultDirPermissions); err != nil {
-		return errors.Wrap(err, "failed to create opencode plugin directory")
-	}
-
-	if err := xdg.EnsureDir(filepath.Dir(path)); err != nil {
-		return errors.Wrap(err, "failed to prepare opencode plugin directory")
-	}
-
-	if err := os.WriteFile(path, data, openCodePluginPermissions); err != nil {
+	if err := AtomicWriteFile(path, data, false); err != nil {
 		return errors.Wrap(err, "failed to write opencode plugin")
 	}
 

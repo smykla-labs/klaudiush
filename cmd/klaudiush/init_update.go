@@ -263,10 +263,9 @@ func fillProviderPathDefaults(selection *providerSelection, existing providerSel
 	}
 
 	if selection.OpenCodeEnabled && selection.OpenCodePluginPath == "" {
-		selection.OpenCodePluginPath = existing.OpenCodePluginPath
-		if selection.OpenCodePluginPath == "" {
-			selection.OpenCodePluginPath = settings.DefaultOpenCodePluginPath()
-		}
+		selection.OpenCodePluginPath = settings.ResolveOpenCodePluginPath(
+			existing.OpenCodePluginPath,
+		)
 	}
 
 	if !selection.OpenCodeEnabled {

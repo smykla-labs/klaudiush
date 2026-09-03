@@ -18,7 +18,7 @@
 // double-charge the exception rate limiter.
 import { execFileSync } from "node:child_process"
 
-const BINARY = "{{ .BinaryPath }}"
+const BINARY = {{ .BinaryLiteral }}
 const TIMEOUT_MS = {{ .TimeoutMs }}
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 
@@ -51,7 +51,7 @@ type Payload = Record<string, unknown>
 // Every failure path fails *open*. A validator that cannot answer must never be
 // able to wedge an editing session, so a missing binary, a timeout, a crash exit
 // (code 3), or unparseable output all resolve to "no opinion".
-function invoke(event: string, payload: Payload): KlaudiushResponse | null {
+function invoke(event: string, cwd: string, payload: Payload): KlaudiushResponse | null {
   let stdout: string
 
   try {
@@ -61,6 +61,12 @@ function invoke(event: string, payload: Payload): KlaudiushResponse | null {
       timeout: TIMEOUT_MS,
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: MAX_OUTPUT_BYTES,
+      // The validators resolve project config and git state from the process
+      // directory, and only trust a provider-reported directory for the
+      // providers that cannot run a shell. Without this the dispatcher would
+      // inspect whichever directory opencode was launched from, which is the
+      // wrong repository whenever the session runs in another worktree.
+      ...(cwd ? { cwd } : {}),
     })
   } catch (error) {
     // Loud on stderr, which opencode captures, because a silent fail-open is
@@ -135,7 +141,7 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
 
   // report forwards an advisory (non-decisive) event and surfaces any message.
   const report = async (event: string, payload: Payload) => {
-    const resp = invoke(event, payload)
+    const resp = invoke(event, cwd, payload)
     await toast(resp, isBlocked(resp) ? "warning" : "info")
 
     return resp
@@ -145,7 +151,7 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
     // Decisive pre-execution gate. Throwing aborts the tool call and hands the
     // reason to the model, which is opencode's only way to refuse a tool.
     "tool.execute.before": async (input: any, output: any) => {
-      const resp = invoke("tool.execute.before", {
+      const resp = invoke("tool.execute.before", cwd, {
         ...base("tool.execute.before", input.sessionID),
         tool_name: input.tool,
         tool_input: output.args,
@@ -164,7 +170,7 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
     // Advisory: the tool already ran. Findings are appended to the tool output
     // so the model reads them as part of the result.
     "tool.execute.after": async (input: any, output: any) => {
-      const resp = invoke("tool.execute.after", {
+      const resp = invoke("tool.execute.after", cwd, {
         ...base("tool.execute.after", input.sessionID),
         tool_name: input.tool,
         tool_input: input.args,
@@ -198,7 +204,11 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
     // Pre-compaction: klaudiush findings are injected into the compaction
     // prompt so they survive into the summarized context.
     "experimental.session.compacting": async (input: any, output: any) => {
-      const resp = invoke("session.compacting", base("session.compacting", input.sessionID))
+      const resp = invoke(
+        "session.compacting",
+        cwd,
+        base("session.compacting", input.sessionID),
+      )
 
       const context = extraContext(resp)
       if (context) {
@@ -227,7 +237,7 @@ export const Klaudiush = async ({ client, directory, worktree }: any) => {
         }
 
         case "session.error": {
-          const resp = invoke("session.idle", {
+          const resp = invoke("session.idle", cwd, {
             ...base("session.idle", event.properties?.sessionID),
             message: event.properties?.error?.name ?? "session error",
           })

@@ -73,7 +73,7 @@ func (f *SecretsValidatorFactory) CreateValidators(cfg *config.Config) []Validat
 			secretsCfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.ToolTypeIn(hook.ToolTypeWrite, hook.ToolTypeEdit, hook.ToolTypeMultiEdit),
 		),
 	})

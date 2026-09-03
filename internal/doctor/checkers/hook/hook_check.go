@@ -680,17 +680,12 @@ func (c *OpenCodeConfigChecker) Check(_ context.Context) doctor.CheckResult {
 		return doctor.Skip("opencode plugin configuration", "opencode provider disabled")
 	}
 
-	if !c.cfg.HasPluginPath() {
-		return doctor.FailWarning(
-			"opencode plugin configuration",
-			"plugin_path is not configured",
-		).WithDetails(
-			"Set [providers.opencode] plugin_path to the bridge plugin location",
-			"Default: "+settings.DefaultOpenCodePluginPath(),
-		)
-	}
-
-	return doctor.Pass("opencode plugin configuration", c.cfg.PluginPath)
+	// plugin_path is optional: enabling the provider is enough, and the
+	// installer falls back to the default location.
+	return doctor.Pass(
+		"opencode plugin configuration",
+		settings.ResolveOpenCodePluginPath(c.cfg.PluginPath),
+	)
 }
 
 // OpenCodeRegistrationChecker checks if the bridge plugin invokes the dispatcher.
@@ -722,16 +717,94 @@ func (c *OpenCodeRegistrationChecker) Check(_ context.Context) doctor.CheckResul
 		return result
 	}
 
+	pluginPath := c.pluginPath()
+
 	return checkProviderRegistration(
 		checkName,
-		c.cfg.PluginPath,
+		pluginPath,
 		func(dispatcherPath string) (bool, error) {
-			return settings.NewOpenCodePluginParser(c.cfg.PluginPath).IsDispatcherRegistered(
+			return settings.NewOpenCodePluginParser(pluginPath).IsDispatcherRegistered(
 				dispatcherPath,
 			)
 		},
 		c.failForParseError,
 	)
+}
+
+// OpenCodeFreshnessChecker checks the installed plugin matches this binary.
+//
+// The registration and event checks only look for the dispatcher path and the
+// subscribed events, both of which survive a klaudiush upgrade that changed the
+// plugin body. Without this check a stale plugin keeps reporting healthy, and
+// the fix a release shipped never reaches the session.
+type OpenCodeFreshnessChecker struct {
+	cfg *pkgConfig.OpenCodeProviderConfig
+}
+
+// NewOpenCodeFreshnessChecker creates a checker for plugin staleness.
+func NewOpenCodeFreshnessChecker(
+	cfg *pkgConfig.OpenCodeProviderConfig,
+) *OpenCodeFreshnessChecker {
+	return &OpenCodeFreshnessChecker{cfg: cfg}
+}
+
+// Name returns the name of the check.
+func (*OpenCodeFreshnessChecker) Name() string {
+	return "opencode plugin is up to date"
+}
+
+// Category returns the category of the check.
+func (*OpenCodeFreshnessChecker) Category() doctor.Category {
+	return doctor.CategoryHook
+}
+
+// Check compares the installed plugin against the current template.
+func (c *OpenCodeFreshnessChecker) Check(_ context.Context) doctor.CheckResult {
+	checkName := "opencode plugin is up to date"
+
+	registrationChecker := &OpenCodeRegistrationChecker{cfg: c.cfg}
+	if result, ready := registrationChecker.preflight(checkName); !ready {
+		return result
+	}
+
+	binaryPath, err := exec.LookPath(binaryName)
+	if err != nil {
+		return doctor.Skip(checkName, "Binary not found in PATH")
+	}
+
+	pluginPath := registrationChecker.pluginPath()
+
+	current, err := settings.NewOpenCodePluginParser(pluginPath).Read()
+	if err != nil {
+		if errors.Is(err, settings.ErrPluginNotFound) {
+			// The registration check already reports the missing plugin.
+			return doctor.Skip(checkName, "Bridge plugin not installed")
+		}
+
+		return registrationChecker.failForParseError(checkName, err)
+	}
+
+	rendered, err := settings.RenderOpenCodePlugin(binaryPath)
+	if err != nil {
+		return doctor.FailError(
+			checkName,
+			fmt.Sprintf("Failed to render bridge plugin: %v", err),
+		)
+	}
+
+	// An error rather than a warning: doctor --fix only heals errors, and a
+	// plugin that no longer matches this binary is silently validating with
+	// whatever an older release shipped.
+	if current != string(rendered) {
+		return doctor.FailError(checkName, "Bridge plugin is out of date").
+			WithDetails(
+				"File: "+pluginPath,
+				"Regenerate with: klaudiush doctor --fix",
+			).
+			WithFixID("install_hook")
+	}
+
+	return doctor.Pass(checkName, "Current")
 }
 
 // OpenCodeEventChecker checks that the plugin forwards a specific opencode event.
@@ -769,13 +842,14 @@ func (c *OpenCodeEventChecker) Check(_ context.Context) doctor.CheckResult {
 	}
 
 	registrationChecker := &OpenCodeRegistrationChecker{cfg: c.cfg}
+	pluginPath := registrationChecker.pluginPath()
 
 	return checkProviderEventHook(
 		checkName,
-		c.cfg.PluginPath,
+		pluginPath,
 		c.eventName,
 		func(eventName, dispatcherPath string) (bool, error) {
-			return settings.NewOpenCodePluginParser(c.cfg.PluginPath).HasEventHook(
+			return settings.NewOpenCodePluginParser(pluginPath).HasEventHook(
 				eventName,
 				dispatcherPath,
 			)
@@ -789,11 +863,16 @@ func (c *OpenCodeRegistrationChecker) preflight(checkName string) (doctor.CheckR
 		return doctor.Skip(checkName, "opencode provider disabled"), false
 	}
 
-	if !c.cfg.HasPluginPath() {
-		return doctor.Skip(checkName, "plugin_path not configured"), false
+	return doctor.CheckResult{}, true
+}
+
+// pluginPath is the configured location, or the default when unset.
+func (c *OpenCodeRegistrationChecker) pluginPath() string {
+	if c.cfg == nil {
+		return settings.DefaultOpenCodePluginPath()
 	}
 
-	return doctor.CheckResult{}, true
+	return settings.ResolveOpenCodePluginPath(c.cfg.PluginPath)
 }
 
 func (c *OpenCodeEventChecker) preflight(checkName string) (doctor.CheckResult, bool) {
@@ -809,7 +888,7 @@ func (c *OpenCodeRegistrationChecker) failForParseError(
 	if errors.Is(err, settings.ErrPluginNotFound) {
 		return doctor.FailError(checkName, "Bridge plugin not found").
 			WithDetails(
-				"Expected at: "+c.cfg.PluginPath,
+				"Expected at: "+c.pluginPath(),
 				"Generate with: klaudiush doctor --fix",
 			).
 			WithFixID("install_hook")

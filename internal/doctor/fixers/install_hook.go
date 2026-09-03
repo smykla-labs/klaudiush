@@ -166,10 +166,7 @@ func configuredInstallTargets(cfg *pkgConfig.Config) installTargets {
 	// integration can be installed from an enable flag alone.
 	openCodeCfg := providers.GetOpenCode()
 	if openCodeCfg.IsEnabled() {
-		targets.openCodePluginPath = openCodeCfg.PluginPath
-		if targets.openCodePluginPath == "" {
-			targets.openCodePluginPath = settings.DefaultOpenCodePluginPath()
-		}
+		targets.openCodePluginPath = settings.ResolveOpenCodePluginPath(openCodeCfg.PluginPath)
 	}
 
 	return targets

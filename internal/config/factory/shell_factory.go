@@ -63,7 +63,7 @@ func (f *ShellValidatorFactory) createBacktickValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.ToolTypeIs(hook.ToolTypeBash),
 			validator.Or(
 				// git commit with -m or --message

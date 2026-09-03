@@ -707,11 +707,7 @@ func openCodeInstallPath(cfg *pkgConfig.OpenCodeProviderConfig) string {
 		return ""
 	}
 
-	if cfg.HasPluginPath() {
-		return cfg.PluginPath
-	}
-
-	return settings.DefaultOpenCodePluginPath()
+	return settings.ResolveOpenCodePluginPath(cfg.PluginPath)
 }
 
 func loadHookInstallConfig() (*pkgConfig.Config, error) {

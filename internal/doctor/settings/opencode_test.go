@@ -70,6 +70,34 @@ var _ = Describe("opencode bridge plugin", func() {
 			Expect(string(rendered)).To(ContainSubstring("console.error"))
 		})
 
+		// An unescaped path would emit broken source for any path containing a
+		// backslash or quote, and the bridge could not launch at all.
+		It("encodes the binary path as a valid string literal", func() {
+			rendered, err := settings.RenderOpenCodePlugin(`C:\Users\me\klaudiush.exe`)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(rendered)).
+				To(ContainSubstring(`const BINARY = "C:\\Users\\me\\klaudiush.exe"`))
+		})
+
+		It("detects a dispatcher whose path needs escaping", func() {
+			windowsPath := `C:\Users\me\klaudiush.exe`
+
+			_, err := settings.InstallOpenCodeDispatcher(pluginPath, windowsPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			registered, err := settings.NewOpenCodePluginParser(pluginPath).
+				IsDispatcherRegistered(windowsPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(registered).To(BeTrue())
+		})
+
+		// The validators resolve git state from the process directory.
+		It("runs the dispatcher in the session directory", func() {
+			rendered, err := settings.RenderOpenCodePlugin(binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(rendered)).To(ContainSubstring("cwd ? { cwd }"))
+		})
+
 		It("passes the opencode provider on the command line", func() {
 			rendered, err := settings.RenderOpenCodePlugin(binaryPath)
 			Expect(err).NotTo(HaveOccurred())
@@ -97,7 +125,23 @@ var _ = Describe("opencode bridge plugin", func() {
 	Describe("defaults", func() {
 		It("places the plugin in the opencode config directory", func() {
 			Expect(settings.DefaultOpenCodePluginPath()).
-				To(HaveSuffix(".config/opencode/plugin/klaudiush.ts"))
+				To(HaveSuffix("opencode/plugin/klaudiush.ts"))
+		})
+
+		// opencode honours XDG_CONFIG_HOME when locating its plugin directory,
+		// so a hardcoded ~/.config would write somewhere it never loads.
+		It("follows XDG_CONFIG_HOME", func() {
+			GinkgoT().Setenv("XDG_CONFIG_HOME", "/tmp/xdg-root")
+
+			Expect(settings.DefaultOpenCodePluginPath()).
+				To(Equal("/tmp/xdg-root/opencode/plugin/klaudiush.ts"))
+		})
+
+		It("falls back to the default when plugin_path is unset", func() {
+			Expect(settings.ResolveOpenCodePluginPath("")).
+				To(Equal(settings.DefaultOpenCodePluginPath()))
+			Expect(settings.ResolveOpenCodePluginPath("/custom/p.ts")).
+				To(Equal("/custom/p.ts"))
 		})
 
 		It("re-exports the forwarded event list", func() {
@@ -107,6 +151,23 @@ var _ = Describe("opencode bridge plugin", func() {
 	})
 
 	Describe("InstallOpenCodeDispatcher", func() {
+		// A truncating write would leave a half-rendered plugin behind if it
+		// were interrupted, and opencode would stop validating entirely.
+		It("leaves no partial file behind when replacing a plugin", func() {
+			_, err := settings.InstallOpenCodeDispatcher(pluginPath, "/old/klaudiush")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = settings.InstallOpenCodeDispatcher(pluginPath, binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			entries, err := os.ReadDir(filepath.Dir(pluginPath))
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, entry := range entries {
+				Expect(entry.Name()).To(Equal(filepath.Base(pluginPath)))
+			}
+		})
+
 		It("creates the plugin and reports it as newly written", func() {
 			alreadyInstalled, err := settings.InstallOpenCodeDispatcher(pluginPath, binaryPath)
 			Expect(err).NotTo(HaveOccurred())

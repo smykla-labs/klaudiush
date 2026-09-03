@@ -83,16 +83,16 @@ var _ = Describe("opencode hook checkers", func() {
 				To(Equal(doctor.StatusSkipped))
 		})
 
-		It("warns and names the default when plugin_path is unset", func() {
+		// plugin_path is optional, so an enabled provider without one is a
+		// supported setup and must not be reported as misconfigured.
+		It("passes with the default path when plugin_path is unset", func() {
 			enabled := true
 			result := hook.NewOpenCodeConfigChecker(
 				&pkgConfig.OpenCodeProviderConfig{Enabled: &enabled},
 			).Check(ctx)
 
-			Expect(result.Status).To(Equal(doctor.StatusFail))
-			Expect(result.Details).To(ContainElement(
-				ContainSubstring(settings.DefaultOpenCodePluginPath()),
-			))
+			Expect(result.Status).To(Equal(doctor.StatusPass))
+			Expect(result.Message).To(Equal(settings.DefaultOpenCodePluginPath()))
 		})
 
 		It("passes when plugin_path is configured", func() {
@@ -104,13 +104,35 @@ var _ = Describe("opencode hook checkers", func() {
 	})
 
 	Describe("OpenCodeRegistrationChecker", func() {
-		It("skips when plugin_path is not configured", func() {
+		// Skipping here would leave doctor --fix with no fixable opencode
+		// result, so the advertised enable-only setup would never install.
+		It("checks the default path when plugin_path is not configured", func() {
+			GinkgoT().Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "xdg"))
+
 			enabled := true
 			result := hook.NewOpenCodeRegistrationChecker(
 				&pkgConfig.OpenCodeProviderConfig{Enabled: &enabled},
 			).Check(ctx)
 
-			Expect(result.Status).To(Equal(doctor.StatusSkipped))
+			Expect(result.Status).To(Equal(doctor.StatusFail))
+			Expect(result.FixID).To(Equal("install_hook"))
+		})
+
+		It("passes on the default path once installed there", func() {
+			GinkgoT().Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "xdg"))
+
+			_, err := settings.InstallOpenCodeDispatcher(
+				settings.DefaultOpenCodePluginPath(),
+				binaryPath,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			enabled := true
+			result := hook.NewOpenCodeRegistrationChecker(
+				&pkgConfig.OpenCodeProviderConfig{Enabled: &enabled},
+			).Check(ctx)
+
+			Expect(result.Status).To(Equal(doctor.StatusPass))
 		})
 
 		It("fails with a fixable result when the plugin is absent", func() {
@@ -141,6 +163,53 @@ var _ = Describe("opencode hook checkers", func() {
 		})
 	})
 
+	Describe("OpenCodeFreshnessChecker", func() {
+		It("skips when the plugin is not installed", func() {
+			result := hook.NewOpenCodeFreshnessChecker(enabledCfg()).Check(ctx)
+
+			Expect(result.Status).To(Equal(doctor.StatusSkipped))
+		})
+
+		It("passes for a freshly installed plugin", func() {
+			_, err := settings.InstallOpenCodeDispatcher(pluginPath, binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			checker := hook.NewOpenCodeFreshnessChecker(enabledCfg())
+			Expect(checker.Name()).To(Equal("opencode plugin is up to date"))
+			Expect(checker.Category()).To(Equal(doctor.CategoryHook))
+			Expect(checker.Check(ctx).Status).To(Equal(doctor.StatusPass))
+		})
+
+		// A plugin body left over from an older klaudiush still names the right
+		// binary and events, so only a content comparison catches it.
+		It("flags a stale plugin as fixable", func() {
+			_, err := settings.InstallOpenCodeDispatcher(pluginPath, binaryPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			current, err := os.ReadFile(pluginPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			stale := string(current) + "\n// left over from an older release\n"
+			Expect(os.WriteFile(pluginPath, []byte(stale), 0o600)).To(Succeed())
+
+			result := hook.NewOpenCodeFreshnessChecker(enabledCfg()).Check(ctx)
+			Expect(result.Status).To(Equal(doctor.StatusFail))
+			Expect(result.FixID).To(Equal("install_hook"))
+			// doctor --fix only acts on errors, so a warning would be reported
+			// and then left in place.
+			Expect(result.IsError()).To(BeTrue())
+		})
+
+		It("skips when the provider is disabled", func() {
+			disabled := false
+			result := hook.NewOpenCodeFreshnessChecker(
+				&pkgConfig.OpenCodeProviderConfig{Enabled: &disabled},
+			).Check(ctx)
+
+			Expect(result.Status).To(Equal(doctor.StatusSkipped))
+		})
+	})
+
 	Describe("OpenCodeEventChecker", func() {
 		It("skips when the provider is disabled", func() {
 			disabled := false
@@ -150,6 +219,19 @@ var _ = Describe("opencode hook checkers", func() {
 			).Check(ctx)
 
 			Expect(result.Status).To(Equal(doctor.StatusSkipped))
+		})
+
+		It("checks the default path for events when plugin_path is unset", func() {
+			GinkgoT().Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "xdg"))
+
+			enabled := true
+			result := hook.NewOpenCodeEventChecker(
+				&pkgConfig.OpenCodeProviderConfig{Enabled: &enabled},
+				"tool.execute.before",
+			).Check(ctx)
+
+			Expect(result.Status).To(Equal(doctor.StatusFail))
+			Expect(result.FixID).To(Equal("install_hook"))
 		})
 
 		It("fails for every forwarded event when the plugin is absent", func() {
