@@ -97,6 +97,33 @@ func TestDisplayEventName_OpenCodeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDisplayEventName_OpenCodeElicitationAndFallback(t *testing.T) {
+	tests := []struct {
+		canonical CanonicalEvent
+		fallback  EventType
+		expected  string
+	}{
+		{CanonicalEventElicitation, EventTypeUnknown, "Elicitation"},
+		{CanonicalEventElicitationResult, EventTypeUnknown, "ElicitationResult"},
+		// No opencode name for the event: fall back to the legacy enum.
+		{CanonicalEventUnknown, EventTypePreToolUse, "PreToolUse"},
+		{CanonicalEventUnknown, EventTypeUnknown, ""},
+	}
+
+	for _, tt := range tests {
+		got := DisplayEventName(ProviderOpenCode, tt.canonical, tt.fallback)
+		if got != tt.expected {
+			t.Errorf(
+				"DisplayEventName(opencode, %q, %v) = %q, want %q",
+				tt.canonical,
+				tt.fallback,
+				got,
+				tt.expected,
+			)
+		}
+	}
+}
+
 func TestDefaultEventName_OpenCode(t *testing.T) {
 	if got := DefaultEventName(ProviderOpenCode); got != "tool.execute.before" {
 		t.Errorf("DefaultEventName(opencode) = %q, want tool.execute.before", got)

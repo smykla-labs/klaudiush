@@ -162,6 +162,20 @@ var _ = Describe("BuildOpenCode", func() {
 		Expect(resp.SystemMessage).NotTo(BeEmpty())
 	})
 
+	// An event klaudiush does not recognise must still be refused rather than
+	// waved through.
+	It("denies a blocking finding on an unrecognised event", func() {
+		resp := hookresponse.BuildOpenCode(
+			ctxFor(hook.CanonicalEventUnknown),
+			blockingErrs(),
+			nil,
+		)
+
+		Expect(resp).NotTo(BeNil())
+		Expect(resp.Decision).To(Equal("deny"))
+		Expect(resp.Reason).NotTo(BeEmpty())
+	})
+
 	It("is selected by BuildForContext for opencode contexts", func() {
 		resp := hookresponse.BuildForContext(
 			ctxFor(hook.CanonicalEventBeforeTool),

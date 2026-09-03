@@ -94,6 +94,18 @@ var _ = Describe("opencode bridge plugin", func() {
 		})
 	})
 
+	Describe("defaults", func() {
+		It("places the plugin in the opencode config directory", func() {
+			Expect(settings.DefaultOpenCodePluginPath()).
+				To(HaveSuffix(".config/opencode/plugin/klaudiush.ts"))
+		})
+
+		It("re-exports the forwarded event list", func() {
+			Expect(settings.OpenCodeEventNames()).To(Equal(hook.OpenCodeEventNames()))
+			Expect(settings.OpenCodeEventNames()).NotTo(ContainElement("permission.ask"))
+		})
+	})
+
 	Describe("InstallOpenCodeDispatcher", func() {
 		It("creates the plugin and reports it as newly written", func() {
 			alreadyInstalled, err := settings.InstallOpenCodeDispatcher(pluginPath, binaryPath)
