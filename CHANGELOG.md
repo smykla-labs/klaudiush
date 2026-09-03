@@ -5,6 +5,20 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.38.0](https://github.com/smykla-skalski/klaudiush/compare/v1.37.1...v1.38.0) (2026-09-03)
+
+### Features
+
+* **providers:** add opencode hook provider ([#612](https://github.com/smykla-skalski/klaudiush/issues/612)) ([28eaef4](https://github.com/smykla-skalski/klaudiush/commit/28eaef4403409110707f3d28ceb9a3e54eb416a1))
+
+### Bug Fixes
+
+* **deps:** update ginkgo to v2.32.1 ([#586](https://github.com/smykla-skalski/klaudiush/issues/586)) ([f08eb97](https://github.com/smykla-skalski/klaudiush/commit/f08eb97a847622d66a013e2b19fdcd9c0748f0c9))
+* **deps:** update module charm.land/lipgloss/v2 to v2.0.6 ([#587](https://github.com/smykla-skalski/klaudiush/issues/587)) ([94d81b8](https://github.com/smykla-skalski/klaudiush/commit/94d81b8af53ec48fb35d82b02ce71e3ca3e5e837))
+* **deps:** update module github.com/charmbracelet/x/ansi to v0.11.8 ([#588](https://github.com/smykla-skalski/klaudiush/issues/588)) ([5038e64](https://github.com/smykla-skalski/klaudiush/commit/5038e64707db58b20234ba6deb203c942c4d3fc7))
+* **deps:** update module github.com/knadh/koanf/maps to v0.1.3 ([#585](https://github.com/smykla-skalski/klaudiush/issues/585)) ([6a07c6f](https://github.com/smykla-skalski/klaudiush/commit/6a07c6f3ab05e9c5d31affdf30275991668cba89))
+* **deps:** update module github.com/mattn/go-runewidth to v0.0.28 ([#593](https://github.com/smykla-skalski/klaudiush/issues/593)) ([ea11849](https://github.com/smykla-skalski/klaudiush/commit/ea11849aacc8099a60967a214ff4c97c4f45c705))
+
 ## [1.37.1](https://github.com/smykla-skalski/klaudiush/compare/v1.37.0...v1.37.1) (2026-08-07)
 
 ## [1.37.0](https://github.com/smykla-skalski/klaudiush/compare/v1.36.2...v1.37.0) (2026-08-04)
