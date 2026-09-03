@@ -654,6 +654,173 @@ func (c *GeminiRegistrationChecker) failForParseError(
 	)
 }
 
+// OpenCodeConfigChecker checks whether the opencode bridge plugin is configured.
+type OpenCodeConfigChecker struct {
+	cfg *pkgConfig.OpenCodeProviderConfig
+}
+
+// NewOpenCodeConfigChecker creates a checker for opencode plugin configuration.
+func NewOpenCodeConfigChecker(cfg *pkgConfig.OpenCodeProviderConfig) *OpenCodeConfigChecker {
+	return &OpenCodeConfigChecker{cfg: cfg}
+}
+
+// Name returns the name of the check.
+func (*OpenCodeConfigChecker) Name() string {
+	return "opencode plugin configuration"
+}
+
+// Category returns the category of the check.
+func (*OpenCodeConfigChecker) Category() doctor.Category {
+	return doctor.CategoryHook
+}
+
+// Check validates opencode bridge plugin configuration readiness.
+func (c *OpenCodeConfigChecker) Check(_ context.Context) doctor.CheckResult {
+	if c.cfg == nil || !c.cfg.IsEnabled() {
+		return doctor.Skip("opencode plugin configuration", "opencode provider disabled")
+	}
+
+	if !c.cfg.HasPluginPath() {
+		return doctor.FailWarning(
+			"opencode plugin configuration",
+			"plugin_path is not configured",
+		).WithDetails(
+			"Set [providers.opencode] plugin_path to the bridge plugin location",
+			"Default: "+settings.DefaultOpenCodePluginPath(),
+		)
+	}
+
+	return doctor.Pass("opencode plugin configuration", c.cfg.PluginPath)
+}
+
+// OpenCodeRegistrationChecker checks if the bridge plugin invokes the dispatcher.
+type OpenCodeRegistrationChecker struct {
+	cfg *pkgConfig.OpenCodeProviderConfig
+}
+
+// NewOpenCodeRegistrationChecker creates a checker for opencode registration.
+func NewOpenCodeRegistrationChecker(
+	cfg *pkgConfig.OpenCodeProviderConfig,
+) *OpenCodeRegistrationChecker {
+	return &OpenCodeRegistrationChecker{cfg: cfg}
+}
+
+// Name returns the name of the check.
+func (*OpenCodeRegistrationChecker) Name() string {
+	return "Dispatcher registered in opencode plugin"
+}
+
+// Category returns the category of the check.
+func (*OpenCodeRegistrationChecker) Category() doctor.Category {
+	return doctor.CategoryHook
+}
+
+// Check performs the opencode dispatcher registration check.
+func (c *OpenCodeRegistrationChecker) Check(_ context.Context) doctor.CheckResult {
+	checkName := "Dispatcher registered in opencode plugin"
+	if result, ready := c.preflight(checkName); !ready {
+		return result
+	}
+
+	return checkProviderRegistration(
+		checkName,
+		c.cfg.PluginPath,
+		func(dispatcherPath string) (bool, error) {
+			return settings.NewOpenCodePluginParser(c.cfg.PluginPath).IsDispatcherRegistered(
+				dispatcherPath,
+			)
+		},
+		c.failForParseError,
+	)
+}
+
+// OpenCodeEventChecker checks that the plugin forwards a specific opencode event.
+type OpenCodeEventChecker struct {
+	cfg       *pkgConfig.OpenCodeProviderConfig
+	eventName string
+}
+
+// NewOpenCodeEventChecker creates a checker for a specific opencode event.
+func NewOpenCodeEventChecker(
+	cfg *pkgConfig.OpenCodeProviderConfig,
+	eventName string,
+) *OpenCodeEventChecker {
+	return &OpenCodeEventChecker{
+		cfg:       cfg,
+		eventName: eventName,
+	}
+}
+
+// Name returns the name of the check.
+func (c *OpenCodeEventChecker) Name() string {
+	return c.eventName + " hook in opencode plugin"
+}
+
+// Category returns the category of the check.
+func (*OpenCodeEventChecker) Category() doctor.Category {
+	return doctor.CategoryHook
+}
+
+// Check performs the configured event coverage check.
+func (c *OpenCodeEventChecker) Check(_ context.Context) doctor.CheckResult {
+	checkName := c.eventName + " hook in opencode plugin"
+	if result, ready := c.preflight(checkName); !ready {
+		return result
+	}
+
+	registrationChecker := &OpenCodeRegistrationChecker{cfg: c.cfg}
+
+	return checkProviderEventHook(
+		checkName,
+		c.cfg.PluginPath,
+		c.eventName,
+		func(eventName, dispatcherPath string) (bool, error) {
+			return settings.NewOpenCodePluginParser(c.cfg.PluginPath).HasEventHook(
+				eventName,
+				dispatcherPath,
+			)
+		},
+		registrationChecker.failForParseError,
+	)
+}
+
+func (c *OpenCodeRegistrationChecker) preflight(checkName string) (doctor.CheckResult, bool) {
+	if c.cfg == nil || !c.cfg.IsEnabled() {
+		return doctor.Skip(checkName, "opencode provider disabled"), false
+	}
+
+	if !c.cfg.HasPluginPath() {
+		return doctor.Skip(checkName, "plugin_path not configured"), false
+	}
+
+	return doctor.CheckResult{}, true
+}
+
+func (c *OpenCodeEventChecker) preflight(checkName string) (doctor.CheckResult, bool) {
+	registrationChecker := &OpenCodeRegistrationChecker{cfg: c.cfg}
+
+	return registrationChecker.preflight(checkName)
+}
+
+func (c *OpenCodeRegistrationChecker) failForParseError(
+	checkName string,
+	err error,
+) doctor.CheckResult {
+	if errors.Is(err, settings.ErrPluginNotFound) {
+		return doctor.FailError(checkName, "Bridge plugin not found").
+			WithDetails(
+				"Expected at: "+c.cfg.PluginPath,
+				"Generate with: klaudiush doctor --fix",
+			).
+			WithFixID("install_hook")
+	}
+
+	return doctor.FailError(
+		checkName,
+		fmt.Sprintf("Failed to read bridge plugin: %v", err),
+	)
+}
+
 type (
 	providerEventLookup         func(eventName, dispatcherPath string) (bool, error)
 	providerParseErrorFormatter func(checkName string, err error) doctor.CheckResult

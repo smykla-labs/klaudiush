@@ -2,9 +2,10 @@ package config
 
 // ProvidersConfig contains provider-specific integration configuration.
 type ProvidersConfig struct {
-	Claude *ClaudeProviderConfig `json:"claude,omitempty" koanf:"claude" toml:"claude,omitempty"`
-	Codex  *CodexProviderConfig  `json:"codex,omitempty"  koanf:"codex"  toml:"codex,omitempty"`
-	Gemini *GeminiProviderConfig `json:"gemini,omitempty" koanf:"gemini" toml:"gemini,omitempty"`
+	Claude   *ClaudeProviderConfig   `json:"claude,omitempty"   koanf:"claude"   toml:"claude,omitempty"`
+	Codex    *CodexProviderConfig    `json:"codex,omitempty"    koanf:"codex"    toml:"codex,omitempty"`
+	Gemini   *GeminiProviderConfig   `json:"gemini,omitempty"   koanf:"gemini"   toml:"gemini,omitempty"`
+	OpenCode *OpenCodeProviderConfig `json:"opencode,omitempty" koanf:"opencode" toml:"opencode,omitempty"`
 }
 
 // ClaudeProviderConfig contains Claude-specific integration toggles.
@@ -23,6 +24,16 @@ type CodexProviderConfig struct {
 type GeminiProviderConfig struct {
 	Enabled      *bool  `json:"enabled,omitempty"       koanf:"enabled"       toml:"enabled,omitempty"`
 	SettingsPath string `json:"settings_path,omitempty" koanf:"settings_path" toml:"settings_path,omitempty"`
+}
+
+// OpenCodeProviderConfig contains opencode-specific integration toggles.
+//
+// opencode has no declarative hook config; hooks are TypeScript plugins. The
+// integration is therefore a generated bridge plugin, and PluginPath is where
+// klaudiush writes it.
+type OpenCodeProviderConfig struct {
+	Enabled    *bool  `json:"enabled,omitempty"     koanf:"enabled"     toml:"enabled,omitempty"`
+	PluginPath string `json:"plugin_path,omitempty" koanf:"plugin_path" toml:"plugin_path,omitempty"`
 }
 
 // GetClaude returns the Claude provider config, creating it if needed.
@@ -50,6 +61,15 @@ func (p *ProvidersConfig) GetGemini() *GeminiProviderConfig {
 	}
 
 	return p.Gemini
+}
+
+// GetOpenCode returns the opencode provider config, creating it if needed.
+func (p *ProvidersConfig) GetOpenCode() *OpenCodeProviderConfig {
+	if p.OpenCode == nil {
+		p.OpenCode = &OpenCodeProviderConfig{}
+	}
+
+	return p.OpenCode
 }
 
 // IsEnabled returns whether Claude integration is enabled.
@@ -96,4 +116,18 @@ func (g *GeminiProviderConfig) IsEnabled() bool {
 // HasSettingsPath returns true when the Gemini settings path is configured.
 func (g *GeminiProviderConfig) HasSettingsPath() bool {
 	return g != nil && g.SettingsPath != ""
+}
+
+// IsEnabled returns whether opencode integration is enabled.
+func (o *OpenCodeProviderConfig) IsEnabled() bool {
+	if o == nil || o.Enabled == nil {
+		return false
+	}
+
+	return *o.Enabled
+}
+
+// HasPluginPath returns true when the opencode plugin path is configured.
+func (o *OpenCodeProviderConfig) HasPluginPath() bool {
+	return o != nil && o.PluginPath != ""
 }

@@ -9,6 +9,7 @@ import (
 const (
 	decisionAllow = "allow"
 	decisionDeny  = "deny"
+	decisionBlock = "block"
 )
 
 // Build constructs a HookResponse from validation errors.
@@ -83,6 +84,10 @@ func BuildForContext(
 		return BuildGemini(hookCtx, errs, patternWarnings)
 	}
 
+	if hookCtx != nil && hookCtx.Provider == hook.ProviderOpenCode {
+		return BuildOpenCode(hookCtx, errs, patternWarnings)
+	}
+
 	if hookCtx != nil && hookCtx.IsElicitationEvent() {
 		return BuildElicitation(hookCtx, errs, patternWarnings)
 	}
@@ -118,7 +123,7 @@ func BuildClaudeAfterTool(
 	}
 
 	if len(blocking) > 0 {
-		resp.Decision = "block"
+		resp.Decision = decisionBlock
 		resp.Reason = formatDecisionReason(blocking)
 	}
 
@@ -153,7 +158,7 @@ func BuildCodex(
 	switch hookCtx.Event {
 	case hook.CanonicalEventTurnStop:
 		if len(blocking) > 0 {
-			resp.Decision = "block"
+			resp.Decision = decisionBlock
 			resp.Reason = formatDecisionReason(blocking)
 		}
 
@@ -251,6 +256,59 @@ func BuildGemini(
 				HookEventName:     hookCtx.EventName(),
 				AdditionalContext: additionalContext,
 			}
+		}
+	}
+
+	return resp
+}
+
+// BuildOpenCode constructs an opencode bridge-plugin response.
+func BuildOpenCode(
+	hookCtx *hook.Context,
+	errs []*dispatcher.ValidationError,
+	patternWarnings []string,
+) *OpenCodeCommandResponse {
+	if len(errs) == 0 {
+		return nil
+	}
+
+	blocking, warnings, bypassed := categorize(errs)
+	additionalContext := formatAdditionalContext(blocking, warnings, bypassed, patternWarnings)
+
+	resp := &OpenCodeCommandResponse{
+		Continue:      true,
+		SystemMessage: FormatSystemMessage(errs),
+	}
+
+	switch hookCtx.Event {
+	case hook.CanonicalEventBeforeTool, hook.CanonicalEventUserPromptSubmit:
+		if len(blocking) > 0 {
+			resp.Decision = decisionDeny
+			resp.Reason = formatDecisionReason(blocking)
+
+			return resp
+		}
+	case hook.CanonicalEventTurnStop:
+		if len(blocking) > 0 {
+			resp.Decision = decisionBlock
+			resp.Reason = formatDecisionReason(blocking)
+		}
+	case hook.CanonicalEventAfterTool, hook.CanonicalEventSessionStart,
+		hook.CanonicalEventNotification, hook.CanonicalEventPreCompress,
+		hook.CanonicalEventPostCompact:
+	default:
+		if len(blocking) > 0 {
+			resp.Decision = decisionDeny
+			resp.Reason = formatDecisionReason(blocking)
+
+			return resp
+		}
+	}
+
+	if additionalContext != "" {
+		resp.HookSpecificOutput = &OpenCodeHookSpecificOutput{
+			HookEventName:     hookCtx.EventName(),
+			AdditionalContext: additionalContext,
 		}
 	}
 

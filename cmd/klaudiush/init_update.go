@@ -13,6 +13,7 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 
 	internalconfig "github.com/smykla-skalski/klaudiush/internal/config"
+	"github.com/smykla-skalski/klaudiush/internal/doctor/settings"
 	"github.com/smykla-skalski/klaudiush/internal/prompt"
 	"github.com/smykla-skalski/klaudiush/internal/schema"
 	pkgConfig "github.com/smykla-skalski/klaudiush/pkg/config"
@@ -30,6 +31,8 @@ type providerSelection struct {
 	CodexHooksPath     string
 	GeminiEnabled      bool
 	GeminiSettingsPath string
+	OpenCodeEnabled    bool
+	OpenCodePluginPath string
 }
 
 func providerSelectionFromConfig(cfg *pkgConfig.Config) providerSelection {
@@ -46,6 +49,8 @@ func providerSelectionFromConfig(cfg *pkgConfig.Config) providerSelection {
 	selection.CodexHooksPath = cfg.GetProviders().GetCodex().HooksConfigPath
 	selection.GeminiEnabled = cfg.GetProviders().GetGemini().IsEnabled()
 	selection.GeminiSettingsPath = cfg.GetProviders().GetGemini().SettingsPath
+	selection.OpenCodeEnabled = cfg.GetProviders().GetOpenCode().IsEnabled()
+	selection.OpenCodePluginPath = cfg.GetProviders().GetOpenCode().PluginPath
 
 	return selection
 }
@@ -89,6 +94,7 @@ func applyProviderSelection(
 	codexEnabled := selection.CodexEnabled
 	codexExperimental := selection.CodexEnabled
 	geminiEnabled := selection.GeminiEnabled
+	openCodeEnabled := selection.OpenCodeEnabled
 
 	updated.Providers = &pkgConfig.ProvidersConfig{
 		Claude: &pkgConfig.ClaudeProviderConfig{
@@ -101,6 +107,9 @@ func applyProviderSelection(
 		Gemini: &pkgConfig.GeminiProviderConfig{
 			Enabled: &geminiEnabled,
 		},
+		OpenCode: &pkgConfig.OpenCodeProviderConfig{
+			Enabled: &openCodeEnabled,
+		},
 	}
 
 	if selection.CodexEnabled {
@@ -109,6 +118,10 @@ func applyProviderSelection(
 
 	if selection.GeminiEnabled {
 		updated.Providers.Gemini.SettingsPath = selection.GeminiSettingsPath
+	}
+
+	if selection.OpenCodeEnabled {
+		updated.Providers.OpenCode.PluginPath = selection.OpenCodePluginPath
 	}
 
 	return updated, nil
@@ -199,6 +212,8 @@ func applyProviderTokens(selection *providerSelection, providers []string) error
 				selection.CodexEnabled = true
 			case "gemini":
 				selection.GeminiEnabled = true
+			case "opencode":
+				selection.OpenCodeEnabled = true
 			default:
 				return errors.Errorf("unknown provider %q", token)
 			}
@@ -246,6 +261,17 @@ func fillProviderPathDefaults(selection *providerSelection, existing providerSel
 	if !selection.GeminiEnabled {
 		selection.GeminiSettingsPath = ""
 	}
+
+	if selection.OpenCodeEnabled && selection.OpenCodePluginPath == "" {
+		selection.OpenCodePluginPath = existing.OpenCodePluginPath
+		if selection.OpenCodePluginPath == "" {
+			selection.OpenCodePluginPath = settings.DefaultOpenCodePluginPath()
+		}
+	}
+
+	if !selection.OpenCodeEnabled {
+		selection.OpenCodePluginPath = ""
+	}
 }
 
 func promptProviderToggleSelection(
@@ -275,6 +301,14 @@ func promptProviderToggleSelection(
 	selection.GeminiEnabled, err = prompter.Confirm(
 		"Enable Gemini integration",
 		current.GeminiEnabled,
+	)
+	if err != nil {
+		return providerSelection{}, err
+	}
+
+	selection.OpenCodeEnabled, err = prompter.Confirm(
+		"Enable opencode integration",
+		current.OpenCodeEnabled,
 	)
 	if err != nil {
 		return providerSelection{}, err
@@ -314,6 +348,20 @@ func promptProviderPaths(
 		}
 
 		selection.GeminiSettingsPath = value
+	}
+
+	if selection.OpenCodeEnabled {
+		defaultPath := current.OpenCodePluginPath
+		if defaultPath == "" {
+			defaultPath = settings.DefaultOpenCodePluginPath()
+		}
+
+		value, err := prompter.Input("opencode bridge plugin path", defaultPath)
+		if err != nil {
+			return err
+		}
+
+		selection.OpenCodePluginPath = value
 	}
 
 	return nil

@@ -166,6 +166,10 @@ func (p *JSONParser) readInput(opts ParseOptions) ([]byte, JSONInput, error) {
 			envInput = os.Getenv("CODEX_HOOK_INPUT")
 		}
 
+		if envInput == "" && opts.Provider == hook.ProviderOpenCode {
+			envInput = os.Getenv("OPENCODE_HOOK_INPUT")
+		}
+
 		if envInput == "" {
 			return nil, JSONInput{}, ErrEmptyInput
 		}
@@ -258,6 +262,10 @@ func extractToolInvocation(
 }
 
 func inferProvider(eventName string, input JSONInput) hook.Provider {
+	if isOpenCodeEventName(input.HookEventName) || isOpenCodeEventName(eventName) {
+		return hook.ProviderOpenCode
+	}
+
 	if len(input.HookEvent) > 0 {
 		return hook.ProviderCodex
 	}
@@ -294,6 +302,13 @@ func inferProvider(eventName string, input JSONInput) hook.Provider {
 	return hook.ProviderClaude
 }
 
+// isOpenCodeEventName reports whether a hook event name is an opencode hook id.
+// opencode is the only supported provider that names hooks with dots
+// ("tool.execute.before"), so the dot alone identifies the payload source.
+func isOpenCodeEventName(name string) bool {
+	return strings.Contains(strings.TrimSpace(name), ".")
+}
+
 func parseToolInput(
 	rawToolName string,
 	inputRaw json.RawMessage,
@@ -318,15 +333,17 @@ func parseToolInput(
 		switch key {
 		case "command":
 			_ = json.Unmarshal(value, &toolInput.Command)
-		case "file_path":
+		// opencode names tool arguments in camelCase; accept both spellings so
+		// any opencode payload parses, not just klaudiush's own bridge plugin.
+		case "file_path", "filePath":
 			_ = json.Unmarshal(value, &toolInput.FilePath)
 		case "path":
 			_ = json.Unmarshal(value, &toolInput.Path)
 		case "content":
 			_ = json.Unmarshal(value, &toolInput.Content)
-		case "old_string":
+		case "old_string", "oldString":
 			_ = json.Unmarshal(value, &toolInput.OldString)
-		case "new_string":
+		case "new_string", "newString":
 			_ = json.Unmarshal(value, &toolInput.NewString)
 		case "pattern":
 			_ = json.Unmarshal(value, &toolInput.Pattern)

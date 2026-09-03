@@ -22,6 +22,7 @@ import (
 	xdgchecker "github.com/smykla-skalski/klaudiush/internal/doctor/checkers/xdg"
 	"github.com/smykla-skalski/klaudiush/internal/doctor/fixers"
 	"github.com/smykla-skalski/klaudiush/internal/doctor/reporters"
+	"github.com/smykla-skalski/klaudiush/internal/doctor/settings"
 	"github.com/smykla-skalski/klaudiush/internal/prompt"
 	pkgConfig "github.com/smykla-skalski/klaudiush/pkg/config"
 	"github.com/smykla-skalski/klaudiush/pkg/logger"
@@ -212,6 +213,19 @@ func registerHookCheckers(registry *doctor.Registry, cfg *pkgConfig.Config) {
 
 	registerCodexHookCheckers(registry, cfg.GetProviders().GetCodex())
 	registerGeminiHookCheckers(registry, cfg.GetProviders().GetGemini())
+	registerOpenCodeHookCheckers(registry, cfg.GetProviders().GetOpenCode())
+}
+
+func registerOpenCodeHookCheckers(
+	registry *doctor.Registry,
+	cfg *pkgConfig.OpenCodeProviderConfig,
+) {
+	registry.RegisterChecker(hook.NewOpenCodeConfigChecker(cfg))
+	registry.RegisterChecker(hook.NewOpenCodeRegistrationChecker(cfg))
+
+	for _, eventName := range settings.OpenCodeEventNames() {
+		registry.RegisterChecker(hook.NewOpenCodeEventChecker(cfg, eventName))
+	}
 }
 
 func registerCodexHookCheckers(registry *doctor.Registry, cfg *pkgConfig.CodexProviderConfig) {

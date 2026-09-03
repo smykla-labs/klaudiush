@@ -7,9 +7,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Release](https://img.shields.io/github/v/release/smykla-skalski/klaudiush)](https://github.com/smykla-skalski/klaudiush/releases/latest)
 
-A validation dispatcher for AI coding-agent hooks. Klaudiush supports Claude Code hooks today and experimental Codex command hooks, enforcing git workflow standards, commit conventions, and code quality rules.
+A validation dispatcher for AI coding-agent hooks. Klaudiush supports Claude Code hooks today, experimental Codex command hooks, and an opencode bridge plugin, enforcing git workflow standards, commit conventions, and code quality rules.
 
-For Claude, klaudiush runs in blocking `before_tool` flows (`PreToolUse`). For Codex, it can also participate in experimental `session_start`, `after_tool`, and `turn_stop` command hooks. It parses Bash commands via `mvdan.cc/sh`, detects file operations, and validates them against project-specific rules.
+For Claude, klaudiush runs in blocking `before_tool` flows (`PreToolUse`). For Codex, it can also participate in experimental `session_start`, `after_tool`, and `turn_stop` command hooks. For opencode, it blocks in both `tool.execute.before` and `permission.ask`, and observes the session lifecycle. It parses Bash commands via `mvdan.cc/sh`, detects file operations, and validates them against project-specific rules.
 
 - Git workflow validation (commits, pushes, branches, PRs)
 - Code quality checks (shellcheck, terraform fmt, actionlint, gofumpt, ruff, oxlint, rustfmt)
@@ -74,6 +74,44 @@ klaudiush doctor
 The binary installs to `~/.local/bin` or `~/bin`. Make sure the install directory is in your `$PATH`.
 
 Shell completions are available for bash, zsh, fish, and PowerShell via `klaudiush completion <shell>`.
+
+### Providers
+
+Claude is enabled by default. The other providers are opt-in:
+
+```toml
+[providers.claude]
+enabled = true
+
+[providers.codex]
+enabled = true
+experimental = true
+hooks_config_path = "~/.codex/hooks.json"
+
+[providers.gemini]
+enabled = true
+settings_path = "~/.gemini/settings.json"
+
+[providers.opencode]
+enabled = true
+# Optional; defaults to ~/.config/opencode/plugin/klaudiush.ts
+plugin_path = "~/.config/opencode/plugin/klaudiush.ts"
+```
+
+Claude, Codex, and Gemini read hooks from JSON settings files, so klaudiush
+registers commands inside the file you point it at. opencode has no declarative
+hook config — hooks are TypeScript plugins — so klaudiush instead generates a
+bridge plugin at `plugin_path` that forwards opencode's hooks to the validator.
+
+Write or refresh the integrations with either command:
+
+```bash
+klaudiush init --install-hooks --global
+klaudiush doctor --fix
+```
+
+Regenerate the opencode plugin after upgrading klaudiush, since it embeds the
+resolved binary path.
 
 ## How it works
 

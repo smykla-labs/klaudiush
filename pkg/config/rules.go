@@ -8,14 +8,16 @@ var (
 	ValidActionTypes = []string{"allow", "block", "warn"}
 
 	// ValidProviders are the valid provider filters for rules.
-	ValidProviders = []string{"claude", "codex", "gemini"}
+	ValidProviders = []string{"claude", "codex", "gemini", "opencode"}
 
 	// ValidEventTypes are the valid event types for rules (case-insensitive matching supported).
 	ValidEventTypes = []string{
 		"before_tool", "after_tool", "session_start", "turn_stop", "notification",
-		"pre_compress",
+		"pre_compress", "post_compact", "user_prompt_submit",
 		"PreToolUse", "PostToolUse", "Notification", "SessionStart", "Stop", "AfterToolUse",
 		"BeforeTool", "AfterTool", "SessionEnd", "PreCompress",
+		"tool.execute.before", "tool.execute.after", "permission.ask", "chat.message",
+		"session.created", "session.idle", "session.compacting", "session.compacted",
 	}
 
 	// ValidToolTypes are the valid tool types for rules (case-insensitive matching supported).
@@ -23,6 +25,7 @@ var (
 		"shell", "write", "edit", "multiedit", "grep", "read", "glob",
 		"Bash", "Write", "Edit", "MultiEdit", "Grep", "Read", "Glob",
 		"run_shell_command", "write_file", "replace", "read_file", "ls",
+		"bash", "list", "patch",
 	}
 )
 
@@ -71,8 +74,8 @@ type RuleMatchConfig struct {
 	ValidatorType string `json:"validator_type,omitempty" koanf:"validator_type" toml:"validator_type,omitempty"`
 
 	// Provider filters by hook provider.
-	// Examples: "claude", "codex", "gemini"
-	Provider string `json:"provider,omitempty" jsonschema:"enum=claude,enum=codex,enum=gemini" koanf:"provider" toml:"provider,omitempty"`
+	// Examples: "claude", "codex", "gemini", "opencode"
+	Provider string `json:"provider,omitempty" jsonschema:"enum=claude,enum=codex,enum=gemini,enum=opencode" koanf:"provider" toml:"provider,omitempty"`
 
 	// RepoPattern matches against the repository root path.
 	// Supports glob patterns (e.g., "**/myorg/**"), regex, and negation (! prefix).
