@@ -86,10 +86,18 @@ jobs:
         id: semantic
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
+          # conventional-changelog-conventionalcommits is pinned to 9.x on
+          # purpose. From 10.0.0 the preset switched to
+          # @conventional-changelog/template and requires
+          # conventional-changelog-writer 9 or newer, while
+          # @semantic-release/release-notes-generator@14 still depends on
+          # writer 8. Leaving it unpinned resolves to the newest major at
+          # install time, which aborts the release with "Missing helper".
+          # Drop the constraint once release-notes-generator ships writer 9.
           extra_plugins: |
             @semantic-release/changelog
             @semantic-release/exec
-            conventional-changelog-conventionalcommits
+            conventional-changelog-conventionalcommits@^9.3.1
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           GIT_AUTHOR_NAME: smyklot[bot]
