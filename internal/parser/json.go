@@ -166,6 +166,10 @@ func (p *JSONParser) readInput(opts ParseOptions) ([]byte, JSONInput, error) {
 			envInput = os.Getenv("CODEX_HOOK_INPUT")
 		}
 
+		if envInput == "" && opts.Provider == hook.ProviderOpenCode {
+			envInput = os.Getenv("OPENCODE_HOOK_INPUT")
+		}
+
 		if envInput == "" {
 			return nil, JSONInput{}, ErrEmptyInput
 		}
@@ -258,6 +262,10 @@ func extractToolInvocation(
 }
 
 func inferProvider(eventName string, input JSONInput) hook.Provider {
+	if isOpenCodeEventName(input.HookEventName) || isOpenCodeEventName(eventName) {
+		return hook.ProviderOpenCode
+	}
+
 	if len(input.HookEvent) > 0 {
 		return hook.ProviderCodex
 	}
@@ -292,6 +300,13 @@ func inferProvider(eventName string, input JSONInput) hook.Provider {
 	}
 
 	return hook.ProviderClaude
+}
+
+// isOpenCodeEventName reports whether a hook event name is an opencode hook id.
+// opencode is the only supported provider that names hooks with dots
+// ("tool.execute.before"), so the dot alone identifies the payload source.
+func isOpenCodeEventName(name string) bool {
+	return strings.Contains(strings.TrimSpace(name), ".")
 }
 
 func parseToolInput(
@@ -338,11 +353,51 @@ func parseToolInput(
 		}
 	}
 
+	applyToolInputAliases(&toolInput)
+
 	if len(toolInput.Additional) == 0 {
 		toolInput.Additional = nil
 	}
 
 	return toolInput
+}
+
+// applyToolInputAliases fills fields the canonical snake_case keys did not set.
+// opencode names tool arguments in camelCase, and its edit approval metadata
+// uses an all-lowercase "filepath".
+//
+// Resolved after the decode loop rather than inside it: the loop walks a map,
+// whose iteration order Go randomizes, so a payload carrying two spellings of
+// one argument would otherwise parse to a different value on each run.
+func applyToolInputAliases(toolInput *hook.ToolInput) {
+	for _, alias := range []struct {
+		field *string
+		keys  []string
+	}{
+		{&toolInput.FilePath, []string{"filePath", "filepath"}},
+		{&toolInput.OldString, []string{"oldString"}},
+		{&toolInput.NewString, []string{"newString"}},
+	} {
+		if *alias.field != "" {
+			continue
+		}
+
+		for _, key := range alias.keys {
+			raw, ok := toolInput.Additional[key]
+			if !ok {
+				continue
+			}
+
+			var value string
+			if err := json.Unmarshal(raw, &value); err != nil || value == "" {
+				continue
+			}
+
+			*alias.field = value
+
+			break
+		}
+	}
 }
 
 func assignProviderSpecificInput(

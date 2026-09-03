@@ -9,13 +9,18 @@ func beforeToolOnlyPredicate() validator.Predicate {
 	return validator.EventIs(hook.CanonicalEventBeforeTool)
 }
 
-func beforeToolOrCodexAfterToolPredicate() validator.Predicate {
+// beforeToolOrProviderAfterToolPredicate selects pre-execution validation for
+// every provider, plus post-execution validation for the providers that report
+// the tool arguments on their after-tool event. Claude's PostToolUse omits
+// them, so file validators would have nothing to inspect there.
+func beforeToolOrProviderAfterToolPredicate() validator.Predicate {
 	return validator.Or(
 		validator.EventIs(hook.CanonicalEventBeforeTool),
 		validator.And(
 			validator.Or(
 				validator.ProviderIs(hook.ProviderCodex),
 				validator.ProviderIs(hook.ProviderGemini),
+				validator.ProviderIs(hook.ProviderOpenCode),
 			),
 			validator.EventIs(hook.CanonicalEventAfterTool),
 		),
@@ -35,5 +40,6 @@ func lifecycleEventPredicate() validator.Predicate {
 		validator.EventIs(hook.CanonicalEventTurnStop),
 		validator.EventIs(hook.CanonicalEventPreCompress),
 		validator.EventIs(hook.CanonicalEventPostCompact),
+		validator.EventIs(hook.CanonicalEventUserPromptSubmit),
 	)
 }

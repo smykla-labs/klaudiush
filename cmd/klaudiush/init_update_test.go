@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
+	"github.com/smykla-skalski/klaudiush/internal/doctor/settings"
 	"github.com/smykla-skalski/klaudiush/internal/prompt"
 	pkgConfig "github.com/smykla-skalski/klaudiush/pkg/config"
 )
@@ -66,6 +67,8 @@ var _ = Describe("init provider updates", func() {
 				CodexHooksPath:     defaultCodexHooksPath,
 				GeminiEnabled:      true,
 				GeminiSettingsPath: defaultGeminiSettingsPath,
+				OpenCodeEnabled:    true,
+				OpenCodePluginPath: "/tmp/klaudiush.ts",
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updated.GetProviders().GetClaude().IsEnabled()).To(BeTrue())
@@ -75,6 +78,9 @@ var _ = Describe("init provider updates", func() {
 			Expect(updated.GetProviders().GetGemini().IsEnabled()).To(BeTrue())
 			Expect(updated.GetProviders().GetGemini().SettingsPath).
 				To(Equal(defaultGeminiSettingsPath))
+			Expect(updated.GetProviders().GetOpenCode().IsEnabled()).To(BeTrue())
+			Expect(updated.GetProviders().GetOpenCode().PluginPath).
+				To(Equal("/tmp/klaudiush.ts"))
 			Expect(updated.GetValidators().GetNotification().Bell.Enabled).
 				To(Equal(existing.GetValidators().GetNotification().Bell.Enabled))
 			Expect(existing.Providers).To(BeNil())
@@ -113,11 +119,17 @@ var _ = Describe("init provider updates", func() {
 					Confirm("Enable Gemini integration", false).
 					Return(true, nil),
 				prompter.EXPECT().
+					Confirm("Enable opencode integration", false).
+					Return(true, nil),
+				prompter.EXPECT().
 					Input("Codex hooks.json path", defaultCodexHooksPath).
 					Return(defaultCodexHooksPath, nil),
 				prompter.EXPECT().
 					Input("Gemini settings.json path", defaultGeminiSettingsPath).
 					Return(defaultGeminiSettingsPath, nil),
+				prompter.EXPECT().
+					Input("opencode bridge plugin path", settings.DefaultOpenCodePluginPath()).
+					Return("/tmp/klaudiush.ts", nil),
 				prompter.EXPECT().
 					Confirm("Apply these changes?", false).
 					Return(true, nil),
@@ -138,6 +150,9 @@ var _ = Describe("init provider updates", func() {
 			Expect(updated.GetProviders().GetGemini().IsEnabled()).To(BeTrue())
 			Expect(updated.GetProviders().GetGemini().SettingsPath).
 				To(Equal(defaultGeminiSettingsPath))
+			Expect(updated.GetProviders().GetOpenCode().IsEnabled()).To(BeTrue())
+			Expect(updated.GetProviders().GetOpenCode().PluginPath).
+				To(Equal("/tmp/klaudiush.ts"))
 			Expect(out.String()).
 				To(ContainSubstring("Proposed changes for /tmp/config.toml"))
 			Expect(out.String()).To(ContainSubstring("[providers]"))

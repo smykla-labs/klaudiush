@@ -39,7 +39,7 @@ var initCmd = &cobra.Command{
 	Long: `Initialize klaudiush configuration file and register hooks.
 
 By default, creates a project-local configuration file (.klaudiush/config.toml)
-and registers supported hooks for enabled providers. Claude installation is enabled by default; Codex installation runs when providers.codex is enabled with experimental=true and hooks_config_path set; Gemini installation runs when providers.gemini is enabled with settings_path set.
+and registers supported hooks for enabled providers. Claude installation is enabled by default; Codex installation runs when providers.codex is enabled with experimental=true and hooks_config_path set; Gemini installation runs when providers.gemini is enabled with settings_path set; opencode installation writes the bridge plugin when providers.opencode is enabled.
 
 Use --global or -g to create a global configuration file (~/.klaudiush/config.toml).
 Use --install-hooks to register hooks only (skip TUI).
@@ -86,7 +86,7 @@ func init() {
 		&providersFlag,
 		"providers",
 		nil,
-		"Providers to configure (claude,codex,gemini)",
+		"Providers to configure (claude,codex,gemini,opencode)",
 	)
 
 	initCmd.Flags().StringVar(
@@ -608,51 +608,106 @@ func performGeminiInstall(settingsPath, binaryPath string) error {
 	return nil
 }
 
+func performOpenCodeInstall(pluginPath, binaryPath string) error {
+	alreadyInstalled, err := settings.InstallOpenCodeDispatcher(pluginPath, binaryPath)
+	if err != nil {
+		return err
+	}
+
+	if alreadyInstalled {
+		fmt.Printf("klaudiush bridge plugin is already current at %s\n", pluginPath)
+
+		return nil
+	}
+
+	fmt.Printf("klaudiush bridge plugin written to %s\n", pluginPath)
+
+	return nil
+}
+
 func performConfiguredInstall(
 	claudeSettingsPath string,
 	binaryPath string,
 	cfg *pkgConfig.Config,
 ) error {
-	claudeEnabled := true
-	codexHooksPath := ""
-	geminiSettingsPath := ""
+	targets := resolveProviderInstallTargets(cfg)
 
-	if cfg != nil {
-		providers := cfg.GetProviders()
-		claudeEnabled = providers.GetClaude().IsEnabled()
-
-		codexCfg := providers.GetCodex()
-		if codexCfg.IsEnabled() &&
-			codexCfg.IsExperimentalEnabled() &&
-			codexCfg.HasHooksConfigPath() {
-			codexHooksPath = codexCfg.HooksConfigPath
-		}
-
-		geminiCfg := providers.GetGemini()
-		if geminiCfg.IsEnabled() && geminiCfg.HasSettingsPath() {
-			geminiSettingsPath = geminiCfg.SettingsPath
-		}
-	}
-
-	if claudeEnabled {
+	if targets.claudeEnabled {
 		if err := performClaudeInstall(claudeSettingsPath, binaryPath); err != nil {
 			return err
 		}
 	}
 
-	if codexHooksPath != "" {
-		if err := performCodexInstall(codexHooksPath, binaryPath); err != nil {
+	if targets.codexHooksPath != "" {
+		if err := performCodexInstall(targets.codexHooksPath, binaryPath); err != nil {
 			return err
 		}
 	}
 
-	if geminiSettingsPath != "" {
-		if err := performGeminiInstall(geminiSettingsPath, binaryPath); err != nil {
+	if targets.geminiSettingsPath != "" {
+		if err := performGeminiInstall(targets.geminiSettingsPath, binaryPath); err != nil {
+			return err
+		}
+	}
+
+	if targets.openCodePluginPath != "" {
+		if err := performOpenCodeInstall(targets.openCodePluginPath, binaryPath); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// providerInstallTargets holds the hook files enabled providers install into.
+type providerInstallTargets struct {
+	claudeEnabled      bool
+	codexHooksPath     string
+	geminiSettingsPath string
+	openCodePluginPath string
+}
+
+func resolveProviderInstallTargets(cfg *pkgConfig.Config) providerInstallTargets {
+	targets := providerInstallTargets{claudeEnabled: true}
+
+	if cfg == nil {
+		return targets
+	}
+
+	providers := cfg.GetProviders()
+	targets.claudeEnabled = providers.GetClaude().IsEnabled()
+	targets.codexHooksPath = codexInstallPath(providers.GetCodex())
+	targets.geminiSettingsPath = geminiInstallPath(providers.GetGemini())
+	targets.openCodePluginPath = openCodeInstallPath(providers.GetOpenCode())
+
+	return targets
+}
+
+func codexInstallPath(cfg *pkgConfig.CodexProviderConfig) string {
+	if cfg.IsEnabled() && cfg.IsExperimentalEnabled() && cfg.HasHooksConfigPath() {
+		return cfg.HooksConfigPath
+	}
+
+	return ""
+}
+
+func geminiInstallPath(cfg *pkgConfig.GeminiProviderConfig) string {
+	if cfg.IsEnabled() && cfg.HasSettingsPath() {
+		return cfg.SettingsPath
+	}
+
+	return ""
+}
+
+// openCodeInstallPath falls back to the default plugin location: unlike the
+// JSON-hook providers there is no pre-existing file to point at, so enabling
+// the provider is enough to install the bridge.
+func openCodeInstallPath(cfg *pkgConfig.OpenCodeProviderConfig) string {
+	if !cfg.IsEnabled() {
+		return ""
+	}
+
+	return settings.ResolveOpenCodePluginPath(cfg.PluginPath)
 }
 
 func loadHookInstallConfig() (*pkgConfig.Config, error) {

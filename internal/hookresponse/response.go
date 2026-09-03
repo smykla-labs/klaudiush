@@ -52,6 +52,26 @@ type GeminiHookSpecificOutput struct {
 	ToolInput         map[string]any `json:"tool_input,omitempty"`
 }
 
+// OpenCodeCommandResponse is the top-level JSON structure for opencode hooks.
+//
+// The bridge plugin reads Decision to decide whether to reject a tool call
+// (by throwing) or to deny an approval request, and surfaces SystemMessage to
+// the user via a toast while AdditionalContext goes back to the model.
+type OpenCodeCommandResponse struct {
+	Continue           bool                        `json:"continue"`
+	HookSpecificOutput *OpenCodeHookSpecificOutput `json:"hookSpecificOutput,omitempty"`
+	Decision           string                      `json:"decision,omitempty"`
+	Reason             string                      `json:"reason,omitempty"`
+	StopReason         string                      `json:"stopReason,omitempty"`
+	SystemMessage      string                      `json:"systemMessage,omitempty"`
+}
+
+// OpenCodeHookSpecificOutput carries model-facing additional context.
+type OpenCodeHookSpecificOutput struct {
+	HookEventName     string `json:"hookEventName"`
+	AdditionalContext string `json:"additionalContext,omitempty"`
+}
+
 // ElicitationHookResponse is the response for Elicitation/ElicitationResult events.
 type ElicitationHookResponse struct {
 	Action        string         `json:"action,omitempty"`

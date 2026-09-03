@@ -131,7 +131,7 @@ func (f *GitValidatorFactory) createNoVerifyValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.GitSubcommandIs("commit"),
 		),
 	}
@@ -155,7 +155,7 @@ func (f *GitValidatorFactory) createCommitValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.GitSubcommandIs("commit"),
 		),
 	}
@@ -179,7 +179,7 @@ func (f *GitValidatorFactory) createPushValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.GitSubcommandIs("push"),
 		),
 	}
@@ -203,7 +203,7 @@ func (f *GitValidatorFactory) createFetchValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.GitSubcommandIs("fetch"),
 		),
 	}
@@ -227,7 +227,7 @@ func (f *GitValidatorFactory) createPRValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.ToolTypeIs(hook.ToolTypeBash),
 			validator.CommandContains("gh pr create"),
 		),
@@ -252,7 +252,7 @@ func (f *GitValidatorFactory) createBranchValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.Or(
 				// git checkout -b or --branch (create new branch)
 				validator.GitSubcommandWithAnyFlag("checkout", "-b", "--branch"),
@@ -289,7 +289,7 @@ func (f *GitValidatorFactory) createMergeValidator(
 			cfg,
 		),
 		Predicate: validator.And(
-			beforeToolOrCodexAfterToolPredicate(),
+			beforeToolOrProviderAfterToolPredicate(),
 			validator.ToolTypeIs(hook.ToolTypeBash),
 			validator.CommandContains("gh pr merge"),
 		),

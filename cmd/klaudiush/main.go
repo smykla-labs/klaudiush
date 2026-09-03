@@ -136,7 +136,7 @@ func init() {
 		&providerName,
 		"provider",
 		string(hook.ProviderClaude),
-		"Hook provider (claude, codex, gemini)",
+		"Hook provider (claude, codex, gemini, opencode)",
 	)
 	rootCmd.Flags().StringVar(
 		&eventName,

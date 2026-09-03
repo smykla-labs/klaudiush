@@ -53,21 +53,9 @@ func (f *InstallHookFixer) Fix(_ context.Context, interactive bool) error {
 		return errors.Wrap(err, "klaudiush binary not found in PATH")
 	}
 
-	claudeEnabled, codexHooksPath, geminiSettingsPath := configuredInstallTargets(f.cfg)
+	install := configuredInstallTargets(f.cfg)
 
-	var targets []string
-	if claudeEnabled {
-		targets = append(targets, settings.GetUserSettingsPath())
-	}
-
-	if codexHooksPath != "" {
-		targets = append(targets, codexHooksPath)
-	}
-
-	if geminiSettingsPath != "" {
-		targets = append(targets, geminiSettingsPath)
-	}
-
+	targets := install.paths()
 	if len(targets) == 0 {
 		return errors.New("no configured hook targets available for installation")
 	}
@@ -85,7 +73,7 @@ func (f *InstallHookFixer) Fix(_ context.Context, interactive bool) error {
 		}
 	}
 
-	if claudeEnabled {
+	if install.claudeEnabled {
 		if _, err := settings.InstallClaudeDispatcher(
 			settings.GetUserSettingsPath(),
 			binaryPath,
@@ -94,42 +82,92 @@ func (f *InstallHookFixer) Fix(_ context.Context, interactive bool) error {
 		}
 	}
 
-	if codexHooksPath != "" {
-		if _, err := settings.InstallCodexDispatcher(codexHooksPath, binaryPath); err != nil {
+	if install.codexHooksPath != "" {
+		if _, err := settings.InstallCodexDispatcher(
+			install.codexHooksPath,
+			binaryPath,
+		); err != nil {
 			return errors.Wrap(err, "failed to install Codex hooks")
 		}
 	}
 
-	if geminiSettingsPath != "" {
-		if _, err := settings.InstallGeminiDispatcher(geminiSettingsPath, binaryPath); err != nil {
+	if install.geminiSettingsPath != "" {
+		if _, err := settings.InstallGeminiDispatcher(
+			install.geminiSettingsPath,
+			binaryPath,
+		); err != nil {
 			return errors.Wrap(err, "failed to install Gemini hooks")
+		}
+	}
+
+	if install.openCodePluginPath != "" {
+		if _, err := settings.InstallOpenCodeDispatcher(
+			install.openCodePluginPath,
+			binaryPath,
+		); err != nil {
+			return errors.Wrap(err, "failed to install opencode bridge plugin")
 		}
 	}
 
 	return nil
 }
 
-func configuredInstallTargets(cfg *pkgConfig.Config) (bool, string, string) {
-	claudeEnabled := true
-	codexHooksPath := ""
-	geminiSettingsPath := ""
+// installTargets holds the provider hook files this fixer may write.
+type installTargets struct {
+	claudeEnabled      bool
+	codexHooksPath     string
+	geminiSettingsPath string
+	openCodePluginPath string
+}
+
+// paths lists the files that will be written, for the confirmation prompt.
+func (t installTargets) paths() []string {
+	var paths []string
+
+	if t.claudeEnabled {
+		paths = append(paths, settings.GetUserSettingsPath())
+	}
+
+	for _, path := range []string{
+		t.codexHooksPath,
+		t.geminiSettingsPath,
+		t.openCodePluginPath,
+	} {
+		if path != "" {
+			paths = append(paths, path)
+		}
+	}
+
+	return paths
+}
+
+func configuredInstallTargets(cfg *pkgConfig.Config) installTargets {
+	targets := installTargets{claudeEnabled: true}
 
 	if cfg == nil {
-		return claudeEnabled, codexHooksPath, geminiSettingsPath
+		return targets
 	}
 
 	providers := cfg.GetProviders()
-	claudeEnabled = providers.GetClaude().IsEnabled()
+	targets.claudeEnabled = providers.GetClaude().IsEnabled()
 
 	codexCfg := providers.GetCodex()
 	if codexCfg.IsEnabled() && codexCfg.IsExperimentalEnabled() && codexCfg.HasHooksConfigPath() {
-		codexHooksPath = codexCfg.HooksConfigPath
+		targets.codexHooksPath = codexCfg.HooksConfigPath
 	}
 
 	geminiCfg := providers.GetGemini()
 	if geminiCfg.IsEnabled() && geminiCfg.HasSettingsPath() {
-		geminiSettingsPath = geminiCfg.SettingsPath
+		targets.geminiSettingsPath = geminiCfg.SettingsPath
 	}
 
-	return claudeEnabled, codexHooksPath, geminiSettingsPath
+	// opencode falls back to the default plugin location: unlike the JSON-hook
+	// providers there is no pre-existing file an operator must point at, so the
+	// integration can be installed from an enable flag alone.
+	openCodeCfg := providers.GetOpenCode()
+	if openCodeCfg.IsEnabled() {
+		targets.openCodePluginPath = settings.ResolveOpenCodePluginPath(openCodeCfg.PluginPath)
+	}
+
+	return targets
 }

@@ -919,6 +919,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "OpenCodeProviderConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "plugin_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "OverrideEntry": {
       "properties": {
         "disabled": {
@@ -1168,6 +1180,9 @@
         },
         "gemini": {
           "$ref": "#/$defs/GeminiProviderConfig"
+        },
+        "opencode": {
+          "$ref": "#/$defs/OpenCodeProviderConfig"
         }
       },
       "additionalProperties": false,
@@ -1299,7 +1314,8 @@
           "enum": [
             "claude",
             "codex",
-            "gemini"
+            "gemini",
+            "opencode"
           ]
         },
         "repo_pattern": {

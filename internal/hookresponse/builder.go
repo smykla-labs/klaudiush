@@ -9,6 +9,7 @@ import (
 const (
 	decisionAllow = "allow"
 	decisionDeny  = "deny"
+	decisionBlock = "block"
 )
 
 // Build constructs a HookResponse from validation errors.
@@ -83,6 +84,10 @@ func BuildForContext(
 		return BuildGemini(hookCtx, errs, patternWarnings)
 	}
 
+	if hookCtx != nil && hookCtx.Provider == hook.ProviderOpenCode {
+		return BuildOpenCode(hookCtx, errs, patternWarnings)
+	}
+
 	if hookCtx != nil && hookCtx.IsElicitationEvent() {
 		return BuildElicitation(hookCtx, errs, patternWarnings)
 	}
@@ -118,7 +123,7 @@ func BuildClaudeAfterTool(
 	}
 
 	if len(blocking) > 0 {
-		resp.Decision = "block"
+		resp.Decision = decisionBlock
 		resp.Reason = formatDecisionReason(blocking)
 	}
 
@@ -153,7 +158,7 @@ func BuildCodex(
 	switch hookCtx.Event {
 	case hook.CanonicalEventTurnStop:
 		if len(blocking) > 0 {
-			resp.Decision = "block"
+			resp.Decision = decisionBlock
 			resp.Reason = formatDecisionReason(blocking)
 		}
 
@@ -255,6 +260,74 @@ func BuildGemini(
 	}
 
 	return resp
+}
+
+// BuildOpenCode constructs an opencode bridge-plugin response.
+func BuildOpenCode(
+	hookCtx *hook.Context,
+	errs []*dispatcher.ValidationError,
+	patternWarnings []string,
+) *OpenCodeCommandResponse {
+	if len(errs) == 0 {
+		return nil
+	}
+
+	blocking, warnings, bypassed := categorize(errs)
+	additionalContext := formatAdditionalContext(blocking, warnings, bypassed, patternWarnings)
+
+	resp := &OpenCodeCommandResponse{
+		Continue:      true,
+		SystemMessage: FormatSystemMessage(errs),
+	}
+
+	switch hookCtx.Event {
+	case hook.CanonicalEventBeforeTool:
+		if len(blocking) > 0 {
+			resp.Decision = decisionDeny
+			resp.Reason = formatDecisionReason(blocking)
+
+			return resp
+		}
+	case hook.CanonicalEventTurnStop:
+		if len(blocking) > 0 {
+			resp.Decision = decisionBlock
+			resp.Reason = formatDecisionReason(blocking)
+		}
+	// A submitted prompt cannot be refused: opencode's chat.message hook
+	// returns void and exposes no decision channel, so findings here are
+	// reported to the user rather than enforced.
+	case hook.CanonicalEventUserPromptSubmit, hook.CanonicalEventAfterTool,
+		hook.CanonicalEventSessionStart, hook.CanonicalEventNotification,
+		hook.CanonicalEventPreCompress, hook.CanonicalEventPostCompact:
+	default:
+		if len(blocking) > 0 {
+			resp.Decision = decisionDeny
+			resp.Reason = formatDecisionReason(blocking)
+
+			return resp
+		}
+	}
+
+	if additionalContext != "" && openCodeConsumesContext(hookCtx.Event) {
+		resp.HookSpecificOutput = &OpenCodeHookSpecificOutput{
+			HookEventName:     hookCtx.EventName(),
+			AdditionalContext: additionalContext,
+		}
+	}
+
+	return resp
+}
+
+// openCodeConsumesContext reports whether opencode gives the bridge plugin
+// anywhere to put model-facing text for an event.
+//
+// Only two hooks do: tool.execute.after can append to the tool result, and the
+// compaction hook can push onto the compaction prompt. The pre-execution and
+// lifecycle hooks expose no such field, so emitting additionalContext for them
+// would promise the model context it can never receive. Those findings still
+// reach the user through systemMessage.
+func openCodeConsumesContext(event hook.CanonicalEvent) bool {
+	return event == hook.CanonicalEventAfterTool || event == hook.CanonicalEventPreCompress
 }
 
 // BuildElicitation constructs an ElicitationHookResponse.

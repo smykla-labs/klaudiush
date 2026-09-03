@@ -21,6 +21,9 @@ const (
 
 	// ProviderGemini represents Gemini hook payloads.
 	ProviderGemini Provider = "gemini"
+
+	// ProviderOpenCode represents opencode hook payloads.
+	ProviderOpenCode Provider = "opencode"
 )
 
 // CanonicalEvent represents the normalized cross-provider hook event name.
@@ -56,6 +59,9 @@ const (
 
 	// CanonicalEventPostCompact is a post-compaction lifecycle event.
 	CanonicalEventPostCompact CanonicalEvent = "post_compact"
+
+	// CanonicalEventUserPromptSubmit is a user-prompt submission event.
+	CanonicalEventUserPromptSubmit CanonicalEvent = "user_prompt_submit"
 )
 
 // ToolFamily represents the normalized cross-provider tool family.
@@ -100,6 +106,40 @@ const (
 	tokenPostCompress = "postcompress"
 )
 
+// opencode hook identifiers. These are the plugin hook names opencode itself
+// uses, so the bridge plugin, the doctor checks, and the response echo all
+// speak one vocabulary.
+const (
+	openCodeEventBeforeTool       = "tool.execute.before"
+	openCodeEventAfterTool        = "tool.execute.after"
+	openCodeEventUserPromptSubmit = "chat.message"
+	openCodeEventSessionStart     = "session.created"
+	openCodeEventTurnStop         = "session.idle"
+	openCodeEventNotification     = "permission.asked"
+	openCodeEventPreCompress      = "session.compacting"
+	openCodeEventPostCompact      = "session.compacted"
+)
+
+// OpenCodeEventNames returns the opencode hook identifiers the bridge plugin
+// forwards to klaudiush, in registration order.
+//
+// permission.ask is deliberately absent. opencode gates every tool call through
+// tool.execute.before regardless of approval outcome, so forwarding the
+// approval prompt as well would validate each call twice and double-charge the
+// exception rate limiter for one operation.
+func OpenCodeEventNames() []string {
+	return []string{
+		openCodeEventBeforeTool,
+		openCodeEventAfterTool,
+		openCodeEventUserPromptSubmit,
+		openCodeEventSessionStart,
+		openCodeEventTurnStop,
+		openCodeEventNotification,
+		openCodeEventPreCompress,
+		openCodeEventPostCompact,
+	}
+}
+
 // ParseProvider parses a provider string.
 func ParseProvider(s string) (Provider, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
@@ -109,6 +149,8 @@ func ParseProvider(s string) (Provider, error) {
 		return ProviderCodex, nil
 	case string(ProviderGemini):
 		return ProviderGemini, nil
+	case string(ProviderOpenCode):
+		return ProviderOpenCode, nil
 	default:
 		return ProviderUnknown, errors.Newf("unknown provider %q", s)
 	}
@@ -117,23 +159,35 @@ func ParseProvider(s string) (Provider, error) {
 // NormalizeEventName converts provider-specific event names to canonical names.
 func NormalizeEventName(name string) CanonicalEvent {
 	switch normalizeToken(name) {
-	case "beforetool", "pretooluse":
+	// An approval request carries the tool and its arguments, so it normalizes
+	// onto before_tool: a hand-written plugin that forwards it still gets every
+	// pre-execution validator. klaudiush's own bridge does not forward it, to
+	// avoid validating the same call twice — see OpenCodeEventNames.
+	case "beforetool", "pretooluse", "toolexecutebefore", "permissionask",
+		"permissionrequest":
 		return CanonicalEventBeforeTool
-	case "aftertool", "posttooluse", "aftertooluse":
+	case "aftertool", "posttooluse", "aftertooluse", "toolexecuteafter",
+		"posttoolusefailure":
 		return CanonicalEventAfterTool
-	case "sessionstart":
+	case "sessionstart", "sessioncreated", "subagentstart":
 		return CanonicalEventSessionStart
-	case "turnstop", "stop", "sessionend":
+	case "turnstop", "stop", "sessionend", "sessionidle", "sessionerror",
+		"stopfailure", "subagentstop":
 		return CanonicalEventTurnStop
-	case "notification":
+	// A pending approval means the session is waiting on the user, which is what
+	// a Claude Notification reports. opencode has renamed this event across
+	// versions, so both spellings are accepted.
+	case "notification", "permissionasked", "permissionupdated":
 		return CanonicalEventNotification
-	case "precompress":
+	case "precompress", "sessioncompacting":
 		return CanonicalEventPreCompress
+	case "userpromptsubmit", "chatmessage":
+		return CanonicalEventUserPromptSubmit
 	case tokenElicitation:
 		return CanonicalEventElicitation
 	case "elicitationresult":
 		return CanonicalEventElicitationResult
-	case "postcompact", tokenPostCompress:
+	case "postcompact", tokenPostCompress, "sessioncompacted":
 		return CanonicalEventPostCompact
 	default:
 		return CanonicalEventUnknown
@@ -151,7 +205,7 @@ func ResolveLegacyEventType(
 	switch canonical {
 	case CanonicalEventUnknown, CanonicalEventSessionStart, CanonicalEventTurnStop,
 		CanonicalEventPreCompress, CanonicalEventElicitation, CanonicalEventElicitationResult,
-		CanonicalEventPostCompact:
+		CanonicalEventPostCompact, CanonicalEventUserPromptSubmit:
 	case CanonicalEventBeforeTool:
 		return EventTypePreToolUse
 	case CanonicalEventAfterTool:
@@ -180,6 +234,8 @@ func DefaultEventName(provider Provider) string {
 		return EventTypePreToolUse.String()
 	case ProviderGemini:
 		return "BeforeTool"
+	case ProviderOpenCode:
+		return openCodeEventBeforeTool
 	default:
 		return ""
 	}
@@ -195,6 +251,8 @@ func DisplayEventName(provider Provider, canonical CanonicalEvent, fallback Even
 		name = displayCodexEvent(canonical)
 	case ProviderGemini:
 		name = displayGeminiEvent(canonical)
+	case ProviderOpenCode:
+		name = displayOpenCodeEvent(canonical)
 	case ProviderClaude:
 		name = displayClaudeEvent(canonical)
 	}
@@ -256,6 +314,33 @@ func displayGeminiEvent(canonical CanonicalEvent) string {
 	}
 }
 
+func displayOpenCodeEvent(canonical CanonicalEvent) string {
+	switch canonical {
+	case CanonicalEventElicitation:
+		return displayElicitation
+	case CanonicalEventElicitationResult:
+		return displayElicitationResult
+	case CanonicalEventBeforeTool:
+		return openCodeEventBeforeTool
+	case CanonicalEventAfterTool:
+		return openCodeEventAfterTool
+	case CanonicalEventUserPromptSubmit:
+		return openCodeEventUserPromptSubmit
+	case CanonicalEventSessionStart:
+		return openCodeEventSessionStart
+	case CanonicalEventTurnStop:
+		return openCodeEventTurnStop
+	case CanonicalEventNotification:
+		return openCodeEventNotification
+	case CanonicalEventPreCompress:
+		return openCodeEventPreCompress
+	case CanonicalEventPostCompact:
+		return openCodeEventPostCompact
+	default:
+		return ""
+	}
+}
+
 func displayClaudeEvent(canonical CanonicalEvent) string {
 	switch canonical {
 	case CanonicalEventElicitation:
@@ -280,7 +365,7 @@ func ResolveToolMetadata(rawToolName string) (ToolType, ToolFamily) {
 		return ToolTypeBash, ToolFamilyShell
 	case "write", "writefile":
 		return ToolTypeWrite, ToolFamilyWrite
-	case "edit", "applypatch", "replace":
+	case "edit", "applypatch", "replace", "patch":
 		return ToolTypeEdit, ToolFamilyEdit
 	case "multiedit", "multifileedit":
 		return ToolTypeMultiEdit, ToolFamilyMultiEdit
@@ -288,7 +373,7 @@ func ResolveToolMetadata(rawToolName string) (ToolType, ToolFamily) {
 		return ToolTypeGrep, ToolFamilyGrep
 	case "read", "readfile", "viewimage":
 		return ToolTypeRead, ToolFamilyRead
-	case "glob", "listfiles", "ls":
+	case "glob", "listfiles", "ls", "list":
 		return ToolTypeGlob, ToolFamilyGlob
 	default:
 		if toolType, err := ToolTypeString(rawToolName); err == nil {
@@ -320,11 +405,15 @@ func toolFamilyFromToolType(toolType ToolType) ToolFamily {
 	}
 }
 
+// normalizeToken folds provider event and tool spellings onto a single token.
+// Dots are stripped so opencode's dotted hook ids ("tool.execute.before")
+// compare equal to their undotted counterparts.
 func normalizeToken(s string) string {
 	s = strings.TrimSpace(strings.ToLower(s))
 	s = strings.ReplaceAll(s, "_", "")
 	s = strings.ReplaceAll(s, "-", "")
 	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(s, ".", "")
 
 	return s
 }

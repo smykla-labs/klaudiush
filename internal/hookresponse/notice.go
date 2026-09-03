@@ -22,6 +22,13 @@ func BuildNotice(hookCtx *hook.Context, msg string) any {
 		}
 	}
 
+	if hookCtx != nil && hookCtx.Provider == hook.ProviderOpenCode {
+		return &OpenCodeCommandResponse{
+			Continue:      true,
+			SystemMessage: msg,
+		}
+	}
+
 	return &HookResponse{
 		SystemMessage: msg,
 	}
@@ -36,6 +43,8 @@ func AppendNotice(resp any, msg string) {
 	case *CodexCommandResponse:
 		r.SystemMessage = joinNotice(r.SystemMessage, msg)
 	case *GeminiCommandResponse:
+		r.SystemMessage = joinNotice(r.SystemMessage, msg)
+	case *OpenCodeCommandResponse:
 		r.SystemMessage = joinNotice(r.SystemMessage, msg)
 	case *ElicitationHookResponse:
 		r.SystemMessage = joinNotice(r.SystemMessage, msg)
@@ -54,6 +63,8 @@ func IsEmpty(resp any) bool {
 	case *CodexCommandResponse:
 		return r == nil
 	case *GeminiCommandResponse:
+		return r == nil
+	case *OpenCodeCommandResponse:
 		return r == nil
 	case *ElicitationHookResponse:
 		return r == nil
