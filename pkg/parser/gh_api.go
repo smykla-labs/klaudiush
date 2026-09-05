@@ -44,6 +44,7 @@ const (
 	flagMethodLong  = "--method"
 	flagInput       = "--input"
 	flagHeaderLong  = "--header"
+	flagFieldLong   = "--field"
 
 	// Short flags several clients spell the same way for different options:
 	// -F is gh's --field and curl's --form, -b is gh's --body and curl's
@@ -63,7 +64,7 @@ var ghAPIValueFlags = map[string]bool{
 	"-f":            true,
 	"--raw-field":   true,
 	flagFieldShort:  true,
-	"--field":       true,
+	flagFieldLong:   true,
 	"-H":            true,
 	flagHeaderLong:  true,
 	flagInput:       true,
@@ -82,7 +83,7 @@ var ghAPIFieldFlags = map[string]bool{
 	"-f":           true,
 	"--raw-field":  true,
 	flagFieldShort: true,
-	"--field":      true,
+	flagFieldLong:  true,
 	flagInput:      true,
 }
 
@@ -239,7 +240,9 @@ func (c *GHAPICommand) parseAPIArg(args []string, idx int, state *ghAPIParseStat
 	case ghAPIFieldFlags[name]:
 		state.hasFieldFlag = true
 
-		c.collectQueryField(value)
+		// Only --field/-F expands a leading @ to a file; --raw-field takes the
+		// value literally.
+		c.collectQueryField(value, name == flagFieldShort || name == flagFieldLong)
 	}
 
 	return used
@@ -259,8 +262,19 @@ func (c *GHAPICommand) parseAPIPositional(arg string, state *ghAPIParseState) {
 }
 
 // collectQueryField appends a query=... field value to the GraphQL document.
-func (c *GHAPICommand) collectQueryField(value string) {
-	if !strings.HasPrefix(value, queryFieldPrefix) {
+// When the flag expands a leading @, the value names a file holding the query
+// rather than the query itself.
+func (c *GHAPICommand) collectQueryField(value string, expandsFile bool) {
+	query, isQuery := strings.CutPrefix(value, queryFieldPrefix)
+	if !isQuery {
+		return
+	}
+
+	if path, isFile := strings.CutPrefix(query, "@"); isFile && expandsFile {
+		if path != stdinPath {
+			c.InputFile = path
+		}
+
 		return
 	}
 
@@ -268,7 +282,7 @@ func (c *GHAPICommand) collectQueryField(value string) {
 		c.Query += "\n"
 	}
 
-	c.Query += strings.TrimPrefix(value, queryFieldPrefix)
+	c.Query += query
 }
 
 // splitGHAPIFlag splits --flag=value, -f=value and -fvalue into name and value.

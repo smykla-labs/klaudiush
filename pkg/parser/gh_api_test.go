@@ -163,6 +163,24 @@ var _ = Describe("ParseGHAPICommand", func() {
 			Expect(apiCmd.Method).To(Equal("POST"))
 		})
 
+		It("follows --field query=@path to the file holding the query", func() {
+			apiCmd, err := parser.ParseGHAPICommand(
+				parseFirstGHCommand("gh api graphql -F query=@q.graphql"),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(apiCmd.InputFile).To(Equal("q.graphql"))
+			Expect(apiCmd.Query).To(BeEmpty())
+		})
+
+		It("keeps a --raw-field value literal, since it does not expand @", func() {
+			apiCmd, err := parser.ParseGHAPICommand(
+				parseFirstGHCommand("gh api graphql -f query=@q.graphql"),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(apiCmd.InputFile).To(BeEmpty())
+			Expect(apiCmd.Query).To(Equal("@q.graphql"))
+		})
+
 		It("treats --input - as stdin rather than a path", func() {
 			apiCmd, err := parser.ParseGHAPICommand(
 				parseFirstGHCommand("gh api graphql --input -"),

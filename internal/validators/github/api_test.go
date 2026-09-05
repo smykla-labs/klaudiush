@@ -383,6 +383,21 @@ var _ = Describe("APIValidator", func() {
 			Expect(result.Passed).To(BeTrue())
 		})
 
+		It("reads a query field pointed at a file with @", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "q.graphql")
+			Expect(os.WriteFile(
+				path,
+				[]byte("mutation { createCommitOnBranch(input: $i) { url } }"),
+				0o600,
+			)).To(Succeed())
+
+			result := apiValidator.Validate(ctx, bashContext(`gh api graphql -F query=@`+path))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH002"))
+		})
+
 		It("blocks when the file cannot be read", func() {
 			result := apiValidator.Validate(ctx, bashContext(`gh api graphql --input missing.json`))
 
