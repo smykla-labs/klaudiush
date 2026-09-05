@@ -249,7 +249,7 @@ func (v *APIValidator) checkREST(
 	apiCmd *parser.GHAPICommand,
 	endpoint string,
 ) *validator.Result {
-	if blocked := v.matchEndpoint(apiCmd.Method, endpoint); blocked != "" {
+	if v.blocksEndpoint(apiCmd.Method, endpoint) {
 		return v.fail(fmt.Sprintf(
 			"gh api %s %s creates a commit through the GitHub API, %s",
 			apiCmd.Method, endpoint, bypassExplanation,
@@ -370,7 +370,7 @@ func (v *APIValidator) checkHTTPRequest(
 		return v.checkRequestBody(parsed, req)
 	}
 
-	if blocked := v.matchEndpoint(req.Method, endpoint); blocked != "" {
+	if v.blocksEndpoint(req.Method, endpoint) {
 		return v.fail(fmt.Sprintf(
 			"%s %s %s creates a commit through the GitHub API, %s",
 			req.Tool, req.Method, endpoint, bypassExplanation,
@@ -436,7 +436,7 @@ func (v *APIValidator) checkScriptText(command string) *validator.Result {
 			continue
 		}
 
-		if blocked := v.matchEndpoint(req.Method, endpoint); blocked != "" {
+		if v.blocksEndpoint(req.Method, endpoint) {
 			return v.fail(fmt.Sprintf(
 				"the script sends %s %s, which creates a commit through the GitHub API, %s",
 				req.Method, endpoint, bypassExplanation,
@@ -458,19 +458,19 @@ func (v *APIValidator) isGitHubAPI(host, path string) bool {
 		strings.HasPrefix(path, "/"+ghesGraphQLPrefix)
 }
 
-// matchEndpoint returns the rule that blocks the request, or an empty string.
-func (v *APIValidator) matchEndpoint(method, endpoint string) string {
+// blocksEndpoint reports whether a rule rejects this method and endpoint.
+func (v *APIValidator) blocksEndpoint(method, endpoint string) bool {
 	for _, blocked := range v.endpoints {
 		if blocked.method != methodWildcard && blocked.method != method {
 			continue
 		}
 
 		if blocked.pattern.Match(endpoint) {
-			return blocked.method + " " + blocked.pattern.String()
+			return true
 		}
 	}
 
-	return ""
+	return false
 }
 
 // matchMutation returns the blocked mutation found in a GraphQL body.
