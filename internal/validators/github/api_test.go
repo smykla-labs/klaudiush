@@ -400,6 +400,30 @@ var _ = Describe("APIValidator", func() {
 				"sh -c running curl",
 				`sh -c "curl -X PUT https://api.github.com/repos/o/r/contents/x -d '{}'"`,
 			),
+			Entry(
+				"a heredoc script on stdin",
+				"bash <<'EOF'\ngh api -X PUT repos/o/r/contents/x -f message=y\nEOF",
+			),
+		)
+
+		DescribeTable(
+			"leaves a shell script that only mentions a call alone",
+			func(command string) {
+				result := apiValidator.Validate(ctx, bashContext(command))
+				Expect(result.Passed).To(BeTrue())
+			},
+			Entry(
+				"a commit message quoting a call",
+				`bash -c 'git commit -sS -m "docs: describe octokit.repos.merge() workaround"'`,
+			),
+			Entry(
+				"an echo quoting a call",
+				`sh -c 'echo "use repos.merge() instead"'`,
+			),
+			Entry(
+				"a PR comment quoting a call",
+				`bash -c 'gh pr comment 1 --body "stop using git.createCommit() here"'`,
+			),
 		)
 
 		It("names the tool that sends the request", func() {

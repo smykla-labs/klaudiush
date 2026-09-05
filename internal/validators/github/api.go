@@ -48,6 +48,8 @@ const (
 // scriptInterpreters run a program given in their arguments or on their stdin.
 // Only their text is scanned for an API call: any other command's arguments are
 // data, and a commit message or a PR comment that quotes a call is not one.
+// Shells are not among them - their script is shell source, so it is parsed
+// rather than scanned. See shellInterpreters.
 var scriptInterpreters = map[string]bool{
 	"node":      true,
 	"nodejs":    true,
@@ -62,11 +64,6 @@ var scriptInterpreters = map[string]bool{
 	"perl":      true,
 	"php":       true,
 	"osascript": true,
-	"sh":        true,
-	"bash":      true,
-	"zsh":       true,
-	"ksh":       true,
-	"dash":      true,
 }
 
 // commandLaunchers run another command named in their arguments. Rather than
@@ -96,8 +93,8 @@ var commandLaunchers = map[string]bool{
 	"pipx":    true,
 }
 
-// shellInterpreters run a command line handed to them after -c, so that script
-// is parsed and checked like any other command line.
+// shellInterpreters run a command line handed to them after -c or on stdin, so
+// that script is parsed and checked like any other command line.
 var shellInterpreters = map[string]bool{
 	"sh":   true,
 	"bash": true,
@@ -300,12 +297,14 @@ func (v *APIValidator) checkCommand(
 
 		return nil
 
-	case v.checksHTTPClients() && scriptInterpreters[cmd.Name]:
-		if result := v.checkScriptText(scriptText(cmd)); result != nil {
-			return result
-		}
-
+	// A shell is handed shell source, which is parsed and checked command by
+	// command. Scanning that same text for a call name could only add false
+	// positives: an echo or a commit message inside the script is data.
+	case v.checksHTTPClients() && shellInterpreters[cmd.Name]:
 		return v.checkShellScript(cmd, depth)
+
+	case v.checksHTTPClients() && scriptInterpreters[cmd.Name]:
+		return v.checkScriptText(scriptText(cmd))
 
 	default:
 		return nil
@@ -347,7 +346,7 @@ func (v *APIValidator) isCheckedCommand(name string) bool {
 		return false
 	}
 
-	return parser.IsHTTPClientName(name) || scriptInterpreters[name]
+	return parser.IsHTTPClientName(name) || scriptInterpreters[name] || shellInterpreters[name]
 }
 
 // scriptText is the program an interpreter was handed, whether it arrived in
@@ -356,26 +355,31 @@ func scriptText(cmd parser.Command) string {
 	return strings.Join(cmd.Args, " ") + "\n" + cmd.Stdin
 }
 
-// checkShellScript parses the command line a shell was given after -c and
-// checks it, so wrapping a call in sh -c does not hide it.
+// checkShellScript parses the script a shell was given, after -c or on stdin,
+// and checks it, so wrapping a call in sh -c does not hide it.
 func (v *APIValidator) checkShellScript(cmd parser.Command, depth int) *validator.Result {
-	if depth >= maxScriptDepth || !shellInterpreters[cmd.Name] {
+	if depth >= maxScriptDepth {
 		return nil
 	}
 
-	script := shellScriptArg(cmd)
-	if script == "" {
-		return nil
+	for _, script := range []string{shellScriptArg(cmd), cmd.Stdin} {
+		if script == "" {
+			continue
+		}
+
+		inner, err := parser.NewBashParser().Parse(script)
+		if err != nil {
+			v.Logger().Debug("Cannot parse shell script", "error", err)
+
+			continue
+		}
+
+		if result := v.checkParsed(inner, depth+1); result != nil {
+			return result
+		}
 	}
 
-	inner, err := parser.NewBashParser().Parse(script)
-	if err != nil {
-		v.Logger().Debug("Cannot parse shell script argument", "error", err)
-
-		return nil
-	}
-
-	return v.checkParsed(inner, depth+1)
+	return nil
 }
 
 // shellScriptArg returns the command line a shell was given after -c.
