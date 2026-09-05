@@ -7,7 +7,7 @@ go = "1.27.1"
 
 # Go linting tool with comprehensive checks
 # https://golangci-lint.run/
-golangci-lint = "2.13.0"
+golangci-lint = "2.13.2"
 
 # Markdown linter
 # https://github.com/DavidAnson/markdownlint-cli2
