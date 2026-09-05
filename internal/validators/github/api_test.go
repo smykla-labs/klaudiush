@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	validatorpkg "github.com/smykla-skalski/klaudiush/internal/validator"
 	"github.com/smykla-skalski/klaudiush/internal/validators/github"
 	"github.com/smykla-skalski/klaudiush/pkg/config"
 	"github.com/smykla-skalski/klaudiush/pkg/hook"
@@ -396,6 +397,23 @@ var _ = Describe("APIValidator", func() {
 
 			Expect(result.Passed).To(BeFalse())
 			Expect(result.Reference.Code()).To(Equal("GH002"))
+		})
+
+		It("does not read an endless character device", func() {
+			done := make(chan *validatorpkg.Result, 1)
+
+			go func() {
+				defer GinkgoRecover()
+
+				done <- apiValidator.Validate(
+					ctx,
+					bashContext(`gh api graphql --input /dev/zero`),
+				)
+			}()
+
+			var result *validatorpkg.Result
+			Eventually(done, "5s").Should(Receive(&result))
+			Expect(result.Reference.Code()).To(Equal("GH003"))
 		})
 
 		It("blocks when the file cannot be read", func() {

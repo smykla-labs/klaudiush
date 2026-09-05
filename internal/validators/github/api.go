@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -32,6 +33,9 @@ const (
 	// API path, which can appear on any hostname.
 	ghesRESTPrefix    = "api/v3/"
 	ghesGraphQLPrefix = "api/graphql"
+
+	// maxRequestBodyBytes caps how much of a request body file is read.
+	maxRequestBodyBytes = 1 << 20
 
 	// bypassExplanation names what a commit made this way skips.
 	bypassExplanation = "bypassing commit validation (GPG signing, sign-off, conventional commit format)"
@@ -342,9 +346,36 @@ func (v *APIValidator) readFile(
 		path = filepath.Join(workDir, path)
 	}
 
-	content, err := os.ReadFile(filepath.Clean(path))
+	return v.readBodyFile(filepath.Clean(path))
+}
+
+// readBodyFile reads at most maxRequestBodyBytes of a regular file. The path
+// comes from the command being validated, so an endless character device such
+// as /dev/zero must not be read to the end, and a body far larger than any
+// GraphQL document carries nothing worth matching.
+func (v *APIValidator) readBodyFile(path string) (string, bool) {
+	log := v.Logger()
+
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		log.Debug("Skipping API request body file", "path", path, "error", err)
+
+		return "", false
+	}
+
+	//nolint:gosec // path comes from the tool invocation klaudiush is validating
+	file, err := os.Open(path)
 	if err != nil {
-		v.Logger().Debug("Cannot read API request body file", "path", path, "error", err)
+		log.Debug("Cannot open API request body file", "path", path, "error", err)
+
+		return "", false
+	}
+
+	defer func() { _ = file.Close() }()
+
+	content, err := io.ReadAll(io.LimitReader(file, maxRequestBodyBytes))
+	if err != nil {
+		log.Debug("Cannot read API request body file", "path", path, "error", err)
 
 		return "", false
 	}
