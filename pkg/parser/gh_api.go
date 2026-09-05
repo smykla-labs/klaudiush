@@ -288,15 +288,17 @@ func (c *GHAPICommand) collectQueryField(value string, expandsFile bool) {
 // splitGHAPIFlag splits --flag=value, -f=value and -fvalue into name and value.
 // The bool reports whether a value was attached to the flag itself.
 func splitGHAPIFlag(arg string) (string, string, bool) {
-	if name, value, found := strings.Cut(arg, "="); found {
-		return name, value, true
-	}
-
-	// Short flag with an attached value, e.g. -XPUT.
+	// A single-dash flag can carry its value attached, as in -XPUT or
+	// -fmessage=x. That split has to come first: cutting on "=" would read
+	// -fmessage=x as a flag named "-fmessage" and lose the field entirely.
 	if len(arg) > shortFlagLen && !strings.HasPrefix(arg, "--") {
 		if short := arg[:shortFlagLen]; ghAPIValueFlags[short] {
-			return short, arg[shortFlagLen:], true
+			return short, strings.TrimPrefix(arg[shortFlagLen:], "="), true
 		}
+	}
+
+	if name, value, found := strings.Cut(arg, "="); found {
+		return name, value, true
 	}
 
 	return arg, "", false

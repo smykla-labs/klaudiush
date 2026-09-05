@@ -42,6 +42,30 @@ const (
 		"with -f query=... or on stdin, so klaudiush can tell whether it creates a commit."
 )
 
+// scriptInterpreters run a program given in their arguments or on their stdin.
+// Only their text is scanned for an API call: any other command's arguments are
+// data, and a commit message or a PR comment that quotes a call is not one.
+var scriptInterpreters = map[string]bool{
+	"node":      true,
+	"nodejs":    true,
+	"deno":      true,
+	"bun":       true,
+	"tsx":       true,
+	"ts-node":   true,
+	"python":    true,
+	"python2":   true,
+	"python3":   true,
+	"ruby":      true,
+	"perl":      true,
+	"php":       true,
+	"osascript": true,
+	"sh":        true,
+	"bash":      true,
+	"zsh":       true,
+	"ksh":       true,
+	"dash":      true,
+}
+
 // blockedEndpoint pairs an HTTP method with a compiled endpoint pattern.
 type blockedEndpoint struct {
 	method  string
@@ -192,10 +216,6 @@ func (v *APIValidator) Validate(ctx context.Context, hookCtx *hook.Context) *val
 		}
 	}
 
-	if result := v.checkScriptText(hookCtx.GetCommand()); result != nil {
-		return result
-	}
-
 	log.Debug("No commit-creating API calls found")
 
 	return validator.Pass()
@@ -226,9 +246,18 @@ func (v *APIValidator) checkCommand(
 
 		return nil
 
+	case v.checksHTTPClients() && scriptInterpreters[cmd.Name]:
+		return v.checkScriptText(scriptText(cmd))
+
 	default:
 		return nil
 	}
+}
+
+// scriptText is the program an interpreter was handed, whether it arrived in
+// the arguments or on stdin.
+func scriptText(cmd parser.Command) string {
+	return strings.Join(cmd.Args, " ") + "\n" + cmd.Stdin
 }
 
 // checkAPICommand returns a failure when the call creates a commit, nil otherwise.
@@ -320,6 +349,15 @@ func (v *APIValidator) checkGraphQL(
 			mutation,
 			bypassExplanation,
 		))
+	}
+
+	// A write whose query never appears in the command - built by command
+	// substitution, say - is as unprovable as one whose file cannot be read.
+	if strings.TrimSpace(query) == "" && apiCmd.IsWriteMethod() && v.blocksUnverifiable() {
+		return v.failUnverifiable(
+			"gh api graphql sends a query that is not spelled out in the command, " +
+				"so there is no way to tell whether it creates a commit",
+		)
 	}
 
 	return nil

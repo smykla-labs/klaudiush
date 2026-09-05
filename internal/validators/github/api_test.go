@@ -90,6 +90,18 @@ var _ = Describe("APIValidator", func() {
 				`gh api https://ghe.example.com/api/graphql `+
 					`-f query='mutation { createCommitOnBranch(input: $i) { url } }'`,
 			),
+			Entry(
+				"git commits POST with the field flag value attached",
+				`gh api repos/o/r/git/commits -fmessage=x -ftree=abc`,
+			),
+			Entry(
+				"merges POST with the field flag value attached",
+				`gh api repos/o/r/merges -Fbase=main -Fhead=topic`,
+			),
+			Entry(
+				"curl with the data flag value attached",
+				`curl -d'{"base":"main"}' https://api.github.com/repos/o/r/merges`,
+			),
 		)
 
 		It("names the method, the endpoint and the intended path", func() {
@@ -239,6 +251,11 @@ var _ = Describe("APIValidator", func() {
 				`curl https://example.com/ok --next -X PUT `+
 					`https://api.github.com/repos/o/r/contents/x -d '{}'`,
 			),
+			Entry(
+				"curl whose second URL carries a query string",
+				`curl -X PUT https://example.com/ok `+
+					`"https://api.github.com/repos/o/r/contents/x?branch=main"`,
+			),
 		)
 
 		DescribeTable(
@@ -274,6 +291,22 @@ var _ = Describe("APIValidator", func() {
 			Entry(
 				"a script mentioning a blocked call without invoking it",
 				`echo "use repos.createOrUpdateFileContents instead of git"`,
+			),
+			Entry(
+				"a commit message describing a blocked call",
+				`git commit -sS -m "docs: describe octokit.repos.merge() workaround"`,
+			),
+			Entry(
+				"a PR comment describing a blocked call",
+				`gh pr comment 1 --body "we should stop using octokit git.createCommit() here"`,
+			),
+			Entry(
+				"an issue comment posted through gh api",
+				`gh api repos/o/r/issues/1/comments -f body='use repos.merge() instead of the API'`,
+			),
+			Entry(
+				"a commit message quoting a client call with a URL",
+				`git commit -sS -m 'fix axios.put("https://api.github.com/repos/o/r/contents/x")'`,
 			),
 			Entry(
 				"curl posting a harmless graphql query",
@@ -418,6 +451,17 @@ var _ = Describe("APIValidator", func() {
 
 			var result *validatorpkg.Result
 			Eventually(done, "5s").Should(Receive(&result))
+			Expect(result.Reference.Code()).To(Equal("GH003"))
+		})
+
+		It("blocks a graphql write whose query text is not visible", func() {
+			// Command substitution renders to nothing, so the query the call
+			// will send cannot be inspected.
+			result := apiValidator.Validate(ctx, bashContext(
+				`gh api graphql -f query="$(cat createCommit.graphql)"`,
+			))
+
+			Expect(result.Passed).To(BeFalse())
 			Expect(result.Reference.Code()).To(Equal("GH003"))
 		})
 

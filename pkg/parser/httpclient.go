@@ -352,8 +352,9 @@ func (s *httpClientState) parseClientPositional(arg string, spec *httpClientSpec
 	}
 
 	// httpie request items ("field=value", "field:=json") make the call a POST.
-	// curl has no positional items, so an "=" only means one once a URL is known.
-	if len(s.urls) > 0 && strings.Contains(arg, "=") {
+	// Only the clients that take a positional method have them; curl fetches
+	// every positional, so a URL of its own carrying a query string stays a URL.
+	if spec.positionalMethod && len(s.urls) > 0 && strings.Contains(arg, "=") {
 		s.hasDataItem = true
 
 		s.collectBody(arg)
@@ -366,15 +367,17 @@ func (s *httpClientState) parseClientPositional(arg string, spec *httpClientSpec
 
 // splitClientFlag splits --flag=value and a short flag with an attached value.
 func splitClientFlag(arg string, spec *httpClientSpec) (string, string, bool) {
-	if name, value, found := strings.Cut(arg, "="); found {
-		return name, value, true
-	}
-
+	// The attached-value split comes first, or "-dbase=main" would read as a
+	// flag named "-dbase" and its body would be lost.
 	if len(arg) > shortFlagLen && !strings.HasPrefix(arg, "--") {
 		short := arg[:shortFlagLen]
 		if flag, known := spec.find(short); known && flag.takesValue {
-			return short, arg[shortFlagLen:], true
+			return short, strings.TrimPrefix(arg[shortFlagLen:], "="), true
 		}
+	}
+
+	if name, value, found := strings.Cut(arg, "="); found {
+		return name, value, true
 	}
 
 	return arg, "", false
