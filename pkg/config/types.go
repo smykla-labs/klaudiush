@@ -8,7 +8,7 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
-//go:generate enumer -type=Severity -trimprefix=Severity -transform=lower -json -text -yaml -sql
+//go:generate go run github.com/dmarkham/enumer -type=Severity -trimprefix=Severity -transform=lower -json -text -yaml -sql
 //go:generate go run github.com/smykla-skalski/klaudiush/tools/enumerfix severity_enumer.go
 
 // jsonSchemaTypeString is the JSON Schema "string" type name.
