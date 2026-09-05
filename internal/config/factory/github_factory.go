@@ -17,8 +17,10 @@ const defaultLinterTimeout = 10 * time.Second
 
 // ghAPICommandPattern is the cheap prefilter for the gh api validator: the gh
 // api subcommand, the HTTP clients that can reach the same endpoints, and the
-// markers an API client library leaves in an inline script.
-const ghAPICommandPattern = `\bgh\s+api\b|\b(curl|wget|https?|xhs?)\b|` +
+// markers an API client library leaves in an inline script. A client name only
+// counts in command position, so an unrelated command that merely carries a
+// URL does not pay for a parse.
+const ghAPICommandPattern = `\bgh\s+api\b|(^|[\n|&;(])\s*(curl|wget|https?|xhs?)\b|` +
 	`octokit|\.request\(|api\.github\.com|/api/(v3|graphql)/`
 
 // GitHubValidatorFactory creates GitHub CLI validators from configuration.
