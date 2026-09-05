@@ -55,6 +55,21 @@
         },
         "block_unverifiable_calls": {
           "type": "boolean"
+        },
+        "check_http_clients": {
+          "type": "boolean"
+        },
+        "hosts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "blocked_client_calls": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

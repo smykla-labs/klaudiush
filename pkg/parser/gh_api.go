@@ -21,8 +21,13 @@ const (
 	// ghesAPIPrefix is the REST path prefix on GitHub Enterprise Server.
 	ghesAPIPrefix = "api/v3/"
 
+	// ghesGraphQLPath is the GraphQL path on GitHub Enterprise Server.
+	ghesGraphQLPath = "api/graphql"
+
 	methodGET  = "GET"
 	methodPOST = "POST"
+	methodPUT  = "PUT"
+	methodHEAD = "HEAD"
 
 	// queryFieldPrefix marks the field carrying a GraphQL document.
 	queryFieldPrefix = "query="
@@ -37,8 +42,15 @@ const (
 
 	flagMethodShort = "-X"
 	flagMethodLong  = "--method"
-	flagFieldShort  = "-F"
 	flagInput       = "--input"
+	flagHeaderLong  = "--header"
+
+	// Short flags several clients spell the same way for different options:
+	// -F is gh's --field and curl's --form, -b is gh's --body and curl's
+	// --cookie, -m is gh's --merge and curl's --max-time.
+	flagFieldShort = "-F"
+	flagBodyShort  = "-b"
+	flagMergeShort = "-m"
 
 	// stdinPath is the --input value that means "read the body from stdin".
 	stdinPath = "-"
@@ -53,7 +65,7 @@ var ghAPIValueFlags = map[string]bool{
 	flagFieldShort:  true,
 	"--field":       true,
 	"-H":            true,
-	"--header":      true,
+	flagHeaderLong:  true,
 	flagInput:       true,
 	"-q":            true,
 	"--jq":          true,
@@ -274,6 +286,18 @@ func splitGHAPIFlag(arg string) (string, string, bool) {
 	}
 
 	return arg, "", false
+}
+
+// NormalizeAPIEndpoint strips the scheme, host, API prefix, query string and
+// surrounding slashes so patterns can match a stable path. A GitHub Enterprise
+// GraphQL path collapses to the same "graphql" as the github.com one.
+func NormalizeAPIEndpoint(endpoint string) string {
+	normalized := normalizeGHAPIEndpoint(endpoint)
+	if normalized == ghesGraphQLPath {
+		return graphqlEndpoint
+	}
+
+	return normalized
 }
 
 // normalizeGHAPIEndpoint strips the scheme, host, API prefix, query string and

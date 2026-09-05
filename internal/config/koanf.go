@@ -834,6 +834,9 @@ func defaultGHAPIMap() map[string]any {
 		"blocked_endpoints":         config.DefaultBlockedGHAPIEndpoints(),
 		"blocked_graphql_mutations": config.DefaultBlockedGHAPIMutations(),
 		"block_unverifiable_calls":  true,
+		"check_http_clients":        true,
+		"hosts":                     config.DefaultGitHubAPIHosts(),
+		"blocked_client_calls":      config.DefaultBlockedGHAPIClientCalls(),
 	}
 }
 

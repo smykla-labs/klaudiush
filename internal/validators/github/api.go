@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/smykla-skalski/klaudiush/internal/rules"
@@ -24,12 +25,20 @@ const (
 	// graphqlPath is the normalized endpoint of a GraphQL request.
 	graphqlPath = "graphql"
 
+	// reposPrefix is where every commit-creating REST endpoint lives.
+	reposPrefix = "repos/"
+
+	// ghesRESTPrefix and ghesGraphQLPrefix identify a GitHub Enterprise Server
+	// API path, which can appear on any hostname.
+	ghesRESTPrefix    = "api/v3/"
+	ghesGraphQLPrefix = "api/graphql"
+
 	// bypassExplanation names what a commit made this way skips.
 	bypassExplanation = "bypassing commit validation (GPG signing, sign-off, conventional commit format)"
 
 	// apiHelp names the intended path, so the refusal is not just a "no".
 	apiHelp = "Clone the repository, stage the change, and commit with git commit -sS. " +
-		"gh api calls that create no commit are unaffected: reads, " +
+		"API calls that create no commit are unaffected: reads, " +
 		"POST /repos/{owner}/{repo}/git/refs, gh pr create."
 
 	// unverifiableHelp tells the caller how to make the call checkable.
@@ -103,6 +112,33 @@ func (v *APIValidator) blocksUnverifiable() bool {
 	return true
 }
 
+// checksHTTPClients reports whether clients other than gh are inspected.
+func (v *APIValidator) checksHTTPClients() bool {
+	if v.config != nil && v.config.CheckHTTPClients != nil {
+		return *v.config.CheckHTTPClients
+	}
+
+	return true
+}
+
+// hosts returns the hostnames treated as the GitHub API.
+func (v *APIValidator) hosts() []string {
+	if v.config != nil && len(v.config.Hosts) > 0 {
+		return v.config.Hosts
+	}
+
+	return config.DefaultGitHubAPIHosts()
+}
+
+// blockedClientCalls returns the library method names that create a commit.
+func (v *APIValidator) blockedClientCalls() []string {
+	if v.config != nil && len(v.config.BlockedClientCalls) > 0 {
+		return v.config.BlockedClientCalls
+	}
+
+	return config.DefaultBlockedGHAPIClientCalls()
+}
+
 // compileBlockedEndpoints turns "METHOD pattern" rules into matchers. A rule
 // that does not compile is skipped rather than failing the whole hook.
 func compileBlockedEndpoints(specs []string, log logger.Logger) []blockedEndpoint {
@@ -151,25 +187,47 @@ func (v *APIValidator) Validate(ctx context.Context, hookCtx *hook.Context) *val
 	}
 
 	for _, cmd := range parsed.Commands {
-		if !parser.IsGHAPI(&cmd) {
-			continue
-		}
-
-		apiCmd, parseErr := parser.ParseGHAPICommand(cmd)
-		if parseErr != nil {
-			log.Debug("Skipping unparseable gh api command", "error", parseErr)
-
-			continue
-		}
-
-		if result := v.checkAPICommand(parsed, apiCmd); result != nil {
+		if result := v.checkCommand(parsed, cmd); result != nil {
 			return result
 		}
 	}
 
-	log.Debug("No commit-creating gh api commands found")
+	if result := v.checkScriptText(hookCtx.GetCommand()); result != nil {
+		return result
+	}
+
+	log.Debug("No commit-creating API calls found")
 
 	return validator.Pass()
+}
+
+// checkCommand dispatches one parsed command to the matching request source.
+func (v *APIValidator) checkCommand(
+	parsed *parser.ParseResult,
+	cmd parser.Command,
+) *validator.Result {
+	switch {
+	case parser.IsGHAPI(&cmd):
+		apiCmd, err := parser.ParseGHAPICommand(cmd)
+		if err != nil {
+			v.Logger().Debug("Skipping unparseable gh api command", "error", err)
+
+			return nil
+		}
+
+		return v.checkAPICommand(parsed, apiCmd)
+
+	case v.checksHTTPClients() && parser.IsHTTPClient(&cmd):
+		req, ok := parser.ParseHTTPClientCommand(cmd)
+		if !ok {
+			return nil
+		}
+
+		return v.checkHTTPRequest(parsed, req)
+
+	default:
+		return nil
+	}
 }
 
 // checkAPICommand returns a failure when the call creates a commit, nil otherwise.
@@ -191,15 +249,7 @@ func (v *APIValidator) checkREST(
 	apiCmd *parser.GHAPICommand,
 	endpoint string,
 ) *validator.Result {
-	for _, blocked := range v.endpoints {
-		if blocked.method != methodWildcard && blocked.method != apiCmd.Method {
-			continue
-		}
-
-		if !blocked.pattern.Match(endpoint) {
-			continue
-		}
-
+	if blocked := v.matchEndpoint(apiCmd.Method, endpoint); blocked != "" {
 		return v.fail(fmt.Sprintf(
 			"gh api %s %s creates a commit through the GitHub API, %s",
 			apiCmd.Method, endpoint, bypassExplanation,
@@ -245,7 +295,9 @@ func (v *APIValidator) checkGraphQL(
 	query := apiCmd.Query
 
 	if apiCmd.InputFile != "" {
-		body, ok := v.readInputFile(parsed, apiCmd)
+		body, ok := v.readFile(
+			parsed, apiCmd.InputFile, apiCmd.WorkingDirectory, apiCmd.Location,
+		)
 		if !ok {
 			if !v.blocksUnverifiable() {
 				return nil
@@ -261,11 +313,7 @@ func (v *APIValidator) checkGraphQL(
 		query += "\n" + body
 	}
 
-	for _, mutation := range v.mutations {
-		if !strings.Contains(query, mutation) {
-			continue
-		}
-
+	if mutation := v.matchMutation(query); mutation != "" {
 		return v.fail(fmt.Sprintf(
 			"gh api graphql calls the %s mutation, which creates a commit through the GitHub API, %s",
 			mutation,
@@ -276,32 +324,164 @@ func (v *APIValidator) checkGraphQL(
 	return nil
 }
 
-// readInputFile returns the --input body, preferring content written earlier in
-// the same command line over what is on disk, since a file created by a heredoc
-// does not exist yet when the PreToolUse hook runs.
-func (v *APIValidator) readInputFile(
+// readFile returns a request body from a file, preferring content written
+// earlier in the same command line over what is on disk, since a file created
+// by a heredoc does not exist yet when the PreToolUse hook runs.
+func (v *APIValidator) readFile(
 	parsed *parser.ParseResult,
-	apiCmd *parser.GHAPICommand,
+	filePath, workDir string,
+	location parser.Location,
 ) (string, bool) {
-	if content, ok := parsed.InlineFileContent(
-		apiCmd.InputFile, apiCmd.WorkingDirectory, apiCmd.Location,
-	); ok {
+	if content, ok := parsed.InlineFileContent(filePath, workDir, location); ok {
 		return content, true
 	}
 
-	path := apiCmd.InputFile
-	if !filepath.IsAbs(path) && apiCmd.WorkingDirectory != "" {
-		path = filepath.Join(apiCmd.WorkingDirectory, path)
+	path := filePath
+	if !filepath.IsAbs(path) && workDir != "" {
+		path = filepath.Join(workDir, path)
 	}
 
 	content, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		v.Logger().Debug("Cannot read gh api input file", "path", path, "error", err)
+		v.Logger().Debug("Cannot read API request body file", "path", path, "error", err)
 
 		return "", false
 	}
 
 	return string(content), true
+}
+
+// checkHTTPRequest applies the same endpoint rules to a curl, wget, httpie or
+// xh call, once its URL is shown to address the GitHub API.
+func (v *APIValidator) checkHTTPRequest(
+	parsed *parser.ParseResult,
+	req *parser.HTTPRequest,
+) *validator.Result {
+	url := parsed.ExpandVars(req.URL)
+
+	host, path := parser.SplitURL(url)
+	if !v.isGitHubAPI(host, path) {
+		return nil
+	}
+
+	endpoint := parser.NormalizeAPIEndpoint(url)
+
+	if endpoint == graphqlPath {
+		return v.checkRequestBody(parsed, req)
+	}
+
+	if blocked := v.matchEndpoint(req.Method, endpoint); blocked != "" {
+		return v.fail(fmt.Sprintf(
+			"%s %s %s creates a commit through the GitHub API, %s",
+			req.Tool, req.Method, endpoint, bypassExplanation,
+		))
+	}
+
+	return nil
+}
+
+// checkRequestBody looks for a commit-creating mutation in a GraphQL body sent
+// by a client other than gh.
+func (v *APIValidator) checkRequestBody(
+	parsed *parser.ParseResult,
+	req *parser.HTTPRequest,
+) *validator.Result {
+	body := req.Body
+
+	if req.BodyFile != "" {
+		if content, ok := v.readFile(parsed, req.BodyFile, req.WorkingDirectory, req.Location); ok {
+			body += "\n" + content
+		}
+	}
+
+	if mutation := v.matchMutation(body); mutation != "" {
+		return v.fail(fmt.Sprintf(
+			"%s sends the %s mutation to the GitHub GraphQL API, "+
+				"which creates a commit, %s",
+			req.Tool, mutation, bypassExplanation,
+		))
+	}
+
+	return nil
+}
+
+// checkScriptText looks for API calls written inside an inline script body, so
+// a request made from node -e or python -c is seen even though the command
+// itself is only an interpreter invocation.
+func (v *APIValidator) checkScriptText(command string) *validator.Result {
+	if !v.checksHTTPClients() {
+		return nil
+	}
+
+	if call := parser.FindCallsInText(command, v.blockedClientCalls()); call != "" {
+		return v.fail(fmt.Sprintf(
+			"the script calls %s, which creates a commit through the GitHub API, %s",
+			call, bypassExplanation,
+		))
+	}
+
+	for _, req := range parser.FindAPICallsInText(command) {
+		endpoint := parser.NormalizeAPIEndpoint(req.URL)
+
+		host, path := parser.SplitURL(req.URL)
+		if host != "" {
+			if !v.isGitHubAPI(host, path) {
+				continue
+			}
+		} else if !req.ExplicitAPICall || !strings.HasPrefix(endpoint, reposPrefix) {
+			// A path with no host is only a GitHub call when the syntax names
+			// an API client and the path sits under repos/, where every
+			// commit-creating REST endpoint lives. Anything else is as likely
+			// to be a local route in the same script.
+			continue
+		}
+
+		if blocked := v.matchEndpoint(req.Method, endpoint); blocked != "" {
+			return v.fail(fmt.Sprintf(
+				"the script sends %s %s, which creates a commit through the GitHub API, %s",
+				req.Method, endpoint, bypassExplanation,
+			))
+		}
+	}
+
+	return nil
+}
+
+// isGitHubAPI reports whether a host and path address the GitHub API. A path
+// under the Enterprise Server prefixes counts on any host.
+func (v *APIValidator) isGitHubAPI(host, path string) bool {
+	if slices.Contains(v.hosts(), host) {
+		return true
+	}
+
+	return strings.HasPrefix(path, "/"+ghesRESTPrefix) ||
+		strings.HasPrefix(path, "/"+ghesGraphQLPrefix)
+}
+
+// matchEndpoint returns the rule that blocks the request, or an empty string.
+func (v *APIValidator) matchEndpoint(method, endpoint string) string {
+	for _, blocked := range v.endpoints {
+		if blocked.method != methodWildcard && blocked.method != method {
+			continue
+		}
+
+		if blocked.pattern.Match(endpoint) {
+			return blocked.method + " " + blocked.pattern.String()
+		}
+	}
+
+	return ""
+}
+
+// matchMutation returns the blocked mutation found in a GraphQL body.
+func (v *APIValidator) matchMutation(body string) string {
+	for _, mutation := range v.mutations {
+		if strings.Contains(body, mutation) {
+			return mutation
+		}
+	}
+
+	return ""
 }
 
 // fail builds the blocking result. FixHint comes from the suggestions registry.

@@ -139,6 +139,134 @@ var _ = Describe("APIValidator", func() {
 		)
 	})
 
+	Describe("clients other than gh", func() {
+		DescribeTable(
+			"blocks the call",
+			func(command string) {
+				result := apiValidator.Validate(ctx, bashContext(command))
+
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.ShouldBlock).To(BeTrue())
+				Expect(result.Reference.Code()).To(Equal("GH002"))
+			},
+			Entry(
+				"curl with an explicit method",
+				`curl -X PUT -H "Authorization: bearer $T" `+
+					`https://api.github.com/repos/o/r/contents/README.md -d '{"message":"x"}'`,
+			),
+			Entry(
+				"curl with the method attached to the flag",
+				`curl -XDELETE https://api.github.com/repos/o/r/contents/README.md`,
+			),
+			Entry(
+				"curl whose method is implied by --upload-file",
+				`curl -T body.json https://api.github.com/repos/o/r/contents/README.md`,
+			),
+			Entry(
+				"curl whose method is implied by --data",
+				`curl --data '{"base":"main"}' https://api.github.com/repos/o/r/merges`,
+			),
+			Entry(
+				"curl using --url instead of a positional",
+				`curl -X PUT --url https://api.github.com/repos/o/r/contents/x`,
+			),
+			Entry(
+				"curl against GitHub Enterprise Server",
+				`curl -X PUT https://ghe.example.com/api/v3/repos/o/r/contents/x -d '{}'`,
+			),
+			Entry(
+				"wget",
+				`wget --method=PUT --body-data='{"message":"x"}' `+
+					`https://api.github.com/repos/o/r/contents/README.md`,
+			),
+			Entry(
+				"httpie",
+				`http PUT https://api.github.com/repos/o/r/contents/README.md message=x`,
+			),
+			Entry(
+				"xh",
+				`xh DELETE https://api.github.com/repos/o/r/contents/README.md`,
+			),
+			Entry(
+				"curl posting a graphql mutation",
+				`curl -X POST https://api.github.com/graphql `+
+					`-d '{"query":"mutation { createCommitOnBranch(input: $i) { url } }"}'`,
+			),
+			Entry(
+				"an inline octokit script",
+				`node -e 'octokit.rest.repos.createOrUpdateFileContents({owner, repo, path})'`,
+			),
+			Entry(
+				"an inline octokit request call",
+				`node -e 'await octokit.request("PUT /repos/{owner}/{repo}/contents/{path}", opts)'`,
+			),
+			Entry(
+				"an inline python request",
+				`python3 -c 'requests.put("https://api.github.com/repos/o/r/contents/x", json=b)'`,
+			),
+		)
+
+		DescribeTable(
+			"passes the call",
+			func(command string) {
+				result := apiValidator.Validate(ctx, bashContext(command))
+				Expect(result.Passed).To(BeTrue())
+			},
+			Entry(
+				"curl reading contents",
+				`curl https://api.github.com/repos/o/r/contents/README.md`,
+			),
+			Entry(
+				"curl creating a branch ref",
+				`curl -X POST https://api.github.com/repos/o/r/git/refs -d '{"ref":"refs/heads/x"}'`,
+			),
+			Entry(
+				"curl against a host that is not GitHub",
+				`curl -X PUT https://example.com/repos/o/r/contents/README.md -d '{}'`,
+			),
+			Entry(
+				"curl downloading a release asset",
+				`curl -L -o out.tgz https://github.com/o/r/archive/refs/tags/v1.tar.gz`,
+			),
+			Entry(
+				"an unrelated route in a script",
+				`node -e 'app.put("/repos/:id/contents/:path", handler)'`,
+			),
+			Entry(
+				"a script mentioning a blocked call without invoking it",
+				`echo "use repos.createOrUpdateFileContents instead of git"`,
+			),
+			Entry(
+				"curl posting a harmless graphql query",
+				`curl -X POST https://api.github.com/graphql -d '{"query":"query { viewer }"}'`,
+			),
+		)
+
+		It("names the tool that sends the request", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				`curl -X PUT https://api.github.com/repos/o/r/contents/x -d '{}'`,
+			))
+
+			Expect(result.Message).To(HavePrefix("curl PUT repos/o/r/contents/x"))
+		})
+
+		It("leaves other clients alone when the check is turned off", func() {
+			disabled := false
+			cfg := &config.APIValidatorConfig{CheckHTTPClients: &disabled}
+			apiValidator = github.NewAPIValidator(cfg, logger.NewNoOpLogger(), nil)
+
+			viaCurl := apiValidator.Validate(ctx, bashContext(
+				`curl -X PUT https://api.github.com/repos/o/r/contents/x -d '{}'`,
+			))
+			Expect(viaCurl.Passed).To(BeTrue())
+
+			viaGH := apiValidator.Validate(ctx, bashContext(
+				`gh api -X PUT repos/o/r/contents/x -f message=y`,
+			))
+			Expect(viaGH.Passed).To(BeFalse())
+		})
+	})
+
 	Describe("endpoints built from variables", func() {
 		It("resolves an assignment made on the same command line", func() {
 			result := apiValidator.Validate(ctx, bashContext(

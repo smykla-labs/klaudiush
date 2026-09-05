@@ -167,7 +167,7 @@ severity = "error"
 # GitHub CLI Validators
 [validators.github]
 
-# gh api Validator - rejects calls to endpoints that create commits outside git
+# GitHub API Validator - rejects calls to endpoints that create commits outside git
 [validators.github.api]
 enabled = true
 severity = "error"
@@ -186,6 +186,21 @@ blocked_graphql_mutations = ["createCommitOnBranch"]
 # Reject a write whose endpoint was built from a variable that cannot be
 # resolved, or whose GraphQL body lives in a file that cannot be read (GH003)
 block_unverifiable_calls = true
+# Apply the same rules to curl, wget, httpie and xh, and to REST calls written
+# inside an inline script body
+check_http_clients = true
+# Hostnames treated as the GitHub API. A path under /api/v3/ or /api/graphql is
+# recognised on any host, covering GitHub Enterprise Server
+hosts = ["api.github.com"]
+# API client library methods that create a commit, matched only in call form
+blocked_client_calls = [
+  "repos.createOrUpdateFileContents",
+  "repos.deleteFile",
+  "git.createCommit",
+  "repos.merge",
+  "pulls.merge",
+  "createCommitOnBranch",
+]
 
 # Notification Validators
 [validators.notification]

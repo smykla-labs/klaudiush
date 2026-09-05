@@ -149,6 +149,9 @@ func DefaultAPIValidatorConfig() *config.APIValidatorConfig {
 		BlockedEndpoints:        config.DefaultBlockedGHAPIEndpoints(),
 		BlockedGraphQLMutations: config.DefaultBlockedGHAPIMutations(),
 		BlockUnverifiableCalls:  &enabled,
+		CheckHTTPClients:        &enabled,
+		Hosts:                   config.DefaultGitHubAPIHosts(),
+		BlockedClientCalls:      config.DefaultBlockedGHAPIClientCalls(),
 	}
 }
 

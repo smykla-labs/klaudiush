@@ -15,6 +15,12 @@ import (
 
 const defaultLinterTimeout = 10 * time.Second
 
+// ghAPICommandPattern is the cheap prefilter for the gh api validator: the gh
+// api subcommand, the HTTP clients that can reach the same endpoints, and the
+// markers an API client library leaves in an inline script.
+const ghAPICommandPattern = `\bgh\s+api\b|\b(curl|wget|https?|xhs?)\b|` +
+	`octokit|\.request\(|api\.github\.com|/api/(v3|graphql)/`
+
 // GitHubValidatorFactory creates GitHub CLI validators from configuration.
 type GitHubValidatorFactory struct {
 	cfg        *config.Config
@@ -81,7 +87,7 @@ func (f *GitHubValidatorFactory) createAPIValidator(
 		Predicate: validator.And(
 			beforeToolOrProviderAfterToolPredicate(),
 			validator.ToolTypeIs(hook.ToolTypeBash),
-			validator.CommandContains("gh api"),
+			validator.CommandMatches(ghAPICommandPattern),
 		),
 	}
 }

@@ -33,6 +33,22 @@ type APIValidatorConfig struct {
 	// that cannot be read. Such a call cannot be shown to create no commit.
 	// Default: true
 	BlockUnverifiableCalls *bool `json:"block_unverifiable_calls,omitempty" koanf:"block_unverifiable_calls" toml:"block_unverifiable_calls,omitempty"`
+
+	// CheckHTTPClients extends the same endpoint rules to curl, wget, httpie
+	// and xh, and to REST calls written inside inline script bodies.
+	// Default: true
+	CheckHTTPClients *bool `json:"check_http_clients,omitempty" koanf:"check_http_clients" toml:"check_http_clients,omitempty"`
+
+	// Hosts are the hostnames treated as the GitHub API when a non-gh client
+	// sends the request. A path under /api/v3/ or /api/graphql is recognised on
+	// any host, covering GitHub Enterprise Server.
+	// Default: ["api.github.com"]
+	Hosts []string `json:"hosts,omitempty" koanf:"hosts" toml:"hosts,omitempty"`
+
+	// BlockedClientCalls lists API client library methods that create a commit.
+	// A name matches only in call form, so mentioning it in prose is fine.
+	// Default: the Octokit methods behind the blocked REST endpoints.
+	BlockedClientCalls []string `json:"blocked_client_calls,omitempty" koanf:"blocked_client_calls" toml:"blocked_client_calls,omitempty"`
 }
 
 // IssueValidatorConfig configures the gh issue create validator.
@@ -72,4 +88,23 @@ func DefaultBlockedGHAPIEndpoints() []string {
 // DefaultBlockedGHAPIMutations returns the GraphQL mutations that create a commit.
 func DefaultBlockedGHAPIMutations() []string {
 	return []string{"createCommitOnBranch"}
+}
+
+// DefaultGitHubAPIHosts returns the hostnames treated as the GitHub API when a
+// client other than gh sends the request.
+func DefaultGitHubAPIHosts() []string {
+	return []string{"api.github.com"}
+}
+
+// DefaultBlockedGHAPIClientCalls returns the API client library methods that
+// create a commit, named the way Octokit exposes them.
+func DefaultBlockedGHAPIClientCalls() []string {
+	return []string{
+		"repos.createOrUpdateFileContents",
+		"repos.deleteFile",
+		"git.createCommit",
+		"repos.merge",
+		"pulls.merge",
+		"createCommitOnBranch",
+	}
 }
