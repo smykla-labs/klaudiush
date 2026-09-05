@@ -164,6 +164,26 @@ severity = "error"
 # check_unquoted = true          # Detect unquoted backticks (e.g., echo `date`)
 # suggest_single_quotes = true   # Suggest single quotes when no variables present
 
+# GitHub CLI Validators
+[validators.github]
+
+# gh api Validator - rejects calls to endpoints that create commits outside git
+[validators.github.api]
+enabled = true
+severity = "error"
+# Entries are "METHOD path-pattern". The method may be "*". The pattern is
+# matched against the endpoint path with the scheme, host, leading slash and
+# query string removed, and is a glob unless it contains regex syntax.
+blocked_endpoints = [
+  "PUT **/contents/**",
+  "DELETE **/contents/**",
+  "POST **/git/commits",
+  "POST **/merges",
+  "PUT **/pulls/*/merge",
+]
+# Mutation names rejected when found in the query body of a /graphql request
+blocked_graphql_mutations = ["createCommitOnBranch"]
+
 # Notification Validators
 [validators.notification]
 

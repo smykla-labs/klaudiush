@@ -30,6 +30,33 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "APIValidatorConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "rules_enabled": {
+          "type": "boolean"
+        },
+        "blocked_endpoints": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "blocked_graphql_mutations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AddValidatorConfig": {
       "properties": {
         "enabled": {
@@ -609,6 +636,9 @@
       "properties": {
         "issue": {
           "$ref": "#/$defs/IssueValidatorConfig"
+        },
+        "api": {
+          "$ref": "#/$defs/APIValidatorConfig"
         }
       },
       "additionalProperties": false,

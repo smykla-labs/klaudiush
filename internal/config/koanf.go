@@ -703,7 +703,8 @@ func applyDisableFlags(cfg map[string]any, validatorNames []string) {
 		validatorLinterIgnore: {sectionFile, validatorLinterIgnore},
 		sectionSecrets:        {sectionSecrets, sectionSecrets},
 		validatorBacktick:     {sectionShell, validatorBacktick},
-		"issue":               {"github", "issue"},
+		"issue":               {sectionGitHub, "issue"},
+		validatorGHAPI:        {sectionGitHub, validatorGHAPI},
 		validatorBell:         {sectionNotification, validatorBell},
 	}
 
@@ -815,7 +816,23 @@ func defaultValidatorsMap() map[string]any {
 	return map[string]any{
 		sectionGit:          defaultGitValidatorsMap(),
 		sectionFile:         defaultFileValidatorsMap(),
+		sectionGitHub:       defaultGitHubValidatorsMap(),
 		sectionNotification: defaultNotificationValidatorsMap(),
+	}
+}
+
+func defaultGitHubValidatorsMap() map[string]any {
+	return map[string]any{
+		validatorGHAPI: defaultGHAPIMap(),
+	}
+}
+
+func defaultGHAPIMap() map[string]any {
+	return map[string]any{
+		keyEnabled:                  true,
+		keySeverity:                 severityError,
+		"blocked_endpoints":         config.DefaultBlockedGHAPIEndpoints(),
+		"blocked_graphql_mutations": config.DefaultBlockedGHAPIMutations(),
 	}
 }
 

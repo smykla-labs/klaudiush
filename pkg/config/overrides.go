@@ -106,6 +106,7 @@ var CodeToValidator = map[string]string{
 
 	// GitHub CLI codes
 	"GH001": "github.issue",
+	"GH002": "github.api",
 
 	// Plugin codes
 	"PLUG001": validatorPlugins,

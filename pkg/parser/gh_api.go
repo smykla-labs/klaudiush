@@ -1,0 +1,260 @@
+package parser
+
+import (
+	"strings"
+
+	"github.com/cockroachdb/errors"
+)
+
+// ErrNotGHAPICommand is returned when the gh command is not an api command.
+var ErrNotGHAPICommand = errors.New("not a gh api command")
+
+const (
+	apiSubCmd = "api"
+
+	// minGHAPIArgsLen is the minimum arg count for "gh api".
+	minGHAPIArgsLen = 1
+
+	// graphqlEndpoint is the endpoint gh uses for GraphQL requests.
+	graphqlEndpoint = "graphql"
+
+	// ghesAPIPrefix is the REST path prefix on GitHub Enterprise Server.
+	ghesAPIPrefix = "api/v3/"
+
+	methodGET  = "GET"
+	methodPOST = "POST"
+
+	// queryFieldPrefix marks the field carrying a GraphQL document.
+	queryFieldPrefix = "query="
+
+	schemeSeparator = "://"
+	shortFlagLen    = 2
+
+	// argsPerFlag is what a flag consumes on its own, and
+	// argsPerFlagWithValue what it consumes together with its value.
+	argsPerFlag          = 1
+	argsPerFlagWithValue = 2
+
+	flagMethodShort = "-X"
+	flagMethodLong  = "--method"
+	flagFieldShort  = "-F"
+)
+
+// ghAPIValueFlags lists gh api flags that consume the following argument.
+var ghAPIValueFlags = map[string]bool{
+	flagMethodShort: true,
+	flagMethodLong:  true,
+	"-f":            true,
+	"--raw-field":   true,
+	flagFieldShort:  true,
+	"--field":       true,
+	"-H":            true,
+	"--header":      true,
+	"--input":       true,
+	"-q":            true,
+	"--jq":          true,
+	"-t":            true,
+	"--template":    true,
+	"--hostname":    true,
+	"--cache":       true,
+	"-p":            true,
+	"--preview":     true,
+}
+
+// ghAPIFieldFlags lists gh api flags that turn the default method into POST.
+var ghAPIFieldFlags = map[string]bool{
+	"-f":           true,
+	"--raw-field":  true,
+	flagFieldShort: true,
+	"--field":      true,
+	"--input":      true,
+}
+
+// httpMethods lists the verbs accepted as a bare positional method.
+var httpMethods = map[string]bool{
+	"GET":     true,
+	"POST":    true,
+	"PUT":     true,
+	"PATCH":   true,
+	"DELETE":  true,
+	"HEAD":    true,
+	"OPTIONS": true,
+}
+
+// GHAPICommand represents a parsed gh api command.
+type GHAPICommand struct {
+	// Endpoint is the normalized request path: no scheme, no host, no leading
+	// or trailing slash, no query string.
+	Endpoint string
+
+	// Method is the effective HTTP method, upper-case. gh defaults to GET, or
+	// to POST as soon as any field flag is present.
+	Method string
+
+	// IsGraphQL reports whether the request targets the GraphQL endpoint.
+	IsGraphQL bool
+
+	// Query holds GraphQL document text found in the command: query fields,
+	// heredocs and piped stdin.
+	Query string
+
+	// RawArgs contains all the raw arguments for debugging.
+	RawArgs []string
+}
+
+// IsGHAPI checks if a command is a gh api command.
+func IsGHAPI(cmd *Command) bool {
+	if cmd.Name != ghCLI {
+		return false
+	}
+
+	if len(cmd.Args) < minGHAPIArgsLen {
+		return false
+	}
+
+	return cmd.Args[0] == apiSubCmd
+}
+
+// ParseGHAPICommand parses a Command into a GHAPICommand.
+func ParseGHAPICommand(cmd Command) (*GHAPICommand, error) {
+	if cmd.Name != ghCLI {
+		return nil, ErrNotGHCommand
+	}
+
+	if !IsGHAPI(&cmd) {
+		return nil, ErrNotGHAPICommand
+	}
+
+	api := &GHAPICommand{
+		Query:   cmd.Stdin,
+		RawArgs: cmd.Args,
+	}
+
+	state := ghAPIParseState{}
+
+	args := cmd.Args[1:]
+	for i := 0; i < len(args); {
+		i += api.parseAPIArg(args, i, &state)
+	}
+
+	api.Endpoint = normalizeGHAPIEndpoint(api.Endpoint)
+	api.IsGraphQL = api.Endpoint == graphqlEndpoint
+	api.Method = state.resolveMethod()
+
+	return api, nil
+}
+
+// ghAPIParseState accumulates the signals needed to resolve the method.
+type ghAPIParseState struct {
+	explicitMethod   string
+	positionalMethod string
+	hasFieldFlag     bool
+}
+
+// resolveMethod applies gh's own precedence: an explicit method wins, then a
+// bare positional verb, then POST when fields are present, then GET.
+func (s *ghAPIParseState) resolveMethod() string {
+	switch {
+	case s.explicitMethod != "":
+		return s.explicitMethod
+	case s.positionalMethod != "":
+		return s.positionalMethod
+	case s.hasFieldFlag:
+		return methodPOST
+	default:
+		return methodGET
+	}
+}
+
+// parseAPIArg consumes one argument and returns how many args it used.
+func (c *GHAPICommand) parseAPIArg(args []string, idx int, state *ghAPIParseState) int {
+	arg := args[idx]
+
+	if !strings.HasPrefix(arg, "-") || arg == "-" {
+		c.parseAPIPositional(arg, state)
+
+		return argsPerFlag
+	}
+
+	name, value, attached := splitGHAPIFlag(arg)
+
+	used := argsPerFlag
+
+	if !attached && ghAPIValueFlags[name] && idx+1 < len(args) {
+		value = args[idx+1]
+		used = argsPerFlagWithValue
+	}
+
+	switch {
+	case name == flagMethodShort || name == flagMethodLong:
+		state.explicitMethod = strings.ToUpper(value)
+	case ghAPIFieldFlags[name]:
+		state.hasFieldFlag = true
+
+		c.collectQueryField(value)
+	}
+
+	return used
+}
+
+// parseAPIPositional records a bare verb or the endpoint.
+func (c *GHAPICommand) parseAPIPositional(arg string, state *ghAPIParseState) {
+	if c.Endpoint == "" && state.positionalMethod == "" && httpMethods[strings.ToUpper(arg)] {
+		state.positionalMethod = strings.ToUpper(arg)
+
+		return
+	}
+
+	if c.Endpoint == "" {
+		c.Endpoint = arg
+	}
+}
+
+// collectQueryField appends a query=... field value to the GraphQL document.
+func (c *GHAPICommand) collectQueryField(value string) {
+	if !strings.HasPrefix(value, queryFieldPrefix) {
+		return
+	}
+
+	if c.Query != "" {
+		c.Query += "\n"
+	}
+
+	c.Query += strings.TrimPrefix(value, queryFieldPrefix)
+}
+
+// splitGHAPIFlag splits --flag=value, -f=value and -fvalue into name and value.
+// The bool reports whether a value was attached to the flag itself.
+func splitGHAPIFlag(arg string) (string, string, bool) {
+	if name, value, found := strings.Cut(arg, "="); found {
+		return name, value, true
+	}
+
+	// Short flag with an attached value, e.g. -XPUT.
+	if len(arg) > shortFlagLen && !strings.HasPrefix(arg, "--") {
+		if short := arg[:shortFlagLen]; ghAPIValueFlags[short] {
+			return short, arg[shortFlagLen:], true
+		}
+	}
+
+	return arg, "", false
+}
+
+// normalizeGHAPIEndpoint strips the scheme, host, API prefix, query string and
+// surrounding slashes so patterns can match a stable path.
+func normalizeGHAPIEndpoint(endpoint string) string {
+	if idx := strings.Index(endpoint, "?"); idx != -1 {
+		endpoint = endpoint[:idx]
+	}
+
+	if _, rest, found := strings.Cut(endpoint, schemeSeparator); found {
+		_, path, hasPath := strings.Cut(rest, "/")
+		if !hasPath {
+			return ""
+		}
+
+		endpoint = strings.TrimPrefix(path, ghesAPIPrefix)
+	}
+
+	return strings.Trim(endpoint, "/")
+}

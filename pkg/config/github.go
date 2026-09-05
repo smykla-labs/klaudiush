@@ -5,6 +5,28 @@ package config
 type GitHubConfig struct {
 	// Issue validator configuration
 	Issue *IssueValidatorConfig `json:"issue,omitempty" koanf:"issue" toml:"issue,omitempty"`
+
+	// API validator configuration
+	API *APIValidatorConfig `json:"api,omitempty" koanf:"api" toml:"api,omitempty"`
+}
+
+// APIValidatorConfig configures the gh api validator, which rejects calls to
+// GitHub endpoints that create commits outside git and therefore outside the
+// commit validators.
+type APIValidatorConfig struct {
+	ValidatorConfig `koanf:",squash"`
+
+	// BlockedEndpoints lists "METHOD path-pattern" entries. The method may be
+	// "*" to match any. The pattern is matched against the normalized endpoint
+	// path (no scheme, host, leading slash or query string) and is a glob
+	// unless it contains regex syntax.
+	// Default: the REST endpoints that create commits.
+	BlockedEndpoints []string `json:"blocked_endpoints,omitempty" koanf:"blocked_endpoints" toml:"blocked_endpoints,omitempty"`
+
+	// BlockedGraphQLMutations lists mutation names rejected when found in the
+	// query body of a /graphql request.
+	// Default: ["createCommitOnBranch"]
+	BlockedGraphQLMutations []string `json:"blocked_graphql_mutations,omitempty" koanf:"blocked_graphql_mutations" toml:"blocked_graphql_mutations,omitempty"`
 }
 
 // IssueValidatorConfig configures the gh issue create validator.
@@ -26,4 +48,22 @@ type IssueValidatorConfig struct {
 	// Timeout for markdown linting operations.
 	// Default: 10s
 	Timeout Duration `json:"timeout,omitempty" koanf:"timeout" toml:"timeout,omitempty"`
+}
+
+// DefaultBlockedGHAPIEndpoints returns the REST endpoints that create a commit
+// without running git: writing or deleting repository contents, creating a git
+// commit object, merging a branch, and merging a pull request.
+func DefaultBlockedGHAPIEndpoints() []string {
+	return []string{
+		"PUT **/contents/**",
+		"DELETE **/contents/**",
+		"POST **/git/commits",
+		"POST **/merges",
+		"PUT **/pulls/*/merge",
+	}
+}
+
+// DefaultBlockedGHAPIMutations returns the GraphQL mutations that create a commit.
+func DefaultBlockedGHAPIMutations() []string {
+	return []string{"createCommitOnBranch"}
 }

@@ -1,0 +1,26 @@
+# Test: gh api calls that create no commit pass untouched
+# Creating a branch ref and reading a file are ordinary work
+
+stdin create_ref.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+stdin read_contents.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+-- create_ref.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "gh api -X POST repos/owner/repo/git/refs -f ref=refs/heads/topic -f sha=deadbeef"
+  }
+}
+
+-- read_contents.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "gh api repos/owner/repo/contents/README.md --jq .sha"
+  }
+}

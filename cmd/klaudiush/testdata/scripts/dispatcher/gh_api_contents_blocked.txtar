@@ -1,0 +1,16 @@
+# Test: gh api writing repository contents is blocked
+# The endpoint creates a commit without running git, so no commit validator sees it
+
+stdin input.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+stdout 'GH002'
+stdout 'git commit -sS'
+
+-- input.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "gh api --method PUT /repos/owner/repo/contents/README.md -f message=docs -f content=aGk="
+  }
+}

@@ -51,7 +51,39 @@ func (f *GitHubValidatorFactory) CreateValidators(cfg *config.Config) []Validato
 		validators = append(validators, f.createIssueValidator(ghCfg.Issue))
 	}
 
+	// API validator - rejects gh api calls that create commits behind the hook.
+	if ghCfg.API != nil && ghCfg.API.IsEnabled() &&
+		!isValidatorOverridden(cfg.Overrides, "github.api") {
+		validators = append(validators, f.createAPIValidator(ghCfg.API))
+	}
+
 	return validators
+}
+
+func (f *GitHubValidatorFactory) createAPIValidator(
+	cfg *config.APIValidatorConfig,
+) ValidatorWithPredicate {
+	var rc validator.RuleChecker
+
+	if f.ruleEngine != nil {
+		rc = rules.NewRuleValidatorAdapter(
+			f.ruleEngine,
+			rules.ValidatorGitHubAPI,
+			rules.WithAdapterLogger(f.log),
+		)
+	}
+
+	return ValidatorWithPredicate{
+		Validator: wrapValidatorWithSeverity(
+			githubvalidators.NewAPIValidator(cfg, f.log, rc),
+			cfg,
+		),
+		Predicate: validator.And(
+			beforeToolOrProviderAfterToolPredicate(),
+			validator.ToolTypeIs(hook.ToolTypeBash),
+			validator.CommandContains("gh api"),
+		),
+	}
 }
 
 func (f *GitHubValidatorFactory) createIssueValidator(

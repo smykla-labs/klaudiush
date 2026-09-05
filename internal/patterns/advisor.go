@@ -68,6 +68,7 @@ var codeDescriptions = map[string]string{
 	codeSHELL001: "backtick substitution",
 	// GitHub
 	"GH001": "issue validation",
+	"GH002": "gh api commit",
 	// Plugin
 	"PLUG001": "path traversal",
 	"PLUG002": "path not allowed",
