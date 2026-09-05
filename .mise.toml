@@ -27,7 +27,7 @@ ginkgo = "2.32.1"
 
 # Git hooks manager
 # https://github.com/evilmartians/lefthook
-lefthook = "2.1.10"
+lefthook = "2.1.12"
 
 [env]
 # Ensure Go binaries are in PATH
