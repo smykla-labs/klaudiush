@@ -166,11 +166,16 @@ var httpClientSpecs = map[string]httpClientSpec{
 	"xhs":   {flags: httpieFlags, positionalMethod: true},
 }
 
-// IsHTTPClient reports whether the command is a known HTTP client.
-func IsHTTPClient(cmd *Command) bool {
-	_, known := httpClientSpecs[cmd.Name]
+// IsHTTPClientName reports whether a command name is a known HTTP client.
+func IsHTTPClientName(name string) bool {
+	_, known := httpClientSpecs[name]
 
 	return known
+}
+
+// IsHTTPClient reports whether the command is a known HTTP client.
+func IsHTTPClient(cmd *Command) bool {
+	return IsHTTPClientName(cmd.Name)
 }
 
 // nextFlag starts a fresh set of curl options, and so a separate request.

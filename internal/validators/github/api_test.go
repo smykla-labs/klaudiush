@@ -340,6 +340,51 @@ var _ = Describe("APIValidator", func() {
 		})
 
 		DescribeTable(
+			"unwraps a command launcher",
+			func(command string) {
+				result := apiValidator.Validate(ctx, bashContext(command))
+
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Reference.Code()).To(Equal("GH002"))
+			},
+			Entry(
+				"sudo",
+				`sudo gh api -X PUT repos/o/r/contents/x -f message=y`,
+			),
+			Entry(
+				"sudo with its own flags",
+				`sudo -u builder gh api -X PUT repos/o/r/contents/x -f message=y`,
+			),
+			Entry(
+				"env with an assignment",
+				`env GH_TOKEN=x gh api -X PUT repos/o/r/contents/x -f message=y`,
+			),
+			Entry(
+				"timeout with a duration",
+				`timeout 30 curl -X PUT https://api.github.com/repos/o/r/contents/x -d '{}'`,
+			),
+			Entry(
+				"npx running an interpreter",
+				`npx tsx -e 'octokit.repos.createOrUpdateFileContents({})'`,
+			),
+			Entry(
+				"uv run running an interpreter",
+				`uv run python -c 'requests.put("https://api.github.com/repos/o/r/contents/x")'`,
+			),
+		)
+
+		DescribeTable(
+			"leaves a launcher running something else alone",
+			func(command string) {
+				result := apiValidator.Validate(ctx, bashContext(command))
+				Expect(result.Passed).To(BeTrue())
+			},
+			Entry("a launcher with no known command", `sudo systemctl restart nginx`),
+			Entry("a command that only prints one", `echo gh api -X PUT repos/o/r/contents/x`),
+			Entry("a launcher running a read", `sudo gh api repos/o/r/contents/x`),
+		)
+
+		DescribeTable(
 			"unwraps a shell interpreter's script",
 			func(command string) {
 				result := apiValidator.Validate(ctx, bashContext(command))

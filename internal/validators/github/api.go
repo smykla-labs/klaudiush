@@ -69,6 +69,33 @@ var scriptInterpreters = map[string]bool{
 	"dash":      true,
 }
 
+// commandLaunchers run another command named in their arguments. Rather than
+// model each one's own flags, the first argument naming a command this
+// validator checks is taken as the command being launched, which resolves
+// "sudo -u u gh api", "env FOO=1 gh api", "timeout 30 curl" and "uv run python"
+// alike. A launcher running anything else is left alone.
+var commandLaunchers = map[string]bool{
+	"sudo":    true,
+	"doas":    true,
+	"env":     true,
+	"command": true,
+	"nice":    true,
+	"ionice":  true,
+	"nohup":   true,
+	"stdbuf":  true,
+	"timeout": true,
+	"xargs":   true,
+	"time":    true,
+	"watch":   true,
+	"npx":     true,
+	"bunx":    true,
+	"pnpm":    true,
+	"yarn":    true,
+	"uv":      true,
+	"poetry":  true,
+	"pipx":    true,
+}
+
 // shellInterpreters run a command line handed to them after -c, so that script
 // is parsed and checked like any other command line.
 var shellInterpreters = map[string]bool{
@@ -249,6 +276,10 @@ func (v *APIValidator) checkCommand(
 	cmd parser.Command,
 	depth int,
 ) *validator.Result {
+	if inner, launched := v.unwrapLauncher(cmd); launched && depth < maxScriptDepth {
+		return v.checkCommand(parsed, inner, depth+1)
+	}
+
 	switch {
 	case parser.IsGHAPI(&cmd):
 		apiCmd, err := parser.ParseGHAPICommand(cmd)
@@ -279,6 +310,44 @@ func (v *APIValidator) checkCommand(
 	default:
 		return nil
 	}
+}
+
+// unwrapLauncher returns the command a launcher runs, when one of the commands
+// this validator checks appears among its arguments.
+func (v *APIValidator) unwrapLauncher(cmd parser.Command) (parser.Command, bool) {
+	if !commandLaunchers[cmd.Name] {
+		return parser.Command{}, false
+	}
+
+	for i, arg := range cmd.Args {
+		if !v.isCheckedCommand(arg) {
+			continue
+		}
+
+		return parser.Command{
+			Name:             arg,
+			Args:             cmd.Args[i+1:],
+			Type:             cmd.Type,
+			Stdin:            cmd.Stdin,
+			WorkingDirectory: cmd.WorkingDirectory,
+			Location:         cmd.Location,
+		}, true
+	}
+
+	return parser.Command{}, false
+}
+
+// isCheckedCommand reports whether a name is one this validator inspects.
+func (v *APIValidator) isCheckedCommand(name string) bool {
+	if name == ghCommand {
+		return true
+	}
+
+	if !v.checksHTTPClients() {
+		return false
+	}
+
+	return parser.IsHTTPClientName(name) || scriptInterpreters[name]
 }
 
 // scriptText is the program an interpreter was handed, whether it arrived in
