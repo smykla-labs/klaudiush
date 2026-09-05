@@ -15,6 +15,10 @@ type astWalker struct {
 	// piped echo/printf). Populated when a Stmt or pipeline is visited, then
 	// consumed when the corresponding CallExpr is extracted into a Command.
 	stdinByCall map[*syntax.CallExpr]string
+	// assignments records literal NAME=value assignments, both standalone and
+	// as a prefix on a command, so consumers can resolve a variable used later
+	// in the same command line.
+	assignments map[string]string
 }
 
 // visit is called for each node in the AST.
@@ -330,6 +334,8 @@ func printfEscape(c byte) (byte, bool) {
 
 // extractCommand extracts a command from a CallExpr node.
 func (w *astWalker) extractCommand(call *syntax.CallExpr) {
+	w.extractAssigns(call)
+
 	if len(call.Args) == 0 {
 		return
 	}
@@ -499,6 +505,20 @@ func copiesStdinVerbatim(call *syntax.CallExpr) bool {
 		return wordToString(rest[0]) == "-" // "cat -"
 	default:
 		return false // "cat - -", "cat file", ...
+	}
+}
+
+// extractAssigns records NAME=value assignments carried by a call, whether the
+// call is a bare assignment or a command with assignment prefixes. Appends
+// (NAME+=value) and naked assignments carry no complete value, so they are
+// skipped rather than recorded with a partial one.
+func (w *astWalker) extractAssigns(call *syntax.CallExpr) {
+	for _, assign := range call.Assigns {
+		if assign.Name == nil || assign.Value == nil || assign.Append || assign.Naked {
+			continue
+		}
+
+		w.assignments[assign.Name.Value] = wordToString(assign.Value)
 	}
 }
 

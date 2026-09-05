@@ -148,6 +148,7 @@ func DefaultAPIValidatorConfig() *config.APIValidatorConfig {
 		},
 		BlockedEndpoints:        config.DefaultBlockedGHAPIEndpoints(),
 		BlockedGraphQLMutations: config.DefaultBlockedGHAPIMutations(),
+		BlockUnverifiableCalls:  &enabled,
 	}
 }
 

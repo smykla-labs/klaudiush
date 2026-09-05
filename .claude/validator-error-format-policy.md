@@ -99,10 +99,11 @@ RefShellcheck     Reference = "https://klaudiu.sh/e/FILE001"
 
 - SHELL001: Command substitution in double-quoted strings
 
-**GH001-GH002**: GitHub CLI operations
+**GH001-GH003**: GitHub CLI operations
 
 - GH001: Issue body validation failure (markdown formatting)
 - GH002: `gh api` call to an endpoint that creates a commit outside git
+- GH003: GitHub API write whose endpoint or body cannot be inspected
 
 **PLUG001-PLUG005**: Plugin security
 

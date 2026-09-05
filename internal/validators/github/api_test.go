@@ -2,6 +2,8 @@ package github_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -137,7 +139,116 @@ var _ = Describe("APIValidator", func() {
 		)
 	})
 
+	Describe("endpoints built from variables", func() {
+		It("resolves an assignment made on the same command line", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				`EP=repos/o/r/contents/README.md; gh api -X PUT "$EP" -f message=x`,
+			))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH002"))
+		})
+
+		It("resolves an assignment used as a command prefix", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				`EP=repos/o/r/merges gh api "$EP" -f base=main -f head=topic`,
+			))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH002"))
+		})
+
+		It("blocks a write whose endpoint cannot be resolved", func() {
+			result := apiValidator.Validate(
+				ctx,
+				bashContext(`gh api -X PUT "$ENDPOINT" -f message=x`),
+			)
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.ShouldBlock).To(BeTrue())
+			Expect(result.Reference.Code()).To(Equal("GH003"))
+		})
+
+		It("allows a read whose endpoint cannot be resolved", func() {
+			result := apiValidator.Validate(ctx, bashContext(`gh api "$ENDPOINT" --jq .sha`))
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("allows a resolved write to an endpoint that creates no commit", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				`EP=repos/o/r/git/refs; gh api -X POST "$EP" -f ref=refs/heads/topic`,
+			))
+			Expect(result.Passed).To(BeTrue())
+		})
+	})
+
+	Describe("GraphQL body in a file", func() {
+		It("reads a file written earlier in the same command line", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				"cat > query.json <<'EOF'\n"+
+					`{"query": "mutation { createCommitOnBranch(input: $i) { commit { url } } }"}`+
+					"\nEOF\ngh api graphql --input query.json",
+			))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH002"))
+		})
+
+		It("reads a file that exists on disk", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "query.json")
+			Expect(os.WriteFile(
+				path,
+				[]byte(`{"query": "mutation { createCommitOnBranch(input: $i) { url } }"}`),
+				0o600,
+			)).To(Succeed())
+
+			result := apiValidator.Validate(ctx, bashContext(`gh api graphql --input `+path))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH002"))
+		})
+
+		It("passes a file on disk carrying a harmless query", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "query.json")
+			Expect(os.WriteFile(
+				path,
+				[]byte(`{"query": "query { viewer { login } }"}`),
+				0o600,
+			)).To(Succeed())
+
+			result := apiValidator.Validate(ctx, bashContext(`gh api graphql --input `+path))
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("blocks when the file cannot be read", func() {
+			result := apiValidator.Validate(ctx, bashContext(`gh api graphql --input missing.json`))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH003"))
+		})
+	})
+
 	Describe("configuration", func() {
+		It("allows unverifiable writes when the check is turned off", func() {
+			disabled := false
+			cfg := &config.APIValidatorConfig{BlockUnverifiableCalls: &disabled}
+			apiValidator = github.NewAPIValidator(cfg, logger.NewNoOpLogger(), nil)
+
+			opaque := apiValidator.Validate(
+				ctx,
+				bashContext(`gh api -X PUT "$ENDPOINT" -f message=x`),
+			)
+			Expect(opaque.Passed).To(BeTrue())
+
+			unreadable := apiValidator.Validate(
+				ctx,
+				bashContext(`gh api graphql --input missing.json`),
+			)
+			Expect(unreadable.Passed).To(BeTrue())
+		})
+
 		It("uses the configured endpoint rules instead of the defaults", func() {
 			cfg := &config.APIValidatorConfig{
 				BlockedEndpoints: []string{"POST **/git/refs"},

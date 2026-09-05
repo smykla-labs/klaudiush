@@ -59,6 +59,7 @@ var DefaultSuggestions = map[Reference]string{
 	// GitHub CLI suggestions
 	RefGHIssueValidation: "Fix markdown formatting in issue body (empty lines around headings, proper list spacing)",
 	RefGHAPICommit:       "Clone the repository, stage the files, and run git commit -sS instead of creating the commit through the GitHub API",
+	RefGHAPIUnverifiable: "Spell the endpoint literally instead of building it from a variable, or pass the GraphQL query inline with -f query=...",
 
 	// MCP Elicitation suggestions
 	RefMCPServerBlocked:    "Remove MCP server from deny list or use a different server",

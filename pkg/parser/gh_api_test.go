@@ -153,6 +153,25 @@ var _ = Describe("ParseGHAPICommand", func() {
 		})
 	})
 
+	Describe("input file", func() {
+		It("records a --input path", func() {
+			apiCmd, err := parser.ParseGHAPICommand(
+				parseFirstGHCommand("gh api graphql --input query.json"),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(apiCmd.InputFile).To(Equal("query.json"))
+			Expect(apiCmd.Method).To(Equal("POST"))
+		})
+
+		It("treats --input - as stdin rather than a path", func() {
+			apiCmd, err := parser.ParseGHAPICommand(
+				parseFirstGHCommand("gh api graphql --input -"),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(apiCmd.InputFile).To(BeEmpty())
+		})
+	})
+
 	Describe("IsGHAPI", func() {
 		It("recognises gh api inside a pipeline", func() {
 			cmd := parseFirstGHCommand("gh api repos/o/r/commits | jq .")

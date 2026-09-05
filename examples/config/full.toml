@@ -183,6 +183,9 @@ blocked_endpoints = [
 ]
 # Mutation names rejected when found in the query body of a /graphql request
 blocked_graphql_mutations = ["createCommitOnBranch"]
+# Reject a write whose endpoint was built from a variable that cannot be
+# resolved, or whose GraphQL body lives in a file that cannot be read (GH003)
+block_unverifiable_calls = true
 
 # Notification Validators
 [validators.notification]

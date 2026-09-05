@@ -27,6 +27,12 @@ type APIValidatorConfig struct {
 	// query body of a /graphql request.
 	// Default: ["createCommitOnBranch"]
 	BlockedGraphQLMutations []string `json:"blocked_graphql_mutations,omitempty" koanf:"blocked_graphql_mutations" toml:"blocked_graphql_mutations,omitempty"`
+
+	// BlockUnverifiableCalls rejects a write whose endpoint was built from a
+	// variable that cannot be resolved, or whose GraphQL body lives in a file
+	// that cannot be read. Such a call cannot be shown to create no commit.
+	// Default: true
+	BlockUnverifiableCalls *bool `json:"block_unverifiable_calls,omitempty" koanf:"block_unverifiable_calls" toml:"block_unverifiable_calls,omitempty"`
 }
 
 // IssueValidatorConfig configures the gh issue create validator.

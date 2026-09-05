@@ -833,6 +833,7 @@ func defaultGHAPIMap() map[string]any {
 		keySeverity:                 severityError,
 		"blocked_endpoints":         config.DefaultBlockedGHAPIEndpoints(),
 		"blocked_graphql_mutations": config.DefaultBlockedGHAPIMutations(),
+		"block_unverifiable_calls":  true,
 	}
 }
 

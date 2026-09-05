@@ -52,6 +52,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "block_unverifiable_calls": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

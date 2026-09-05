@@ -38,6 +38,10 @@ const (
 	flagMethodShort = "-X"
 	flagMethodLong  = "--method"
 	flagFieldShort  = "-F"
+	flagInput       = "--input"
+
+	// stdinPath is the --input value that means "read the body from stdin".
+	stdinPath = "-"
 )
 
 // ghAPIValueFlags lists gh api flags that consume the following argument.
@@ -50,7 +54,7 @@ var ghAPIValueFlags = map[string]bool{
 	"--field":       true,
 	"-H":            true,
 	"--header":      true,
-	"--input":       true,
+	flagInput:       true,
 	"-q":            true,
 	"--jq":          true,
 	"-t":            true,
@@ -67,7 +71,7 @@ var ghAPIFieldFlags = map[string]bool{
 	"--raw-field":  true,
 	flagFieldShort: true,
 	"--field":      true,
-	"--input":      true,
+	flagInput:      true,
 }
 
 // httpMethods lists the verbs accepted as a bare positional method.
@@ -79,6 +83,14 @@ var httpMethods = map[string]bool{
 	"DELETE":  true,
 	"HEAD":    true,
 	"OPTIONS": true,
+}
+
+// writeMethods lists the verbs that change server state.
+var writeMethods = map[string]bool{
+	"POST":   true,
+	"PUT":    true,
+	"PATCH":  true,
+	"DELETE": true,
 }
 
 // GHAPICommand represents a parsed gh api command.
@@ -98,8 +110,24 @@ type GHAPICommand struct {
 	// heredocs and piped stdin.
 	Query string
 
+	// InputFile is the --input path, when the body comes from a file rather
+	// than from a field or stdin. "-" means stdin and is not recorded here.
+	InputFile string
+
+	// WorkingDirectory is the effective directory of the command, for
+	// resolving a relative InputFile.
+	WorkingDirectory string
+
+	// Location is the position of the command in the source.
+	Location Location
+
 	// RawArgs contains all the raw arguments for debugging.
 	RawArgs []string
+}
+
+// IsWriteMethod reports whether the request changes server state.
+func (c *GHAPICommand) IsWriteMethod() bool {
+	return writeMethods[c.Method]
 }
 
 // IsGHAPI checks if a command is a gh api command.
@@ -126,8 +154,10 @@ func ParseGHAPICommand(cmd Command) (*GHAPICommand, error) {
 	}
 
 	api := &GHAPICommand{
-		Query:   cmd.Stdin,
-		RawArgs: cmd.Args,
+		Query:            cmd.Stdin,
+		WorkingDirectory: cmd.WorkingDirectory,
+		Location:         cmd.Location,
+		RawArgs:          cmd.Args,
 	}
 
 	state := ghAPIParseState{}
@@ -188,6 +218,12 @@ func (c *GHAPICommand) parseAPIArg(args []string, idx int, state *ghAPIParseStat
 	switch {
 	case name == flagMethodShort || name == flagMethodLong:
 		state.explicitMethod = strings.ToUpper(value)
+	case name == flagInput:
+		state.hasFieldFlag = true
+
+		if value != stdinPath {
+			c.InputFile = value
+		}
 	case ghAPIFieldFlags[name]:
 		state.hasFieldFlag = true
 
