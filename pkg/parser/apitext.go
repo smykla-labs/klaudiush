@@ -5,10 +5,6 @@ import (
 	"strings"
 )
 
-// ScriptTool is the Tool value of a request found in script text rather than
-// in a recognised client command.
-const ScriptTool = "script"
-
 var (
 	// requestCallPattern matches an SDK call that names the method and path in
 	// one string, the form Octokit's request() takes:
@@ -36,7 +32,6 @@ func FindAPICallsInText(text string) []HTTPRequest {
 
 	for _, match := range requestCalls {
 		requests = append(requests, HTTPRequest{
-			Tool:            ScriptTool,
 			Method:          strings.ToUpper(match[1]),
 			URL:             match[2],
 			ExplicitAPICall: true,
@@ -45,7 +40,6 @@ func FindAPICallsInText(text string) []HTTPRequest {
 
 	for _, match := range methodCalls {
 		requests = append(requests, HTTPRequest{
-			Tool:   ScriptTool,
 			Method: strings.ToUpper(match[1]),
 			URL:    match[2],
 		})

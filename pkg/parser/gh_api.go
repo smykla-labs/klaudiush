@@ -15,8 +15,8 @@ const (
 	// minGHAPIArgsLen is the minimum arg count for "gh api".
 	minGHAPIArgsLen = 1
 
-	// graphqlEndpoint is the endpoint gh uses for GraphQL requests.
-	graphqlEndpoint = "graphql"
+	// GraphQLEndpoint is the normalized endpoint of a GraphQL request.
+	GraphQLEndpoint = "graphql"
 
 	// ghesAPIPrefix is the REST path prefix on GitHub Enterprise Server.
 	ghesAPIPrefix = "api/v3/"
@@ -180,8 +180,8 @@ func ParseGHAPICommand(cmd Command) (*GHAPICommand, error) {
 		i += api.parseAPIArg(args, i, &state)
 	}
 
-	api.Endpoint = normalizeGHAPIEndpoint(api.Endpoint)
-	api.IsGraphQL = api.Endpoint == graphqlEndpoint
+	api.Endpoint = NormalizeAPIEndpoint(api.Endpoint)
+	api.IsGraphQL = api.Endpoint == GraphQLEndpoint
 	api.Method = state.resolveMethod()
 
 	return api, nil
@@ -302,21 +302,17 @@ func splitGHAPIFlag(arg string) (string, string, bool) {
 	return arg, "", false
 }
 
+// IsGHESAPIPath reports whether a URL path addresses a GitHub Enterprise
+// Server API, which can live on any hostname.
+func IsGHESAPIPath(path string) bool {
+	return strings.HasPrefix(path, "/"+ghesAPIPrefix) ||
+		strings.HasPrefix(path, "/"+ghesGraphQLPath)
+}
+
 // NormalizeAPIEndpoint strips the scheme, host, API prefix, query string and
 // surrounding slashes so patterns can match a stable path. A GitHub Enterprise
 // GraphQL path collapses to the same "graphql" as the github.com one.
 func NormalizeAPIEndpoint(endpoint string) string {
-	normalized := normalizeGHAPIEndpoint(endpoint)
-	if normalized == ghesGraphQLPath {
-		return graphqlEndpoint
-	}
-
-	return normalized
-}
-
-// normalizeGHAPIEndpoint strips the scheme, host, API prefix, query string and
-// surrounding slashes so patterns can match a stable path.
-func normalizeGHAPIEndpoint(endpoint string) string {
 	if idx := strings.Index(endpoint, "?"); idx != -1 {
 		endpoint = endpoint[:idx]
 	}
@@ -332,5 +328,10 @@ func normalizeGHAPIEndpoint(endpoint string) string {
 
 	// The Enterprise prefix is stripped after the slashes, so a bare path
 	// carries it out too, not only a full URL.
-	return strings.TrimPrefix(strings.Trim(endpoint, "/"), ghesAPIPrefix)
+	normalized := strings.TrimPrefix(strings.Trim(endpoint, "/"), ghesAPIPrefix)
+	if normalized == ghesGraphQLPath {
+		return GraphQLEndpoint
+	}
+
+	return normalized
 }

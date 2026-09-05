@@ -23,16 +23,8 @@ const (
 	// methodWildcard matches any HTTP method in a blocked endpoint rule.
 	methodWildcard = "*"
 
-	// graphqlPath is the normalized endpoint of a GraphQL request.
-	graphqlPath = "graphql"
-
 	// reposPrefix is where every commit-creating REST endpoint lives.
 	reposPrefix = "repos/"
-
-	// ghesRESTPrefix and ghesGraphQLPrefix identify a GitHub Enterprise Server
-	// API path, which can appear on any hostname.
-	ghesRESTPrefix    = "api/v3/"
-	ghesGraphQLPrefix = "api/graphql"
 
 	// maxRequestBodyBytes caps how much of a request body file is read.
 	maxRequestBodyBytes = 1 << 20
@@ -60,9 +52,11 @@ type blockedEndpoint struct {
 // API. Such a commit never runs git, so no commit validator ever sees it.
 type APIValidator struct {
 	validator.BaseValidator
-	config    *config.APIValidatorConfig
-	endpoints []blockedEndpoint
-	mutations []string
+	config      *config.APIValidatorConfig
+	endpoints   []blockedEndpoint
+	mutations   []string
+	hosts       []string
+	clientCalls []string
 }
 
 // NewAPIValidator creates a new APIValidator instance.
@@ -83,6 +77,8 @@ func NewAPIValidator(
 		apiValidator.Logger(),
 	)
 	apiValidator.mutations = apiValidator.blockedMutations()
+	apiValidator.hosts = apiValidator.configuredHosts()
+	apiValidator.clientCalls = apiValidator.blockedClientCalls()
 
 	return apiValidator
 }
@@ -125,8 +121,8 @@ func (v *APIValidator) checksHTTPClients() bool {
 	return true
 }
 
-// hosts returns the hostnames treated as the GitHub API.
-func (v *APIValidator) hosts() []string {
+// configuredHosts returns the hostnames treated as the GitHub API.
+func (v *APIValidator) configuredHosts() []string {
 	if v.config != nil && len(v.config.Hosts) > 0 {
 		return v.config.Hosts
 	}
@@ -242,7 +238,7 @@ func (v *APIValidator) checkAPICommand(
 ) *validator.Result {
 	endpoint := parsed.ExpandVars(apiCmd.Endpoint)
 
-	if apiCmd.IsGraphQL || endpoint == graphqlPath {
+	if apiCmd.IsGraphQL || endpoint == parser.GraphQLEndpoint {
 		return v.checkGraphQL(parsed, apiCmd)
 	}
 
@@ -396,7 +392,7 @@ func (v *APIValidator) checkHTTPRequest(
 
 	endpoint := parser.NormalizeAPIEndpoint(path)
 
-	if endpoint == graphqlPath {
+	if endpoint == parser.GraphQLEndpoint {
 		return v.checkRequestBody(parsed, req)
 	}
 
@@ -443,7 +439,7 @@ func (v *APIValidator) checkScriptText(command string) *validator.Result {
 		return nil
 	}
 
-	if call := parser.FindCallsInText(command, v.blockedClientCalls()); call != "" {
+	if call := parser.FindCallsInText(command, v.clientCalls); call != "" {
 		return v.fail(fmt.Sprintf(
 			"the script calls %s, which creates a commit through the GitHub API, %s",
 			call, bypassExplanation,
@@ -480,12 +476,7 @@ func (v *APIValidator) checkScriptText(command string) *validator.Result {
 // isGitHubAPI reports whether a host and path address the GitHub API. A path
 // under the Enterprise Server prefixes counts on any host.
 func (v *APIValidator) isGitHubAPI(host, path string) bool {
-	if slices.Contains(v.hosts(), host) {
-		return true
-	}
-
-	return strings.HasPrefix(path, "/"+ghesRESTPrefix) ||
-		strings.HasPrefix(path, "/"+ghesGraphQLPrefix)
+	return slices.Contains(v.hosts, host) || parser.IsGHESAPIPath(path)
 }
 
 // blocksEndpoint reports whether a rule rejects this method and endpoint.

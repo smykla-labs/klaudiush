@@ -85,6 +85,11 @@ var _ = Describe("APIValidator", func() {
 				"graphql createCommitOnBranch",
 				`gh api graphql -f query='mutation { createCommitOnBranch(input: $i) { commit { url } } }'`,
 			),
+			Entry(
+				"graphql on GitHub Enterprise Server",
+				`gh api https://ghe.example.com/api/graphql `+
+					`-f query='mutation { createCommitOnBranch(input: $i) { url } }'`,
+			),
 		)
 
 		It("names the method, the endpoint and the intended path", func() {
@@ -460,6 +465,22 @@ var _ = Describe("APIValidator", func() {
 				bashContext(`gh api -X PUT repos/o/r/contents/README.md -f message=x`),
 			)
 			Expect(allowed.Passed).To(BeTrue())
+		})
+
+		It("recognises the GitHub Enterprise Server graphql path", func() {
+			// The client-call scan is narrowed to a name nothing uses, so this
+			// proves the GraphQL path itself is recognised rather than the
+			// mutation name merely being spotted in the command text.
+			cfg := &config.APIValidatorConfig{BlockedClientCalls: []string{"nothing.matches.this"}}
+			apiValidator = github.NewAPIValidator(cfg, logger.NewNoOpLogger(), nil)
+
+			result := apiValidator.Validate(ctx, bashContext(
+				`gh api https://ghe.example.com/api/graphql `+
+					`-f query='mutation { createCommitOnBranch(input: $i) { url } }'`,
+			))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH002"))
 		})
 
 		It("supports a wildcard method", func() {

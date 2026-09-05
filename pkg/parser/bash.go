@@ -97,9 +97,8 @@ func (r *ParseResult) ExpandVars(s string) string {
 		}
 
 		expanded := varRefPattern.ReplaceAllStringFunc(s, func(ref string) string {
-			name := varRefPattern.FindStringSubmatch(ref)[1]
-
-			if value, ok := r.Assignments[name]; ok {
+			// ref is exactly "${NAME}", so the name is what the braces enclose.
+			if value, ok := r.Assignments[ref[2:len(ref)-1]]; ok {
 				return value
 			}
 
