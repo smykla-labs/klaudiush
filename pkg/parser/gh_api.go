@@ -313,8 +313,10 @@ func normalizeGHAPIEndpoint(endpoint string) string {
 			return ""
 		}
 
-		endpoint = strings.TrimPrefix(path, ghesAPIPrefix)
+		endpoint = path
 	}
 
-	return strings.Trim(endpoint, "/")
+	// The Enterprise prefix is stripped after the slashes, so a bare path
+	// carries it out too, not only a full URL.
+	return strings.TrimPrefix(strings.Trim(endpoint, "/"), ghesAPIPrefix)
 }

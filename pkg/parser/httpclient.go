@@ -173,43 +173,83 @@ func IsHTTPClient(cmd *Command) bool {
 	return known
 }
 
-// ParseHTTPClientCommand parses a curl, wget, httpie or xh invocation into the
-// request it sends. The second return is false when the command is not a known
-// client or carries no URL.
-func ParseHTTPClientCommand(cmd Command) (*HTTPRequest, bool) {
+// nextFlag starts a fresh set of curl options, and so a separate request.
+const nextFlag = "--next"
+
+// ParseHTTPClientCommands parses a curl, wget, httpie or xh invocation into
+// every request it sends. One command can carry several: curl fetches each URL
+// it is given, and --next starts a new request with its own options.
+func ParseHTTPClientCommands(cmd Command) []*HTTPRequest {
 	spec, known := httpClientSpecs[cmd.Name]
 	if !known {
-		return nil, false
+		return nil
 	}
 
-	req := &HTTPRequest{
-		Tool:             cmd.Name,
-		Body:             cmd.Stdin,
-		WorkingDirectory: cmd.WorkingDirectory,
-		Location:         cmd.Location,
+	var requests []*HTTPRequest
+
+	for _, segment := range splitOnNext(cmd.Args) {
+		requests = append(requests, parseClientSegment(cmd, &spec, segment)...)
 	}
 
-	state := httpClientState{}
-
-	for i := 0; i < len(cmd.Args); {
-		i += req.parseClientArg(cmd.Args, i, &spec, &state)
-	}
-
-	if req.URL == "" {
-		return nil, false
-	}
-
-	req.Method = state.resolveMethod()
-
-	return req, true
+	return requests
 }
 
-// httpClientState accumulates the signals needed to resolve the method.
+// splitOnNext divides a client's arguments into one group per request.
+func splitOnNext(args []string) [][]string {
+	segments := [][]string{{}}
+
+	for _, arg := range args {
+		if arg == nextFlag {
+			segments = append(segments, []string{})
+
+			continue
+		}
+
+		last := len(segments) - 1
+		segments[last] = append(segments[last], arg)
+	}
+
+	return segments
+}
+
+// parseClientSegment turns one request's arguments into a request per URL. The
+// options in a segment apply to every URL it names, which is how curl treats
+// them.
+func parseClientSegment(cmd Command, spec *httpClientSpec, args []string) []*HTTPRequest {
+	state := httpClientState{}
+
+	for i := 0; i < len(args); {
+		i += state.parseClientArg(args, i, spec)
+	}
+
+	method := state.resolveMethod()
+
+	requests := make([]*HTTPRequest, 0, len(state.urls))
+
+	for _, url := range state.urls {
+		requests = append(requests, &HTTPRequest{
+			Tool:             cmd.Name,
+			Method:           method,
+			URL:              url,
+			Body:             state.body,
+			BodyFile:         state.bodyFile,
+			WorkingDirectory: cmd.WorkingDirectory,
+			Location:         cmd.Location,
+		})
+	}
+
+	return requests
+}
+
+// httpClientState accumulates one request's arguments.
 type httpClientState struct {
 	explicitMethod   string
 	positionalMethod string
 	impliedMethod    string
 	hasDataItem      bool
+	urls             []string
+	body             string
+	bodyFile         string
 }
 
 // resolveMethod applies the precedence every client shares: an explicit method
@@ -230,16 +270,11 @@ func (s *httpClientState) resolveMethod() string {
 }
 
 // parseClientArg consumes one argument and returns how many args it used.
-func (r *HTTPRequest) parseClientArg(
-	args []string,
-	idx int,
-	spec *httpClientSpec,
-	state *httpClientState,
-) int {
+func (s *httpClientState) parseClientArg(args []string, idx int, spec *httpClientSpec) int {
 	arg := args[idx]
 
 	if !strings.HasPrefix(arg, "-") || arg == stdinPath {
-		r.parseClientPositional(arg, spec, state)
+		s.parseClientPositional(arg, spec)
 
 		return argsPerFlag
 	}
@@ -258,74 +293,75 @@ func (r *HTTPRequest) parseClientArg(
 		used = argsPerFlagWithValue
 	}
 
-	r.applyClientFlag(flag, value, state)
+	s.applyClientFlag(flag, value)
 
 	return used
 }
 
 // applyClientFlag records what a single flag says about the request.
-func (r *HTTPRequest) applyClientFlag(
-	flag clientFlag,
-	value string,
-	state *httpClientState,
-) {
-	if flag.implies != "" && state.impliedMethod == "" {
-		state.impliedMethod = flag.implies
+func (s *httpClientState) applyClientFlag(flag clientFlag, value string) {
+	if flag.implies != "" && s.impliedMethod == "" {
+		s.impliedMethod = flag.implies
 	}
 
 	switch flag.role {
 	case roleMethod:
-		state.explicitMethod = strings.ToUpper(value)
+		s.explicitMethod = strings.ToUpper(value)
 	case roleURL:
-		r.URL = value
+		s.urls = append(s.urls, value)
 	case roleBodyFile:
-		r.BodyFile = value
+		s.setBodyFile(value)
 	case roleBody:
-		r.collectBody(value)
+		s.collectBody(value)
 	case roleNone:
 	}
 }
 
-// collectBody records inline body text, following curl's "@path" form to a file.
-func (r *HTTPRequest) collectBody(value string) {
-	if path, isFile := strings.CutPrefix(value, "@"); isFile {
-		r.BodyFile = path
-
+// setBodyFile records a body path, ignoring the stdin marker, whose content is
+// already carried on the command's stdin.
+func (s *httpClientState) setBodyFile(path string) {
+	if path == stdinPath {
 		return
 	}
 
-	if r.Body != "" {
-		r.Body += "\n"
-	}
-
-	r.Body += value
+	s.bodyFile = path
 }
 
-// parseClientPositional records a bare verb, the URL, or an httpie data item.
-func (r *HTTPRequest) parseClientPositional(
-	arg string,
-	spec *httpClientSpec,
-	state *httpClientState,
-) {
-	if spec.positionalMethod && r.URL == "" && state.positionalMethod == "" &&
-		httpMethods[strings.ToUpper(arg)] {
-		state.positionalMethod = strings.ToUpper(arg)
+// collectBody records inline body text, following curl's "@path" form to a file.
+func (s *httpClientState) collectBody(value string) {
+	if path, isFile := strings.CutPrefix(value, "@"); isFile {
+		s.setBodyFile(path)
 
 		return
 	}
 
-	if r.URL == "" {
-		r.URL = arg
+	if s.body != "" {
+		s.body += "\n"
+	}
+
+	s.body += value
+}
+
+// parseClientPositional records a bare verb, a URL, or an httpie data item.
+func (s *httpClientState) parseClientPositional(arg string, spec *httpClientSpec) {
+	if spec.positionalMethod && len(s.urls) == 0 && s.positionalMethod == "" &&
+		httpMethods[strings.ToUpper(arg)] {
+		s.positionalMethod = strings.ToUpper(arg)
 
 		return
 	}
 
 	// httpie request items ("field=value", "field:=json") make the call a POST.
-	if strings.Contains(arg, "=") {
-		state.hasDataItem = true
+	// curl has no positional items, so an "=" only means one once a URL is known.
+	if len(s.urls) > 0 && strings.Contains(arg, "=") {
+		s.hasDataItem = true
 
-		r.collectBody(arg)
+		s.collectBody(arg)
+
+		return
 	}
+
+	s.urls = append(s.urls, arg)
 }
 
 // splitClientFlag splits --flag=value and a short flag with an attached value.
@@ -348,17 +384,70 @@ func splitClientFlag(arg string, spec *httpClientSpec) (string, string, bool) {
 // leading slash so callers can recognise a GitHub Enterprise API prefix. A
 // value with no scheme is treated as a path with no host.
 func SplitURL(raw string) (string, string) {
-	rest, found := strings.CutPrefix(raw, "https://")
+	rest, found := cutScheme(raw)
 	if !found {
-		if rest, found = strings.CutPrefix(raw, "http://"); !found {
-			return "", raw
+		return "", raw
+	}
+
+	authority, path, hasPath := strings.Cut(rest, "/")
+	if !hasPath {
+		return normalizeHost(authority), ""
+	}
+
+	return normalizeHost(authority), "/" + path
+}
+
+// SplitRequestURL is SplitURL for a value a client is about to fetch, where a
+// missing scheme means the client supplies one rather than that the value is a
+// path. Without this, "curl api.github.com/repos/..." would read as hostless.
+func SplitRequestURL(raw string) (string, string) {
+	host, path := SplitURL(raw)
+	if host != "" || !looksLikeHost(raw) {
+		return host, path
+	}
+
+	return SplitURL("https://" + raw)
+}
+
+// looksLikeHost reports whether a scheme-less value starts with something that
+// could be a hostname rather than a path segment.
+func looksLikeHost(raw string) bool {
+	if strings.HasPrefix(raw, "/") {
+		return false
+	}
+
+	authority, _, _ := strings.Cut(raw, "/")
+
+	return strings.Contains(authority, ".")
+}
+
+// cutScheme removes a leading http:// or https://, whatever its case, since a
+// scheme is case-insensitive and curl accepts either spelling.
+func cutScheme(raw string) (string, bool) {
+	lower := strings.ToLower(raw)
+
+	for _, scheme := range []string{"https://", "http://"} {
+		if strings.HasPrefix(lower, scheme) {
+			return raw[len(scheme):], true
 		}
 	}
 
-	host, path, hasPath := strings.Cut(rest, "/")
-	if !hasPath {
-		return host, ""
+	return "", false
+}
+
+// normalizeHost drops the userinfo and the port and lower-cases what is left,
+// so neither a credential prefix nor a spelling defeats a host comparison.
+// An IPv6 literal keeps its brackets and port, which no GitHub host uses.
+func normalizeHost(authority string) string {
+	if at := strings.LastIndex(authority, "@"); at != -1 {
+		authority = authority[at+1:]
 	}
 
-	return host, "/" + path
+	if !strings.HasPrefix(authority, "[") {
+		if host, _, found := strings.Cut(authority, ":"); found {
+			authority = host
+		}
+	}
+
+	return strings.ToLower(authority)
 }

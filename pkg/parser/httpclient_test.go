@@ -7,7 +7,7 @@ import (
 	"github.com/smykla-skalski/klaudiush/pkg/parser"
 )
 
-var _ = Describe("ParseHTTPClientCommand", func() {
+var _ = Describe("ParseHTTPClientCommands", func() {
 	parseFirst := func(command, name string) parser.Command {
 		GinkgoHelper()
 
@@ -20,11 +20,19 @@ var _ = Describe("ParseHTTPClientCommand", func() {
 		return commands[0]
 	}
 
+	parseOne := func(command, name string) *parser.HTTPRequest {
+		GinkgoHelper()
+
+		requests := parser.ParseHTTPClientCommands(parseFirst(command, name))
+		Expect(requests).To(HaveLen(1))
+
+		return requests[0]
+	}
+
 	DescribeTable(
 		"resolves the method and URL",
 		func(command, tool, wantMethod, wantURL string) {
-			req, ok := parser.ParseHTTPClientCommand(parseFirst(command, tool))
-			Expect(ok).To(BeTrue())
+			req := parseOne(command, tool)
 			Expect(req.Method).To(Equal(wantMethod))
 			Expect(req.URL).To(Equal(wantURL))
 		},
@@ -96,31 +104,55 @@ var _ = Describe("ParseHTTPClientCommand", func() {
 	)
 
 	It("records an inline body", func() {
-		req, ok := parser.ParseHTTPClientCommand(parseFirst(
+		req := parseOne(
 			`curl -X POST https://api.github.com/graphql -d '{"query":"mutation {}"}'`, "curl",
-		))
-		Expect(ok).To(BeTrue())
+		)
 		Expect(req.Body).To(ContainSubstring("mutation"))
 	})
 
 	It("follows curl's @path form to a body file", func() {
-		req, ok := parser.ParseHTTPClientCommand(parseFirst(
-			"curl -X POST https://api.github.com/graphql -d @query.json", "curl",
-		))
-		Expect(ok).To(BeTrue())
+		req := parseOne("curl -X POST https://api.github.com/graphql -d @query.json", "curl")
 		Expect(req.BodyFile).To(Equal("query.json"))
 	})
 
+	It("treats -d @- as stdin rather than a file named -", func() {
+		req := parseOne("curl -X POST https://api.github.com/graphql -d @-", "curl")
+		Expect(req.BodyFile).To(BeEmpty())
+	})
+
 	It("reports no request when the command carries no URL", func() {
-		_, ok := parser.ParseHTTPClientCommand(parseFirst("curl --version", "curl"))
-		Expect(ok).To(BeFalse())
+		Expect(parser.ParseHTTPClientCommands(parseFirst("curl --version", "curl"))).To(BeEmpty())
 	})
 
 	It("reports no request for a command that is not a client", func() {
-		_, ok := parser.ParseHTTPClientCommand(
+		Expect(parser.ParseHTTPClientCommands(
 			parser.Command{Name: "git", Args: []string{"status"}},
-		)
-		Expect(ok).To(BeFalse())
+		)).To(BeEmpty())
+	})
+
+	Describe("several requests in one command", func() {
+		It("returns one request per URL, sharing the segment's options", func() {
+			requests := parser.ParseHTTPClientCommands(parseFirst(
+				"curl -X PUT https://example.com/a https://api.github.com/repos/o/r/contents/x",
+				"curl",
+			))
+
+			Expect(requests).To(HaveLen(2))
+			Expect(requests[0].URL).To(Equal("https://example.com/a"))
+			Expect(requests[1].URL).To(Equal("https://api.github.com/repos/o/r/contents/x"))
+			Expect(requests[1].Method).To(Equal("PUT"))
+		})
+
+		It("gives each --next segment its own options", func() {
+			requests := parser.ParseHTTPClientCommands(parseFirst(
+				"curl https://example.com/a --next -X DELETE https://api.github.com/repos/o/r/x",
+				"curl",
+			))
+
+			Expect(requests).To(HaveLen(2))
+			Expect(requests[0].Method).To(Equal("GET"))
+			Expect(requests[1].Method).To(Equal("DELETE"))
+		})
 	})
 
 	Describe("SplitURL", func() {
@@ -141,7 +173,39 @@ var _ = Describe("ParseHTTPClientCommand", func() {
 			),
 			Entry("host with no path", "https://api.github.com", "api.github.com", ""),
 			Entry("bare path", "repos/o/r/contents/x", "", "repos/o/r/contents/x"),
+			Entry(
+				"upper-case scheme and host",
+				"HTTPS://API.GITHUB.COM/repos/o/r", "api.github.com", "/repos/o/r",
+			),
+			Entry(
+				"userinfo is dropped",
+				"https://x-token:secret@api.github.com/repos/o/r", "api.github.com", "/repos/o/r",
+			),
+			Entry(
+				"port is dropped",
+				"https://api.github.com:443/repos/o/r", "api.github.com", "/repos/o/r",
+			),
 		)
+	})
+
+	Describe("SplitRequestURL", func() {
+		It("supplies the scheme a client would add", func() {
+			host, path := parser.SplitRequestURL("api.github.com/repos/o/r/contents/x")
+			Expect(host).To(Equal("api.github.com"))
+			Expect(path).To(Equal("/repos/o/r/contents/x"))
+		})
+
+		It("leaves a path that names no host alone", func() {
+			host, path := parser.SplitRequestURL("/repos/o/r/contents/x")
+			Expect(host).To(BeEmpty())
+			Expect(path).To(Equal("/repos/o/r/contents/x"))
+		})
+
+		It("leaves a relative path alone", func() {
+			host, path := parser.SplitRequestURL("repos/o/r/contents/x")
+			Expect(host).To(BeEmpty())
+			Expect(path).To(Equal("repos/o/r/contents/x"))
+		})
 	})
 
 	Describe("FindAPICallsInText", func() {

@@ -204,6 +204,35 @@ var _ = Describe("APIValidator", func() {
 				"an inline python request",
 				`python3 -c 'requests.put("https://api.github.com/repos/o/r/contents/x", json=b)'`,
 			),
+			Entry(
+				"curl with a token in the userinfo",
+				`curl -X PUT https://x-access-token:$T@api.github.com/repos/o/r/contents/x -d '{}'`,
+			),
+			Entry(
+				"curl with an explicit port",
+				`curl -X PUT https://api.github.com:443/repos/o/r/contents/x -d '{}'`,
+			),
+			Entry(
+				"curl with an upper-case host",
+				`curl -X PUT https://API.GITHUB.COM/repos/o/r/contents/x -d '{}'`,
+			),
+			Entry(
+				"curl with an upper-case scheme",
+				`curl -X PUT HTTPS://api.github.com/repos/o/r/contents/x -d '{}'`,
+			),
+			Entry(
+				"curl with no scheme at all",
+				`curl -X PUT api.github.com/repos/o/r/contents/x -d '{}'`,
+			),
+			Entry(
+				"curl fetching a second URL",
+				`curl -X PUT https://example.com/ok https://api.github.com/repos/o/r/contents/x`,
+			),
+			Entry(
+				"curl with the call in a --next request",
+				`curl https://example.com/ok --next -X PUT `+
+					`https://api.github.com/repos/o/r/contents/x -d '{}'`,
+			),
 		)
 
 		DescribeTable(
@@ -227,6 +256,10 @@ var _ = Describe("APIValidator", func() {
 			Entry(
 				"curl downloading a release asset",
 				`curl -L -o out.tgz https://github.com/o/r/archive/refs/tags/v1.tar.gz`,
+			),
+			Entry(
+				"curl reading GitHub then writing elsewhere",
+				`curl https://api.github.com/repos/o/r/contents/x --next -X PUT https://example.com/ok -d '{}'`,
 			),
 			Entry(
 				"an unrelated route in a script",

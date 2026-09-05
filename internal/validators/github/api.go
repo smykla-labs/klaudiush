@@ -218,12 +218,13 @@ func (v *APIValidator) checkCommand(
 		return v.checkAPICommand(parsed, apiCmd)
 
 	case v.checksHTTPClients() && parser.IsHTTPClient(&cmd):
-		req, ok := parser.ParseHTTPClientCommand(cmd)
-		if !ok {
-			return nil
+		for _, req := range parser.ParseHTTPClientCommands(cmd) {
+			if result := v.checkHTTPRequest(parsed, req); result != nil {
+				return result
+			}
 		}
 
-		return v.checkHTTPRequest(parsed, req)
+		return nil
 
 	default:
 		return nil
@@ -357,14 +358,12 @@ func (v *APIValidator) checkHTTPRequest(
 	parsed *parser.ParseResult,
 	req *parser.HTTPRequest,
 ) *validator.Result {
-	url := parsed.ExpandVars(req.URL)
-
-	host, path := parser.SplitURL(url)
+	host, path := parser.SplitRequestURL(parsed.ExpandVars(req.URL))
 	if !v.isGitHubAPI(host, path) {
 		return nil
 	}
 
-	endpoint := parser.NormalizeAPIEndpoint(url)
+	endpoint := parser.NormalizeAPIEndpoint(path)
 
 	if endpoint == graphqlPath {
 		return v.checkRequestBody(parsed, req)
@@ -421,9 +420,9 @@ func (v *APIValidator) checkScriptText(command string) *validator.Result {
 	}
 
 	for _, req := range parser.FindAPICallsInText(command) {
-		endpoint := parser.NormalizeAPIEndpoint(req.URL)
-
 		host, path := parser.SplitURL(req.URL)
+		endpoint := parser.NormalizeAPIEndpoint(path)
+
 		if host != "" {
 			if !v.isGitHubAPI(host, path) {
 				continue
