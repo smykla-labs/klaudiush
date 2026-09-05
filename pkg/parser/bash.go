@@ -2,6 +2,7 @@ package parser
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -17,9 +18,10 @@ var (
 
 // ParseResult contains the results of parsing a Bash command.
 type ParseResult struct {
-	Commands      []Command   // All commands found
-	FileWrites    []FileWrite // All file write operations
-	GitOperations []Command   // Git commands only
+	Commands      []Command         // All commands found
+	FileWrites    []FileWrite       // All file write operations
+	GitOperations []Command         // Git commands only
+	Assignments   map[string]string // Literal NAME=value assignments
 }
 
 // BashParser parses Bash commands using mvdan.cc/sh.
@@ -49,8 +51,9 @@ func (p *BashParser) Parse(command string) (*ParseResult, error) {
 
 	// Walk the AST to extract commands and file operations
 	walker := &astWalker{
-		commands:   make([]Command, 0),
-		fileWrites: make([]FileWrite, 0),
+		commands:    make([]Command, 0),
+		fileWrites:  make([]FileWrite, 0),
+		assignments: make(map[string]string),
 	}
 
 	syntax.Walk(file, walker.visit)
@@ -68,7 +71,54 @@ func (p *BashParser) Parse(command string) (*ParseResult, error) {
 		Commands:      walker.commands,
 		FileWrites:    walker.fileWrites,
 		GitOperations: gitOps,
+		Assignments:   walker.assignments,
 	}, nil
+}
+
+// maxExpandPasses bounds variable expansion so a self-referential assignment
+// cannot loop.
+const maxExpandPasses = 5
+
+// varRefPattern matches a canonical ${NAME} reference, the form wordToString
+// produces for both $NAME and ${NAME}.
+var varRefPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// ExpandVars substitutes assignments captured from the same command line into
+// s. References with no known assignment are left as they are, so callers can
+// tell a resolved value from one they still cannot see.
+func (r *ParseResult) ExpandVars(s string) string {
+	if len(r.Assignments) == 0 {
+		return s
+	}
+
+	for range maxExpandPasses {
+		if !strings.Contains(s, "${") {
+			break
+		}
+
+		expanded := varRefPattern.ReplaceAllStringFunc(s, func(ref string) string {
+			// ref is exactly "${NAME}", so the name is what the braces enclose.
+			if value, ok := r.Assignments[ref[2:len(ref)-1]]; ok {
+				return value
+			}
+
+			return ref
+		})
+
+		if expanded == s {
+			break
+		}
+
+		s = expanded
+	}
+
+	return s
+}
+
+// HasUnresolvedVars reports whether s still carries a variable reference that
+// could not be expanded.
+func HasUnresolvedVars(s string) bool {
+	return strings.Contains(s, "${")
 }
 
 // HasCommand checks if the parse result contains a command with the given name.

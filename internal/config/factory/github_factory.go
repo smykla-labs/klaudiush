@@ -15,6 +15,16 @@ import (
 
 const defaultLinterTimeout = 10 * time.Second
 
+// ghAPICommandPattern is the cheap prefilter for the gh api validator: the gh
+// api subcommand, the HTTP clients that can reach the same endpoints, and the
+// markers an API client library leaves in an inline script. A client name only
+// counts in command position, so an unrelated command that merely carries a
+// URL does not pay for a parse.
+const ghAPICommandPattern = `\bgh\s+api\b|(^|[\n|&;(])\s*(curl|wget|https?|xhs?)\b|` +
+	`\b(sh|bash|zsh|ksh|dash)\s+-c\b|` +
+	`\b(sudo|doas|env|command|nice|nohup|timeout|xargs|npx|bunx|uv|pnpm|yarn|poetry|pipx)\s|` +
+	`octokit|\.request\(|api\.github\.com|/api/(v3|graphql)/`
+
 // GitHubValidatorFactory creates GitHub CLI validators from configuration.
 type GitHubValidatorFactory struct {
 	cfg        *config.Config
@@ -51,7 +61,39 @@ func (f *GitHubValidatorFactory) CreateValidators(cfg *config.Config) []Validato
 		validators = append(validators, f.createIssueValidator(ghCfg.Issue))
 	}
 
+	// API validator - rejects gh api calls that create commits behind the hook.
+	if ghCfg.API != nil && ghCfg.API.IsEnabled() &&
+		!isValidatorOverridden(cfg.Overrides, "github.api") {
+		validators = append(validators, f.createAPIValidator(ghCfg.API))
+	}
+
 	return validators
+}
+
+func (f *GitHubValidatorFactory) createAPIValidator(
+	cfg *config.APIValidatorConfig,
+) ValidatorWithPredicate {
+	var rc validator.RuleChecker
+
+	if f.ruleEngine != nil {
+		rc = rules.NewRuleValidatorAdapter(
+			f.ruleEngine,
+			rules.ValidatorGitHubAPI,
+			rules.WithAdapterLogger(f.log),
+		)
+	}
+
+	return ValidatorWithPredicate{
+		Validator: wrapValidatorWithSeverity(
+			githubvalidators.NewAPIValidator(cfg, f.log, rc),
+			cfg,
+		),
+		Predicate: validator.And(
+			beforeToolOrProviderAfterToolPredicate(),
+			validator.ToolTypeIs(hook.ToolTypeBash),
+			validator.CommandMatches(ghAPICommandPattern),
+		),
+	}
 }
 
 func (f *GitHubValidatorFactory) createIssueValidator(

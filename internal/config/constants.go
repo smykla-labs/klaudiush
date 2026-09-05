@@ -29,7 +29,9 @@ const (
 	sectionNotification = "notification"
 	sectionSecrets      = "secrets"
 	sectionShell        = "shell"
+	sectionGitHub       = "github"
 
+	validatorGHAPI        = "api"
 	validatorCommit       = "commit"
 	validatorPush         = "push"
 	validatorFetch        = "fetch"
