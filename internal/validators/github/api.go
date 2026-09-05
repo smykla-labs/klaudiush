@@ -29,6 +29,9 @@ const (
 	// maxRequestBodyBytes caps how much of a request body file is read.
 	maxRequestBodyBytes = 1 << 20
 
+	// maxScriptDepth bounds how far nested shell -c invocations are unwrapped.
+	maxScriptDepth = 3
+
 	// bypassExplanation names what a commit made this way skips.
 	bypassExplanation = "bypassing commit validation (GPG signing, sign-off, conventional commit format)"
 
@@ -64,6 +67,16 @@ var scriptInterpreters = map[string]bool{
 	"zsh":       true,
 	"ksh":       true,
 	"dash":      true,
+}
+
+// shellInterpreters run a command line handed to them after -c, so that script
+// is parsed and checked like any other command line.
+var shellInterpreters = map[string]bool{
+	"sh":   true,
+	"bash": true,
+	"zsh":  true,
+	"ksh":  true,
+	"dash": true,
 }
 
 // blockedEndpoint pairs an HTTP method with a compiled endpoint pattern.
@@ -210,10 +223,8 @@ func (v *APIValidator) Validate(ctx context.Context, hookCtx *hook.Context) *val
 		return validator.Warn(fmt.Sprintf("Failed to parse command: %v", err))
 	}
 
-	for _, cmd := range parsed.Commands {
-		if result := v.checkCommand(parsed, cmd); result != nil {
-			return result
-		}
+	if result := v.checkParsed(parsed, 0); result != nil {
+		return result
 	}
 
 	log.Debug("No commit-creating API calls found")
@@ -221,10 +232,22 @@ func (v *APIValidator) Validate(ctx context.Context, hookCtx *hook.Context) *val
 	return validator.Pass()
 }
 
+// checkParsed checks every command of one parsed command line.
+func (v *APIValidator) checkParsed(parsed *parser.ParseResult, depth int) *validator.Result {
+	for _, cmd := range parsed.Commands {
+		if result := v.checkCommand(parsed, cmd, depth); result != nil {
+			return result
+		}
+	}
+
+	return nil
+}
+
 // checkCommand dispatches one parsed command to the matching request source.
 func (v *APIValidator) checkCommand(
 	parsed *parser.ParseResult,
 	cmd parser.Command,
+	depth int,
 ) *validator.Result {
 	switch {
 	case parser.IsGHAPI(&cmd):
@@ -247,7 +270,11 @@ func (v *APIValidator) checkCommand(
 		return nil
 
 	case v.checksHTTPClients() && scriptInterpreters[cmd.Name]:
-		return v.checkScriptText(scriptText(cmd))
+		if result := v.checkScriptText(scriptText(cmd)); result != nil {
+			return result
+		}
+
+		return v.checkShellScript(cmd, depth)
 
 	default:
 		return nil
@@ -258,6 +285,39 @@ func (v *APIValidator) checkCommand(
 // the arguments or on stdin.
 func scriptText(cmd parser.Command) string {
 	return strings.Join(cmd.Args, " ") + "\n" + cmd.Stdin
+}
+
+// checkShellScript parses the command line a shell was given after -c and
+// checks it, so wrapping a call in sh -c does not hide it.
+func (v *APIValidator) checkShellScript(cmd parser.Command, depth int) *validator.Result {
+	if depth >= maxScriptDepth || !shellInterpreters[cmd.Name] {
+		return nil
+	}
+
+	script := shellScriptArg(cmd)
+	if script == "" {
+		return nil
+	}
+
+	inner, err := parser.NewBashParser().Parse(script)
+	if err != nil {
+		v.Logger().Debug("Cannot parse shell script argument", "error", err)
+
+		return nil
+	}
+
+	return v.checkParsed(inner, depth+1)
+}
+
+// shellScriptArg returns the command line a shell was given after -c.
+func shellScriptArg(cmd parser.Command) string {
+	for i, arg := range cmd.Args {
+		if arg == "-c" && i+1 < len(cmd.Args) {
+			return cmd.Args[i+1]
+		}
+	}
+
+	return ""
 }
 
 // checkAPICommand returns a failure when the call creates a commit, nil otherwise.
@@ -286,7 +346,7 @@ func (v *APIValidator) checkREST(
 		))
 	}
 
-	if v.isOpaqueWrite(apiCmd, endpoint) {
+	if v.isOpaqueWrite(apiCmd.Method, endpoint) {
 		return v.failUnverifiable(fmt.Sprintf(
 			"gh api %s %s cannot be checked: the endpoint is not spelled literally, "+
 				"so there is no way to tell whether it creates a commit",
@@ -299,8 +359,8 @@ func (v *APIValidator) checkREST(
 
 // isOpaqueWrite reports whether the call changes server state through an
 // endpoint that could not be resolved to a literal path.
-func (v *APIValidator) isOpaqueWrite(apiCmd *parser.GHAPICommand, endpoint string) bool {
-	if !v.blocksUnverifiable() || !apiCmd.IsWriteMethod() {
+func (v *APIValidator) isOpaqueWrite(method, endpoint string) bool {
+	if !v.blocksUnverifiable() || !parser.IsWriteMethod(method) {
 		return false
 	}
 
@@ -441,6 +501,16 @@ func (v *APIValidator) checkHTTPRequest(
 		))
 	}
 
+	// The host is known to be GitHub here, so an unreadable path is as
+	// unprovable as it is for gh api.
+	if v.isOpaqueWrite(req.Method, endpoint) {
+		return v.failUnverifiable(fmt.Sprintf(
+			"%s %s %s cannot be checked: the endpoint is not spelled literally, "+
+				"so there is no way to tell whether it creates a commit",
+			req.Tool, req.Method, describeEndpoint(endpoint),
+		))
+	}
+
 	return nil
 }
 
@@ -453,9 +523,20 @@ func (v *APIValidator) checkRequestBody(
 	body := req.Body
 
 	if req.BodyFile != "" {
-		if content, ok := v.readFile(parsed, req.BodyFile, req.WorkingDirectory, req.Location); ok {
-			body += "\n" + content
+		content, ok := v.readFile(parsed, req.BodyFile, req.WorkingDirectory, req.Location)
+		if !ok {
+			if !v.blocksUnverifiable() {
+				return nil
+			}
+
+			return v.failUnverifiable(fmt.Sprintf(
+				"%s sends a GraphQL body from %s, which cannot be read, "+
+					"so there is no way to tell whether it creates a commit",
+				req.Tool, req.BodyFile,
+			))
 		}
+
+		body += "\n" + content
 	}
 
 	if mutation := v.matchMutation(body); mutation != "" {
@@ -463,6 +544,14 @@ func (v *APIValidator) checkRequestBody(
 			"%s sends the %s mutation to the GitHub GraphQL API, "+
 				"which creates a commit, %s",
 			req.Tool, mutation, bypassExplanation,
+		))
+	}
+
+	if strings.TrimSpace(body) == "" && req.IsWriteMethod() && v.blocksUnverifiable() {
+		return v.failUnverifiable(fmt.Sprintf(
+			"%s sends a GraphQL query that is not spelled out in the command, "+
+				"so there is no way to tell whether it creates a commit",
+			req.Tool,
 		))
 	}
 

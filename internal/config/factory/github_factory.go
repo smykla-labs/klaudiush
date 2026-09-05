@@ -21,6 +21,7 @@ const defaultLinterTimeout = 10 * time.Second
 // counts in command position, so an unrelated command that merely carries a
 // URL does not pay for a parse.
 const ghAPICommandPattern = `\bgh\s+api\b|(^|[\n|&;(])\s*(curl|wget|https?|xhs?)\b|` +
+	`\b(sh|bash|zsh|ksh|dash)\s+-c\b|` +
 	`octokit|\.request\(|api\.github\.com|/api/(v3|graphql)/`
 
 // GitHubValidatorFactory creates GitHub CLI validators from configuration.

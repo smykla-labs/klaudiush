@@ -37,7 +37,7 @@ type HTTPRequest struct {
 
 // IsWriteMethod reports whether the request changes server state.
 func (r *HTTPRequest) IsWriteMethod() bool {
-	return writeMethods[r.Method]
+	return IsWriteMethod(r.Method)
 }
 
 // flagRole is what a client flag's value contributes to the request.

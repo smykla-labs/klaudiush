@@ -138,9 +138,14 @@ type GHAPICommand struct {
 	RawArgs []string
 }
 
+// IsWriteMethod reports whether an HTTP method changes server state.
+func IsWriteMethod(method string) bool {
+	return writeMethods[method]
+}
+
 // IsWriteMethod reports whether the request changes server state.
 func (c *GHAPICommand) IsWriteMethod() bool {
-	return writeMethods[c.Method]
+	return IsWriteMethod(c.Method)
 }
 
 // IsGHAPI checks if a command is a gh api command.

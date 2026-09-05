@@ -314,6 +314,49 @@ var _ = Describe("APIValidator", func() {
 			),
 		)
 
+		It("blocks a GitHub write whose path cannot be resolved", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				`curl -X PUT "https://api.github.com/${ENDPOINT}" -d '{}'`,
+			))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH003"))
+		})
+
+		It("blocks a graphql write whose body file cannot be read", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				`curl -X POST https://api.github.com/graphql -d @mutation.json`,
+			))
+
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference.Code()).To(Equal("GH003"))
+		})
+
+		It("leaves an unresolved write to another host alone", func() {
+			result := apiValidator.Validate(ctx, bashContext(
+				`curl -X PUT "https://example.com/${ENDPOINT}" -d '{}'`,
+			))
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		DescribeTable(
+			"unwraps a shell interpreter's script",
+			func(command string) {
+				result := apiValidator.Validate(ctx, bashContext(command))
+
+				Expect(result.Passed).To(BeFalse())
+				Expect(result.Reference.Code()).To(Equal("GH002"))
+			},
+			Entry(
+				"bash -c running gh api",
+				`bash -c 'gh api -X PUT repos/o/r/contents/x -f message=y'`,
+			),
+			Entry(
+				"sh -c running curl",
+				`sh -c "curl -X PUT https://api.github.com/repos/o/r/contents/x -d '{}'"`,
+			),
+		)
+
 		It("names the tool that sends the request", func() {
 			result := apiValidator.Validate(ctx, bashContext(
 				`curl -X PUT https://api.github.com/repos/o/r/contents/x -d '{}'`,
