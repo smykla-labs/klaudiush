@@ -116,6 +116,22 @@ func ToolTypeIn(toolTypes ...hook.ToolType) Predicate {
 	}
 }
 
+// ToolNameMatches returns a predicate that matches if any alias of the tool
+// name matches the pattern. Use it to reach MCP tools, whose provider-specific
+// name (e.g. "mcp__github__create_pull_request") is the only thing identifying
+// them.
+func ToolNameMatches(pattern string) Predicate {
+	re := regexp.MustCompile(pattern)
+
+	return func(ctx *hook.Context) bool {
+		if ctx == nil {
+			return false
+		}
+
+		return slices.ContainsFunc(ctx.ToolNames(), re.MatchString)
+	}
+}
+
 // CommandMatches returns a predicate that matches if the command matches the pattern.
 func CommandMatches(pattern string) Predicate {
 	re := regexp.MustCompile(pattern)

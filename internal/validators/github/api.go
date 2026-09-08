@@ -3,14 +3,13 @@ package github
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/smykla-skalski/klaudiush/internal/rules"
 	"github.com/smykla-skalski/klaudiush/internal/validator"
+	"github.com/smykla-skalski/klaudiush/internal/validators"
 	"github.com/smykla-skalski/klaudiush/pkg/config"
 	"github.com/smykla-skalski/klaudiush/pkg/hook"
 	"github.com/smykla-skalski/klaudiush/pkg/logger"
@@ -516,38 +515,9 @@ func (v *APIValidator) readFile(
 	return v.readBodyFile(filepath.Clean(path))
 }
 
-// readBodyFile reads at most maxRequestBodyBytes of a regular file. The path
-// comes from the command being validated, so an endless character device such
-// as /dev/zero must not be read to the end, and a body far larger than any
-// GraphQL document carries nothing worth matching.
+// readBodyFile reads at most maxRequestBodyBytes of a regular file.
 func (v *APIValidator) readBodyFile(path string) (string, bool) {
-	log := v.Logger()
-
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		log.Debug("Skipping API request body file", "path", path, "error", err)
-
-		return "", false
-	}
-
-	//nolint:gosec // path comes from the tool invocation klaudiush is validating
-	file, err := os.Open(path)
-	if err != nil {
-		log.Debug("Cannot open API request body file", "path", path, "error", err)
-
-		return "", false
-	}
-
-	defer func() { _ = file.Close() }()
-
-	content, err := io.ReadAll(io.LimitReader(file, maxRequestBodyBytes))
-	if err != nil {
-		log.Debug("Cannot read API request body file", "path", path, "error", err)
-
-		return "", false
-	}
-
-	return string(content), true
+	return validators.ReadCapped(v.Logger(), path, maxRequestBodyBytes)
 }
 
 // checkHTTPRequest applies the same endpoint rules to a curl, wget, httpie or

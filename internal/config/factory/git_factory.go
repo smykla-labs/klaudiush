@@ -156,7 +156,9 @@ func (f *GitValidatorFactory) createCommitValidator(
 		),
 		Predicate: validator.And(
 			beforeToolOrProviderAfterToolPredicate(),
-			validator.GitSubcommandIs("commit"),
+			// merge, revert, cherry-pick and tag reach this validator for the AI
+			// attribution rule alone; the commit contract applies to commit only.
+			validator.GitSubcommandIn("commit", "merge", "revert", "cherry-pick", "tag"),
 		),
 	}
 }
@@ -228,8 +230,14 @@ func (f *GitValidatorFactory) createPRValidator(
 		),
 		Predicate: validator.And(
 			beforeToolOrProviderAfterToolPredicate(),
-			validator.ToolTypeIs(hook.ToolTypeBash),
-			validator.CommandContains("gh pr create"),
+			validator.Or(
+				validator.And(
+					validator.ToolTypeIs(hook.ToolTypeBash),
+					validator.CommandMatches(gitvalidators.PRWritePattern),
+				),
+				// MCP servers create and update pull requests without a shell.
+				validator.ToolNameMatches(gitvalidators.MCPPullRequestToolPattern),
+			),
 		),
 	}
 }
