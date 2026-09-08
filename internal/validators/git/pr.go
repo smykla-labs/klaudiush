@@ -2,7 +2,9 @@ package git
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -16,10 +18,14 @@ import (
 )
 
 const (
-	ghCommand         = "gh"
-	prSubcommand      = "pr"
-	createOperation   = "create"
-	minGHPRCreateArgs = 2
+	ghCommand       = "gh"
+	prSubcommand    = "pr"
+	createOperation = "create"
+	editOperation   = "edit"
+	minGHPRArgs     = 2
+
+	// maxBodyFileBytes caps how much of a --body-file is read for validation.
+	maxBodyFileBytes = 1 << 20
 )
 
 var (
@@ -33,6 +39,37 @@ var (
 	heredocRegex       = regexp.MustCompile(`<<'?EOF'?\s*\n((?s:.+?))\nEOF`)
 	bodyRegex          = regexp.MustCompile(`--body\s+"([^"]+)"`)
 	bodySingleRegex    = regexp.MustCompile(`--body\s+'([^']+)'`)
+	bodyFileRegex      = regexp.MustCompile(
+		`(?:--body-file|-F)[=\s]+("[^"]+"|'[^']+'|[^\s)'";|&]+)`,
+	)
+
+	// apiBodyFileRegex captures a request body read from a file: gh api
+	// --input FILE or -F field=@FILE, and an HTTP client's --data @FILE.
+	apiBodyFileRegex = regexp.MustCompile(
+		`(?:--input[=\s]+|--data(?:-raw|-binary|-ascii)?[=\s]*@|-d\s*@|-F\s*[^\s=]+=@)` +
+			`("[^"]+"|'[^']+'|[^\s)'";|&]+)`,
+	)
+
+	// prWriteRegex matches any command line that writes a pull request title or
+	// body: a gh pr create/edit however it is wrapped (env, sudo, bash -c, a
+	// script), a REST call to a pulls endpoint, or a createPullRequest /
+	// updatePullRequest GraphQL mutation. The request text always survives the
+	// wrapping, so matching the text covers every wrapper without modelling any
+	// of them.
+	prWriteRegex = regexp.MustCompile(PRWritePattern)
+
+	// PRWritePattern matches any command line that writes a pull request title
+	// or body. It is also the validator's registration predicate, so a command
+	// the validator would inspect always reaches it - a substring gate would
+	// miss "gh  pr  create". A merge is included because --body becomes the
+	// squash commit body.
+	PRWritePattern = `\bgh\s+pr\s+(?:create|edit|merge)\b` +
+		`|repos/[^/\s"']+/[^/\s"']+/pulls` +
+		`|(?i:createPullRequest|updatePullRequest)`
+
+	// MCPPullRequestToolPattern matches the MCP tools that create or update a
+	// pull request, e.g. "mcp__github__create_pull_request".
+	MCPPullRequestToolPattern = `(?i)(create|update)_pull_request`
 )
 
 // PRValidator validates gh pr create commands
@@ -217,6 +254,10 @@ func (v *PRValidator) Validate(ctx context.Context, hookCtx *hook.Context) *vali
 		return result
 	}
 
+	if !hookCtx.IsBashTool() {
+		return v.validateMCPPullRequest(hookCtx)
+	}
+
 	// Parse the command
 	bashParser := parser.NewBashParser()
 
@@ -226,36 +267,198 @@ func (v *PRValidator) Validate(ctx context.Context, hookCtx *hook.Context) *vali
 		return validator.Warn(fmt.Sprintf("Failed to parse command: %v", err))
 	}
 
-	// Find gh pr create commands
+	fullCmd := hookCtx.GetCommand()
+
+	// A body file is named relative to the directory the command runs in, which
+	// a preceding "cd" may have changed, so every directory in the chain is a
+	// candidate base for resolving it.
+	dirs := commandDirs(result, hookCtx.GetWorkingDir())
+
+	op := ""
+
 	for _, cmd := range result.Commands {
-		if !v.isGHPRCreate(&cmd) {
-			continue
+		if found := ghPROperation(&cmd); found != "" {
+			op = found
+
+			break
 		}
-
-		// Extract PR metadata from the full command
-		fullCmd := hookCtx.GetCommand()
-		prData := v.extractPRData(fullCmd)
-
-		// Validate PR
-		return v.validatePR(ctx, prData)
 	}
 
-	log.Debug("No gh pr create commands found")
+	// A pull request written any other way - through the GitHub API, or through
+	// a gh pr the bash parser reports under a wrapper - is still a pull request
+	// description, so it gets the same attribution check even though none of the
+	// gh pr contract applies to it.
+	if op == "" && !prWriteRegex.MatchString(fullCmd) {
+		log.Debug("No pull request write found")
+
+		return validator.Pass()
+	}
+
+	// gh takes the body from the last --body-file it is given, so only that file
+	// is the pull request body - an earlier one is never sent.
+	bodyFile := v.readBodyFiles(bodyFileRegex, fullCmd, dirs, true)
+
+	// Attribution is checked before anything else and against the whole command,
+	// so no flag spelling can carry a footer past it.
+	if v.shouldBlockAIAttribution() {
+		apiBody := v.readBodyFiles(apiBodyFileRegex, fullCmd, dirs, false)
+		if attrResult := v.checkAIAttribution(
+			fullCmd + "\n" + bodyFile + "\n" + apiBody,
+		); attrResult != nil {
+			return attrResult
+		}
+	}
+
+	// Only gh pr create carries the full title/body/label contract: an edit is a
+	// partial update, and an API call is not a gh pr invocation at all.
+	if op != createOperation {
+		return validator.Pass()
+	}
+
+	return v.validatePR(ctx, v.extractPRData(fullCmd, bodyFile))
+}
+
+// validateMCPPullRequest checks an MCP tool call that creates or updates a pull
+// request. Such a call never reaches a shell, so no command text exists to
+// scan - the title and body arrive as tool arguments instead.
+func (v *PRValidator) validateMCPPullRequest(hookCtx *hook.Context) *validator.Result {
+	if result := v.checkAIAttribution(mcpToolText(hookCtx)); result != nil {
+		return result
+	}
 
 	return validator.Pass()
 }
 
-// isGHPRCreate checks if a command is gh pr create
-func (*PRValidator) isGHPRCreate(cmd *parser.Command) bool {
-	if cmd.Name != ghCommand {
-		return false
+// mcpToolText joins every string argument of an MCP tool call, so attribution
+// is caught whichever field name the server uses for the description.
+func mcpToolText(hookCtx *hook.Context) string {
+	var text strings.Builder
+
+	text.WriteString(hookCtx.ToolInput.Content)
+	text.WriteString("\n")
+
+	for _, raw := range hookCtx.ToolInput.Additional {
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			continue
+		}
+
+		text.WriteString(value)
+		text.WriteString("\n")
 	}
 
-	if len(cmd.Args) < minGHPRCreateArgs {
-		return false
+	return text.String()
+}
+
+// ghPROperation returns the gh pr subcommand being run - "create" or "edit" -
+// or "" when the command is neither.
+func ghPROperation(cmd *parser.Command) string {
+	if cmd.Name != ghCommand || len(cmd.Args) < minGHPRArgs {
+		return ""
 	}
 
-	return cmd.Args[0] == prSubcommand && cmd.Args[1] == createOperation
+	if cmd.Args[0] != prSubcommand {
+		return ""
+	}
+
+	if cmd.Args[1] == createOperation || cmd.Args[1] == editOperation {
+		return cmd.Args[1]
+	}
+
+	return ""
+}
+
+// readBodyFiles reads the files the command takes a request body from, so their
+// text is validated like an inline body. With lastOnly set, only the last match
+// is read - the way a repeated flag overwrites its earlier value. An unreadable
+// file, stdin, or an unresolved expansion contributes nothing - heredoc text
+// handed to "--body-file -" is already part of the command string.
+func (v *PRValidator) readBodyFiles(
+	re *regexp.Regexp,
+	command string,
+	dirs []string,
+	lastOnly bool,
+) string {
+	matches := re.FindAllStringSubmatch(command, -1)
+	if lastOnly && len(matches) > 1 {
+		matches = matches[len(matches)-1:]
+	}
+
+	var contents strings.Builder
+
+	for _, match := range matches {
+		path := strings.Trim(match[1], `"'`)
+
+		// "-" is stdin, a "$" or backtick is an unresolved expansion, and an "="
+		// means the token is a gh api field ("-F title=x"), not a path.
+		if path == "-" || strings.ContainsAny(path, "$`=") {
+			continue
+		}
+
+		data, ok := v.readBodyFile(path, dirs)
+		if !ok {
+			continue
+		}
+
+		contents.WriteString(data)
+		contents.WriteString("\n")
+	}
+
+	return contents.String()
+}
+
+// readBodyFile reads a body file named on the command line, resolving a
+// relative path against each candidate directory until one holds it.
+func (v *PRValidator) readBodyFile(path string, dirs []string) (string, bool) {
+	if filepath.IsAbs(path) {
+		return v.readCappedFile(filepath.Clean(path))
+	}
+
+	for _, dir := range dirs {
+		if data, ok := v.readCappedFile(filepath.Clean(filepath.Join(dir, path))); ok {
+			return data, true
+		}
+	}
+
+	return "", false
+}
+
+// commandDirs returns every effective working directory in the parsed command
+// line, resolved against the hook's own directory, with that directory first.
+// Each "cd" target is added as well: the parser does not carry the effective
+// directory into a subshell, so "(cd docs && gh pr edit --body-file x.md)"
+// would otherwise resolve the file against the wrong directory.
+func commandDirs(result *parser.ParseResult, hookDir string) []string {
+	dirs := []string{hookDir}
+
+	add := func(dir string) {
+		if dir == "" {
+			return
+		}
+
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(hookDir, dir)
+		}
+
+		if !slices.Contains(dirs, dir) {
+			dirs = append(dirs, dir)
+		}
+	}
+
+	for _, cmd := range result.Commands {
+		add(cmd.WorkingDirectory)
+
+		if cmd.Name == "cd" && len(cmd.Args) > 0 {
+			add(cmd.Args[0])
+		}
+	}
+
+	return dirs
+}
+
+// readCappedFile reads at most maxBodyFileBytes of a regular file.
+func (v *PRValidator) readCappedFile(path string) (string, bool) {
+	return validators.ReadCapped(v.Logger(), path, maxBodyFileBytes)
 }
 
 // PRData holds extracted PR metadata
@@ -273,8 +476,10 @@ type PRData struct {
 	BodyIsExpansion  bool
 }
 
-// extractPRData extracts PR title, body, base branch, and labels from gh command
-func (v *PRValidator) extractPRData(command string) PRData {
+// extractPRData extracts PR title, body, base branch, and labels from gh command.
+// bodyFile carries the already-read contents of a --body-file, used when no
+// inline body is present.
+func (v *PRValidator) extractPRData(command, bodyFile string) PRData {
 	data := PRData{
 		Labels: []string{},
 	}
@@ -316,6 +521,8 @@ func (v *PRValidator) extractPRData(command string) PRData {
 		data.BodyIsExpansion = isBarePRExpansion(matches[1])
 	} else if matches := bodySingleRegex.FindStringSubmatch(command); len(matches) > 1 {
 		data.Body = matches[1] + "\n"
+	} else if bodyFile != "" {
+		data.Body = bodyFile
 	}
 
 	return data
@@ -371,9 +578,6 @@ func (v *PRValidator) validatePR(ctx context.Context, data PRData) *validator.Re
 	// 2. Check for forbidden patterns in title and body
 	forbiddenErrors := v.checkForbiddenPatterns(titleForChecks, bodyForChecks)
 	allErrors = append(allErrors, forbiddenErrors...)
-
-	// 2b. Check for AI attribution in title and body
-	allErrors = append(allErrors, v.checkAIAttribution(titleForChecks, bodyForChecks)...)
 
 	// 3. Extract PR type for body validation
 	validTypes := v.getValidTypes()
@@ -707,33 +911,22 @@ func (v *PRValidator) getForbiddenPatterns() []string {
 	return config.DefaultForbiddenPatterns
 }
 
-// checkAIAttribution checks for AI attribution in the PR title and body.
+// checkAIAttribution rejects AI generation attribution anywhere in a gh pr
+// create/edit command - the title, an inline body, a heredoc, or a --body-file.
+// The whole command text is scanned rather than a parsed body so no flag
+// spelling (--body, -b, --body-file, heredoc) can carry a footer past the check.
 // It catches both plain phrasing ("Generated with Claude Code") and markdown
 // footer links, while allow-listing legitimate references (CLAUDE.md, klaudiush,
 // claude-hooks). Detection reuses containsAIAttribution so the PR and commit
-// paths stay in sync; messages are PR-specific to point at the right field.
-func (v *PRValidator) checkAIAttribution(title, body string) []string {
+// paths stay in sync, and it reports under GIT012 - the same code as
+// commit-message attribution - so disabling the general PR-validation code
+// (GIT023) does not silently disable it too.
+func (v *PRValidator) checkAIAttribution(text string) *validator.Result {
 	if !v.shouldBlockAIAttribution() {
 		return nil
 	}
 
-	errs := make([]string, 0)
-
-	if title != "" && containsAIAttribution(title) {
-		errs = append(
-			errs,
-			"PR title contains AI attribution - remove any AI generation attribution",
-		)
-	}
-
-	if body != "" && containsAIAttribution(body) {
-		errs = append(
-			errs,
-			"PR body contains AI attribution - remove any AI generation attribution",
-		)
-	}
-
-	return errs
+	return aiAttributionResult(text, "PR")
 }
 
 // shouldBlockAIAttribution returns whether AI attribution should be blocked in

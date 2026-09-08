@@ -772,7 +772,7 @@ func defaultExceptionsMap() map[string]any {
 	return map[string]any{
 		keyEnabled:     true,
 		"token_prefix": defaultExceptionTokenPrefix,
-		"policies":     map[string]any{},
+		"policies":     defaultExceptionPoliciesMap(),
 		"rate_limit": map[string]any{
 			keyEnabled:     true,
 			"max_per_hour": defaultExceptionRateLimitPerH,
@@ -785,6 +785,21 @@ func defaultExceptionsMap() map[string]any {
 			"max_size_mb":  defaultExceptionAuditMaxSizeMB,
 			"max_age_days": defaultExceptionAuditMaxAgeDays,
 			"max_backups":  defaultExceptionAuditMaxBackups,
+		},
+	}
+}
+
+// defaultExceptionPoliciesMap denies an exception token for the codes whose
+// whole point is that the artefact outlives the session. AI attribution in a
+// commit message or pull request description is permanent and public, and the
+// assistant writing the commit can just as easily write its own exception
+// token, so GIT012 ships with the escape hatch closed. Set
+// allow_exception = true under [exceptions.policies.GIT012] to reopen it.
+func defaultExceptionPoliciesMap() map[string]any {
+	return map[string]any{
+		"GIT012": map[string]any{
+			keyEnabled:        true,
+			"allow_exception": false,
 		},
 	}
 }

@@ -61,11 +61,12 @@ type BranchRulesData struct {
 
 // PRRulesData holds PR validation rules.
 type PRRulesData struct {
-	TitleMaxLength    int
-	RequireBody       bool
-	TitleStyle        string
-	ValidTypes        []string
-	ForbiddenPatterns []string
+	TitleMaxLength     int
+	RequireBody        bool
+	TitleStyle         string
+	ValidTypes         []string
+	ForbiddenPatterns  []string
+	BlockAIAttribution bool
 }
 
 // FileLinterData describes a single file linter.
@@ -268,11 +269,12 @@ func collectBranchRules(git *config.GitConfig) *BranchRulesData {
 
 func collectPRRules(git *config.GitConfig) *PRRulesData {
 	data := &PRRulesData{
-		TitleMaxLength:    config.DefaultTitleMaxLength,
-		RequireBody:       true,
-		TitleStyle:        prTitleStyleConventional,
-		ValidTypes:        config.DefaultValidTypes,
-		ForbiddenPatterns: config.DefaultForbiddenPatterns,
+		TitleMaxLength:     config.DefaultTitleMaxLength,
+		RequireBody:        true,
+		TitleStyle:         prTitleStyleConventional,
+		ValidTypes:         config.DefaultValidTypes,
+		ForbiddenPatterns:  config.DefaultForbiddenPatterns,
+		BlockAIAttribution: true,
 	}
 
 	pr := git.PR
@@ -300,6 +302,10 @@ func collectPRRules(git *config.GitConfig) *PRRulesData {
 
 	if len(pr.ForbiddenPatterns) > 0 {
 		data.ForbiddenPatterns = pr.ForbiddenPatterns
+	}
+
+	if pr.BlockAIAttribution != nil {
+		data.BlockAIAttribution = *pr.BlockAIAttribution
 	}
 
 	return data

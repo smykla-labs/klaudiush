@@ -70,6 +70,9 @@ Title style: {{.PR.TitleStyle}}.
 {{- if and (ne .PR.TitleStyle "none") (or (eq .PR.TitleStyle "conventional") (eq .PR.TitleStyle "auto"))}}
 Types: {{join .PR.ValidTypes ", "}}
 {{- end}}
+{{- if .PR.BlockAIAttribution}}
+No AI attribution in PR titles or descriptions.
+{{- end}}
 {{- if .PR.ForbiddenPatterns}}
 Forbidden: {{join .PR.ForbiddenPatterns ", "}}
 {{- end}}

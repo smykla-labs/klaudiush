@@ -872,6 +872,40 @@ EOF
 				Expect(result.Message).To(ContainSubstring("AI attribution"))
 			})
 
+			DescribeTable("attribution reaches every message-carrying flag and subcommand",
+				func(command string, blocked bool) {
+					ctx := &hook.Context{
+						EventType: hook.EventTypePreToolUse,
+						ToolName:  hook.ToolTypeBash,
+						ToolInput: hook.ToolInput{Command: command},
+					}
+
+					result := validator.Validate(context.Background(), ctx)
+					Expect(result.Passed).To(Equal(!blocked))
+				},
+				Entry("a second -m carrying the footer",
+					`git commit -sS -m "feat(a): add thing" `+
+						`-m "🤖 Generated with [Claude Code](https://claude.com/claude-code)"`, true),
+				Entry("a --trailer carrying the co-author",
+					`git commit -sS -m "feat(a): add thing" `+
+						`--trailer "Co-authored-by: Claude <noreply@anthropic.com>"`, true),
+				Entry("--message= carrying the footer",
+					`git commit -sS --message="feat(a): add thing`+"\n\n"+
+						`🤖 Generated with [Claude Code](https://claude.com/claude-code)"`, true),
+				Entry("git merge -m",
+					`git merge --no-ff -m "merge branch`+"\n\n"+
+						`🤖 Generated with [Claude Code](https://claude.com/claude-code)" feat/x`, true),
+				Entry("git tag -m",
+					`git tag -a v1.0.0 -m `+
+						`"🤖 Generated with [Claude Code](https://claude.com/claude-code)"`, true),
+				Entry("git cherry-pick -m",
+					`git cherry-pick -x abc123 -m `+
+						`"🤖 Generated with [Claude Code](https://claude.com/claude-code)"`, true),
+				Entry("a plain commit", `git commit -sS -m "feat(a): add thing"`, false),
+				Entry("a plain merge", `git merge --no-ff feat/x`, false),
+				Entry("a plain tag", `git tag -a v1.0.0 -m "release v1.0.0"`, false),
+			)
+
 			It("should pass with CLAUDE.md file reference", func() {
 				ctx := &hook.Context{
 					EventType: hook.EventTypePreToolUse,

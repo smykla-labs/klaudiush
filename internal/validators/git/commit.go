@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -91,7 +92,21 @@ func (v *CommitValidator) Validate(ctx context.Context, hookCtx *hook.Context) *
 
 		// Check if this is a commit command
 		if gitCmd.Subcommand != commitSubcommand {
-			continue
+			if !slices.Contains(otherMessageSubcommands, gitCmd.Subcommand) {
+				continue
+			}
+
+			// merge, revert, cherry-pick and tag write a message too, but none
+			// of the commit contract applies to them - only attribution does.
+			if result := v.checkCommandAIAttribution(hookCtx.GetCommand()); result != nil {
+				return result
+			}
+
+			return validator.Pass()
+		}
+
+		if result := v.checkCommandAIAttribution(hookCtx.GetCommand()); result != nil {
+			return result
 		}
 
 		// Validate the git commit command
@@ -101,6 +116,22 @@ func (v *CommitValidator) Validate(ctx context.Context, hookCtx *hook.Context) *
 	log.Debug("No git commit commands found")
 
 	return validator.Pass()
+}
+
+// otherMessageSubcommands are the git subcommands that write a commit message
+// without being a commit, so only the attribution rule applies to them.
+var otherMessageSubcommands = []string{"merge", "revert", "cherry-pick", "tag"}
+
+// checkCommandAIAttribution rejects AI attribution anywhere in the raw command
+// text. The parsed message keeps one value per flag, so a second -m, a
+// --trailer, or a --file= spelling would otherwise carry a footer past the
+// message rules; the command text carries all of them.
+func (v *CommitValidator) checkCommandAIAttribution(command string) *validator.Result {
+	if !v.shouldBlockAIAttribution() {
+		return nil
+	}
+
+	return aiAttributionResult(command, "Commit message")
 }
 
 // validateGitCommit validates a single git commit command
