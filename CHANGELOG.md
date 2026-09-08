@@ -5,6 +5,21 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.0](https://github.com/smykla-skalski/klaudiush/compare/v1.38.0...v1.39.0) (2026-09-08)
+
+### Features
+
+* **github:** reject API calls that create commits ([#617](https://github.com/smykla-skalski/klaudiush/issues/617)) ([47877a2](https://github.com/smykla-skalski/klaudiush/commit/47877a2e20df54cdf5f2c6be7f03281847fa9504))
+
+### Bug Fixes
+
+* **deps:** update go-github to v91 ([#610](https://github.com/smykla-skalski/klaudiush/issues/610)) ([4210b18](https://github.com/smykla-skalski/klaudiush/commit/4210b18d846bdd5ea2b3347535fdea9e3ff2cb68))
+* **deps:** update module charm.land/bubbles/v2 to v2.2.1 ([#602](https://github.com/smykla-skalski/klaudiush/issues/602)) ([8616df6](https://github.com/smykla-skalski/klaudiush/commit/8616df6b65593cd531ef02917f486f78a40750ca))
+* **deps:** update module github.com/mattn/go-runewidth to v0.0.29 ([#608](https://github.com/smykla-skalski/klaudiush/issues/608)) ([466378c](https://github.com/smykla-skalski/klaudiush/commit/466378ccf1032562b9da807439f2b6b2564feff0))
+* **deps:** update module github.com/onsi/gomega to v1.43.0 ([#604](https://github.com/smykla-skalski/klaudiush/issues/604)) ([a220011](https://github.com/smykla-skalski/klaudiush/commit/a220011bbb2dd6acd8a8625ee6f1489d9951575d))
+* **deps:** update module mvdan.cc/sh/v3 to v3.14.0 ([#606](https://github.com/smykla-skalski/klaudiush/issues/606)) ([10fec48](https://github.com/smykla-skalski/klaudiush/commit/10fec488f3041949d8157f952f707009231d431e))
+* **git:** reject ai attribution on every path ([#620](https://github.com/smykla-skalski/klaudiush/issues/620)) ([d7cbbc3](https://github.com/smykla-skalski/klaudiush/commit/d7cbbc3aa81eff633bbcfa48a8cf3e8ffa1b94d8))
+
 ## [1.38.0](https://github.com/smykla-skalski/klaudiush/compare/v1.37.1...v1.38.0) (2026-09-03)
 
 ### Features
