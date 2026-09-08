@@ -114,6 +114,10 @@ release:
   github:
     owner: smykla-skalski
     name: klaudiush
+  # Replace assets rather than append: a release that dies in a late step, such
+  # as the Homebrew formula push, otherwise cannot be retried because every
+  # upload comes back "already_exists".
+  mode: replace
   prerelease: auto
   draft: false
   name_template: 'v{{ .Version }}'
