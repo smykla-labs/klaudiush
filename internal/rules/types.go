@@ -40,6 +40,7 @@ const (
 	ValidatorGitNoVerify      ValidatorType = "git.no_verify"
 	ValidatorGitAll           ValidatorType = "git.*"
 	ValidatorGitHubIssue      ValidatorType = "github.issue"
+	ValidatorGitHubAPI        ValidatorType = "github.api"
 	ValidatorGitHubAll        ValidatorType = "github.*"
 	ValidatorFileMarkdown     ValidatorType = "file.markdown"
 	ValidatorFileShell        ValidatorType = "file.shell"

@@ -1,0 +1,39 @@
+# Test: a write whose endpoint cannot be resolved is blocked under GH003
+# A read through the same variable stays allowed
+
+stdin opaque_write.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+stdout 'GH003'
+
+stdin opaque_read.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+stdin resolved_write.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+-- opaque_write.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "gh api -X PUT \"$ENDPOINT\" -f message=docs"
+  }
+}
+
+-- opaque_read.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "gh api \"$ENDPOINT\" --jq .sha"
+  }
+}
+
+-- resolved_write.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "EP=repos/owner/repo/git/refs; gh api -X POST \"$EP\" -f ref=refs/heads/topic"
+  }
+}

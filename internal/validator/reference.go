@@ -154,6 +154,14 @@ const (
 const (
 	// RefGHIssueValidation indicates gh issue create validation failure (body markdown).
 	RefGHIssueValidation Reference = ReferenceBaseURL + "/GH001"
+
+	// RefGHAPICommit indicates a gh api call that would create a commit
+	// through the GitHub API, outside git and outside the commit validators.
+	RefGHAPICommit Reference = ReferenceBaseURL + "/GH002"
+
+	// RefGHAPIUnverifiable indicates a GitHub API write whose endpoint or
+	// request body could not be read, so it cannot be shown to create no commit.
+	RefGHAPIUnverifiable Reference = ReferenceBaseURL + "/GH003"
 )
 
 // MCP Elicitation references (MCP001-MCP005).

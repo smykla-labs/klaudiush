@@ -2,10 +2,14 @@ package git_test
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	validatorpkg "github.com/smykla-skalski/klaudiush/internal/validator"
 	"github.com/smykla-skalski/klaudiush/internal/validators/git"
 	"github.com/smykla-skalski/klaudiush/pkg/config"
 	"github.com/smykla-skalski/klaudiush/pkg/hook"
@@ -845,7 +849,320 @@ EOF
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
-			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
+		})
+
+		It("should fail with attribution passed via -b", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" ` +
+						`-b "Summary
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
+		})
+
+		It("should fail with attribution in a --body-file", func() {
+			dir := GinkgoT().TempDir()
+			body := "## Motivation\n\nText\n\n" +
+				"🤖 Generated with [Claude Code](https://claude.com/claude-code)\n"
+			Expect(os.WriteFile(filepath.Join(dir, "pr.md"), []byte(body), 0o600)).To(Succeed())
+
+			ctx := &hook.Context{
+				EventType:  hook.EventTypePreToolUse,
+				ToolName:   hook.ToolTypeBash,
+				WorkingDir: dir,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" --body-file pr.md`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
+		})
+
+		It("should only read the last --body-file, the one gh sends", func() {
+			dir := GinkgoT().TempDir()
+			clean := "## Motivation\n\nText\n"
+			dirty := clean + "\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n"
+			Expect(os.WriteFile(filepath.Join(dir, "clean.md"), []byte(clean), 0o600)).To(Succeed())
+			Expect(os.WriteFile(filepath.Join(dir, "dirty.md"), []byte(dirty), 0o600)).To(Succeed())
+
+			newCtx := func(command string) *hook.Context {
+				return &hook.Context{
+					EventType:  hook.EventTypePreToolUse,
+					ToolName:   hook.ToolTypeBash,
+					WorkingDir: dir,
+					ToolInput:  hook.ToolInput{Command: command},
+				}
+			}
+
+			last := validator.Validate(context.Background(), newCtx(
+				`gh pr create --title "feat(api): add endpoint" `+
+					`--body-file clean.md --body-file dirty.md`,
+			))
+			Expect(last.Passed).To(BeFalse())
+			Expect(last.Message).To(ContainSubstring("PR contains AI attribution"))
+
+			earlier := validator.Validate(context.Background(), newCtx(
+				`gh pr create --title "feat(api): add endpoint" `+
+					`--body-file dirty.md --body-file clean.md`,
+			))
+			Expect(earlier.Message).NotTo(ContainSubstring("PR contains AI attribution"))
+		})
+
+		It("should fail with attribution in gh pr edit", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr edit 12 --body "Summary
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
+		})
+
+		It("should report attribution under GIT012, not the PR validation code", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr create --title "feat(api): add endpoint" ` +
+						`--body "🤖 Generated with [Claude Code](https://claude.com/claude-code)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Reference).To(Equal(validatorpkg.RefGitClaudeAttr))
+		})
+
+		It("should pass a gh pr edit with no attribution", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr edit 12 --add-label ci/skip-tests`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should fail with attribution in a gh api pulls call", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh api repos/o/r/pulls -f title="feat(api): add endpoint" ` +
+						`-f body="🤖 Generated with [Claude Code](https://claude.com/claude-code)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference).To(Equal(validatorpkg.RefGitClaudeAttr))
+		})
+
+		It("should fail with attribution in a createPullRequest mutation", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh api graphql -f query='mutation { createPullRequest(input: ` +
+						`{body: "🤖 Generated with [Claude Code](https://claude.com/claude-code)"}) ` +
+						`{ pullRequest { id } } }'`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		})
+
+		It("should fail with attribution in a curl call to the pulls endpoint", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `curl -X POST https://api.github.com/repos/o/r/pulls ` +
+						`-d '{"body":"🤖 Generated with [Claude Code](https://claude.com/claude-code)"}'`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		})
+
+		It("should fail with attribution in a request body file", func() {
+			dir := GinkgoT().TempDir()
+			body := `{"body":"🤖 Generated with ` +
+				`[Claude Code](https://claude.com/claude-code)"}`
+			Expect(os.WriteFile(filepath.Join(dir, "body.json"), []byte(body), 0o600)).To(Succeed())
+
+			ctx := &hook.Context{
+				EventType:  hook.EventTypePreToolUse,
+				ToolName:   hook.ToolTypeBash,
+				WorkingDir: dir,
+				ToolInput: hook.ToolInput{
+					Command: `gh api repos/o/r/pulls --input body.json`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		})
+
+		It("should fail with attribution in a wrapped gh pr create", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `bash -c 'gh pr create --title "feat(api): add endpoint" ` +
+						`--body "🤖 Generated with [Claude Code](https://claude.com/claude-code)"'`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+		})
+
+		It("should fail with attribution in an MCP create_pull_request call", func() {
+			ctx := &hook.Context{
+				EventType:   hook.EventTypePreToolUse,
+				RawToolName: "mcp__github__create_pull_request",
+				ToolInput: hook.ToolInput{
+					Additional: map[string]json.RawMessage{
+						"title": json.RawMessage(`"feat(api): add endpoint"`),
+						"body": json.RawMessage(
+							`"🤖 Generated with [Claude Code](https://claude.com/claude-code)"`,
+						),
+					},
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference).To(Equal(validatorpkg.RefGitClaudeAttr))
+		})
+
+		It("should pass an MCP create_pull_request call with no attribution", func() {
+			ctx := &hook.Context{
+				EventType:   hook.EventTypePreToolUse,
+				RawToolName: "mcp__github__create_pull_request",
+				ToolInput: hook.ToolInput{
+					Additional: map[string]json.RawMessage{
+						"title": json.RawMessage(`"feat(api): add endpoint"`),
+						"body": json.RawMessage(`"## Motivation
+
+Text"`),
+					},
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		It("should pass a read-only gh api pulls call", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh api repos/o/r/pulls`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeTrue())
+		})
+
+		DescribeTable("attribution detection in a PR description",
+			func(body string, blocked bool) {
+				ctx := &hook.Context{
+					EventType: hook.EventTypePreToolUse,
+					ToolName:  hook.ToolTypeBash,
+					ToolInput: hook.ToolInput{
+						Command: `gh pr edit 1 --body "` + body + `"`,
+					},
+				}
+
+				result := validator.Validate(context.Background(), ctx)
+				Expect(result.Passed).To(Equal(!blocked))
+			},
+			Entry("footer with a non-vendor link",
+				"🤖 Generated with [Claude Code](https://example.com/x)", true),
+			Entry("footer with a non-assistant label",
+				"Generated with [the assistant](https://claude.com/claude-code)", true),
+			Entry("made with", "Made with Claude Code", true),
+			Entry("built using", "Built using Claude Code", true),
+			Entry("bare robot footer", "🤖 Claude Code", true),
+			Entry("session link on its own",
+				"https://claude.ai/code/session_015NqX", true),
+			Entry("co-authored trailer inline",
+				"Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>", true),
+			Entry("Claude AI phrasing", "With Claude AI assistance", true),
+			Entry("product link cited as documentation",
+				"See [GitHub Copilot](https://github.com/features/copilot).", false),
+			Entry("guidance file reference",
+				"See [CLAUDE.md](CLAUDE.md) for the rules", false),
+			Entry("assistant named without credit",
+				"We should try Claude Code for this workflow", false),
+			Entry("vendor documentation link",
+				"See https://docs.anthropic.com/en/api/messages", false),
+			Entry("unrelated description", "Just a normal description", false),
+			Entry("footer link alone on its line",
+				"[Claude Code](https://claude.com/claude-code)", true),
+			Entry("assistant address in a split trailer",
+				"Co-Authored-By:\nClaude <noreply@anthropic.com>", true),
+			Entry(
+				"Cyrillic homoglyph spelling",
+				"🤖 Generated with [Cl\u0430ude Code](https://cl\u0430ude.com/cl\u0430ude-code)",
+				true,
+			),
+			Entry("documentation link inside prose",
+				"See https://docs.anthropic.com/en/api/messages for details.", false),
+		)
+
+		It("should fail with attribution in a gh pr merge --body", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh pr merge 617 --squash --body ` +
+						`"🤖 Generated with [Claude Code](https://claude.com/claude-code)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
+			Expect(result.Reference).To(Equal(validatorpkg.RefGitClaudeAttr))
+		})
+
+		It("should fail with attribution despite extra whitespace in the command", func() {
+			ctx := &hook.Context{
+				EventType: hook.EventTypePreToolUse,
+				ToolName:  hook.ToolTypeBash,
+				ToolInput: hook.ToolInput{
+					Command: `gh  pr  create --title "feat(x): t" --body ` +
+						`"🤖 Generated with [Claude Code](https://claude.com/claude-code)"`,
+				},
+			}
+
+			result := validator.Validate(context.Background(), ctx)
+			Expect(result.Passed).To(BeFalse())
 		})
 
 		It("should fail with Copilot attribution footer in body", func() {
@@ -875,7 +1192,7 @@ EOF
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
-			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
 		})
 
 		It("should fail with Codex attribution footer in body", func() {
@@ -905,7 +1222,7 @@ EOF
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
-			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
 		})
 
 		It("should fail with plain AI attribution phrase in body", func() {
@@ -935,7 +1252,7 @@ EOF
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
-			Expect(result.Message).To(ContainSubstring("PR body contains AI attribution"))
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
 		})
 
 		It("should fail with AI attribution in title", func() {
@@ -965,7 +1282,7 @@ EOF
 
 			result := validator.Validate(context.Background(), ctx)
 			Expect(result.Passed).To(BeFalse())
-			Expect(result.Message).To(ContainSubstring("PR title contains AI attribution"))
+			Expect(result.Message).To(ContainSubstring("PR contains AI attribution"))
 		})
 
 		It("should pass with a legitimate CLAUDE.md reference", func() {

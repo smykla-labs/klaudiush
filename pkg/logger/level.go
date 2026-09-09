@@ -2,7 +2,7 @@ package logger
 
 import "log/slog"
 
-//go:generate enumer -type=Level -trimprefix=Level -transform=upper -json -text -yaml -sql
+//go:generate go run github.com/dmarkham/enumer -type=Level -trimprefix=Level -transform=upper -json -text -yaml -sql
 //go:generate go run github.com/smykla-skalski/klaudiush/tools/enumerfix level_enumer.go
 
 // Level represents the log level.

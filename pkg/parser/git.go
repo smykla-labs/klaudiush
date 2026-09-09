@@ -279,6 +279,19 @@ func addFlag(flag string, args []string, idx int, gitCmd *GitCommand) int {
 
 // parseLongFlag handles long flags like --message, --signoff
 func parseLongFlag(flag string, args []string, idx int, gitCmd *GitCommand) int {
+	// "--file=path" and "--message=text" carry the value in the same token, so
+	// the name is recorded without it and the value is taken from the token
+	// rather than from the next argument.
+	if name, value, found := strings.Cut(flag, "="); found {
+		gitCmd.Flags = append(gitCmd.Flags, name)
+
+		if _, alreadySet := gitCmd.FlagMap[name]; !alreadySet {
+			gitCmd.FlagMap[name] = value
+		}
+
+		return idx + skipFlagOnly
+	}
+
 	return idx + addFlag(flag, args, idx, gitCmd)
 }
 

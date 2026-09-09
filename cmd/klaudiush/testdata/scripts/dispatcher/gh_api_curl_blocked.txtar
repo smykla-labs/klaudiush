@@ -1,0 +1,52 @@
+# Test: the same endpoints are blocked through clients other than gh
+# curl and an inline octokit script reach them without running git
+
+stdin curl_contents.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+stdout 'GH002'
+
+stdin octokit_script.json
+exec klaudiush --hook-type PreToolUse
+stdout '"permissionDecision":"deny"'
+stdout 'GH002'
+
+stdin curl_read.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+stdin curl_other_host.json
+exec klaudiush --hook-type PreToolUse
+! stdout .
+
+-- curl_contents.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "curl -X PUT https://api.github.com/repos/owner/repo/contents/README.md -d '{\"message\":\"docs\"}'"
+  }
+}
+
+-- octokit_script.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "node -e 'octokit.rest.repos.createOrUpdateFileContents({owner, repo, path})'"
+  }
+}
+
+-- curl_read.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "curl https://api.github.com/repos/owner/repo/contents/README.md"
+  }
+}
+
+-- curl_other_host.json --
+{
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "curl -X PUT https://example.com/repos/owner/repo/contents/README.md -d '{}'"
+  }
+}

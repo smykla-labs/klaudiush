@@ -133,6 +133,25 @@ func DefaultGitConfig() *config.GitConfig {
 func DefaultGitHubConfig() *config.GitHubConfig {
 	return &config.GitHubConfig{
 		Issue: DefaultIssueValidatorConfig(),
+		API:   DefaultAPIValidatorConfig(),
+	}
+}
+
+// DefaultAPIValidatorConfig returns the default gh api validator configuration.
+func DefaultAPIValidatorConfig() *config.APIValidatorConfig {
+	enabled := true
+
+	return &config.APIValidatorConfig{
+		ValidatorConfig: config.ValidatorConfig{
+			Enabled:  &enabled,
+			Severity: config.SeverityError, // Commits made this way skip every commit rule
+		},
+		BlockedEndpoints:        config.DefaultBlockedGHAPIEndpoints(),
+		BlockedGraphQLMutations: config.DefaultBlockedGHAPIMutations(),
+		BlockUnverifiableCalls:  &enabled,
+		CheckHTTPClients:        &enabled,
+		Hosts:                   config.DefaultGitHubAPIHosts(),
+		BlockedClientCalls:      config.DefaultBlockedGHAPIClientCalls(),
 	}
 }
 
