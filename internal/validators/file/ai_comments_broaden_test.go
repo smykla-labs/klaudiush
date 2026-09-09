@@ -237,3 +237,55 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		Expect(result.Passed).To(BeTrue())
 	})
 })
+
+var _ = Describe("AICommentValidator struct field docs", func() {
+	var (
+		sv  *file.AICommentValidator
+		ctx *hook.Context
+	)
+
+	BeforeEach(func() {
+		sv = file.NewAICommentValidator(
+			logger.NewNoOpLogger(),
+			&config.AICommentValidatorConfig{Mode: config.AICommentModeStrict},
+			nil,
+		)
+		ctx = &hook.Context{
+			EventType: hook.EventTypePreToolUse,
+			ToolName:  hook.ToolTypeWrite,
+		}
+		ctx.ToolInput.FilePath = "/repo/api.go"
+	})
+
+	DescribeTable(
+		"allows a comment documenting a tagged struct field",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			Expect(sv.Validate(context.Background(), ctx).Passed).To(BeTrue())
+		},
+		Entry("scalar field",
+			"type T struct {\n\t// Version number of the control plane.\n\tVersion string `json:\"version,omitempty\"`\n}"),
+		Entry("pointer to named type",
+			"type T struct {\n\t// KumaCP is the version of the zone control plane.\n\tKumaCP *KumaCpVersion `json:\"kumaCp,omitempty\"`\n}"),
+		Entry("slice of pointers",
+			"type T struct {\n\t// Subscriptions created by a given zone.\n\tSubscriptions []*KDSSubscription `json:\"subscriptions,omitempty\"`\n}"),
+		Entry("map field",
+			"type T struct {\n\t// Stat holds the per service stats.\n\tStat map[string]*KDSServiceStats `json:\"stat,omitempty\"`\n}"),
+		Entry("embedded field",
+			"type T struct {\n\t// Time is pinned to UTC so the bytes do not vary by host.\n\ttime.Time `json:\"-\"`\n}"),
+	)
+
+	DescribeTable(
+		"still blocks prose above code that does not declare anything",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			Expect(sv.Validate(context.Background(), ctx).Passed).To(BeFalse())
+		},
+		Entry("assignment of a raw string",
+			"// Build the query we send upstream.\nq := fmt.Sprintf(`select %d`, id)"),
+		Entry("return of a map literal containing a raw string",
+			"// Hand back the defaults.\nreturn map[string]string{\"a\": `b`}"),
+		Entry("plain statement",
+			"// Guard against nil to avoid a shutdown panic.\nif cli == nil {\n}"),
+	)
+})
