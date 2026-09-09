@@ -5,6 +5,12 @@ All notable changes to klaudiush will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.1](https://github.com/smykla-skalski/klaudiush/compare/v1.39.0...v1.39.1) (2026-09-09)
+
+### Bug Fixes
+
+* **release:** replace release assets on retry ([#622](https://github.com/smykla-skalski/klaudiush/issues/622)) ([1aac76a](https://github.com/smykla-skalski/klaudiush/commit/1aac76a0ccb69127ce31f6f8296d833595390ae6))
+
 ## [1.39.0](https://github.com/smykla-skalski/klaudiush/compare/v1.38.0...v1.39.0) (2026-09-08)
 
 ### Features
