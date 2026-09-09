@@ -237,3 +237,69 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 		Expect(result.Passed).To(BeTrue())
 	})
 })
+
+func documentedField(doc, decl string) string {
+	return "type T struct {\n\t// " + doc + "\n\t" + decl + "\n}"
+}
+
+var _ = Describe("AICommentValidator struct field docs", func() {
+	var (
+		sv  *file.AICommentValidator
+		ctx *hook.Context
+	)
+
+	BeforeEach(func() {
+		sv = file.NewAICommentValidator(
+			logger.NewNoOpLogger(),
+			&config.AICommentValidatorConfig{Mode: config.AICommentModeStrict},
+			nil,
+		)
+		ctx = &hook.Context{
+			EventType: hook.EventTypePreToolUse,
+			ToolName:  hook.ToolTypeWrite,
+		}
+		ctx.ToolInput.FilePath = "/repo/api.go"
+	})
+
+	DescribeTable(
+		"allows a comment documenting a tagged struct field",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			Expect(sv.Validate(context.Background(), ctx).Passed).To(BeTrue())
+		},
+		Entry("scalar field", documentedField(
+			"Version number of the control plane.",
+			"Version string `json:\"version,omitempty\"`",
+		)),
+		Entry("pointer to named type", documentedField(
+			"KumaCP is the version of the zone control plane.",
+			"KumaCP *KumaCpVersion `json:\"kumaCp,omitempty\"`",
+		)),
+		Entry("slice of pointers", documentedField(
+			"Subscriptions created by a given zone.",
+			"Subscriptions []*KDSSubscription `json:\"subscriptions,omitempty\"`",
+		)),
+		Entry("map field", documentedField(
+			"Stat holds the per service stats.",
+			"Stat map[string]*KDSServiceStats `json:\"stat,omitempty\"`",
+		)),
+		Entry("embedded field", documentedField(
+			"Time is pinned to UTC so the bytes do not vary by host.",
+			"time.Time `json:\"-\"`",
+		)),
+	)
+
+	DescribeTable(
+		"still blocks prose above code that does not declare anything",
+		func(content string) {
+			ctx.ToolInput.Content = content
+			Expect(sv.Validate(context.Background(), ctx).Passed).To(BeFalse())
+		},
+		Entry("assignment of a raw string",
+			"// Build the query we send upstream.\nq := fmt.Sprintf(`select %d`, id)"),
+		Entry("return of a map literal containing a raw string",
+			"// Hand back the defaults.\nreturn map[string]string{\"a\": `b`}"),
+		Entry("plain statement",
+			"// Guard against nil to avoid a shutdown panic.\nif cli == nil {\n}"),
+	)
+})

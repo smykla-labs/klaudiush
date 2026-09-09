@@ -111,7 +111,9 @@ var nonStrictBasenames = map[string]bool{
 
 // aiDocDecl matches a source line that declares a symbol or package.
 // A leading comment block directly above such a line is its documentation and
-// is allowed even when it opens with a verb.
+// is allowed even when it opens with a verb. A tagged struct field counts: code
+// generators publish those comments as API documentation, so removing them
+// removes the description from the generated schema.
 var aiDocDecl = regexp.MustCompile(
 	`^\s*(` +
 		`package\s+[A-Za-z_]` + // Go package doc
@@ -120,6 +122,7 @@ var aiDocDecl = regexp.MustCompile(
 		`|(const|var)\s+(\(|[A-Za-z_])` + // Go const/var or block
 		`|export\b` + // JS/TS export
 		`|(async\s+)?(def|class)\s+[A-Za-z_]` + // Python def/class
+		`|[A-Za-z_][\w.]*(\s+[\w*\[\]./]+)?\s+\x60` + // Go struct field with a tag
 		`)`,
 )
 
