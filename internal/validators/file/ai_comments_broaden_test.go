@@ -238,6 +238,10 @@ var _ = Describe("AICommentValidator broadened coverage", func() {
 	})
 })
 
+func documentedField(doc, decl string) string {
+	return "type T struct {\n\t// " + doc + "\n\t" + decl + "\n}"
+}
+
 var _ = Describe("AICommentValidator struct field docs", func() {
 	var (
 		sv  *file.AICommentValidator
@@ -263,16 +267,26 @@ var _ = Describe("AICommentValidator struct field docs", func() {
 			ctx.ToolInput.Content = content
 			Expect(sv.Validate(context.Background(), ctx).Passed).To(BeTrue())
 		},
-		Entry("scalar field",
-			"type T struct {\n\t// Version number of the control plane.\n\tVersion string `json:\"version,omitempty\"`\n}"),
-		Entry("pointer to named type",
-			"type T struct {\n\t// KumaCP is the version of the zone control plane.\n\tKumaCP *KumaCpVersion `json:\"kumaCp,omitempty\"`\n}"),
-		Entry("slice of pointers",
-			"type T struct {\n\t// Subscriptions created by a given zone.\n\tSubscriptions []*KDSSubscription `json:\"subscriptions,omitempty\"`\n}"),
-		Entry("map field",
-			"type T struct {\n\t// Stat holds the per service stats.\n\tStat map[string]*KDSServiceStats `json:\"stat,omitempty\"`\n}"),
-		Entry("embedded field",
-			"type T struct {\n\t// Time is pinned to UTC so the bytes do not vary by host.\n\ttime.Time `json:\"-\"`\n}"),
+		Entry("scalar field", documentedField(
+			"Version number of the control plane.",
+			"Version string `json:\"version,omitempty\"`",
+		)),
+		Entry("pointer to named type", documentedField(
+			"KumaCP is the version of the zone control plane.",
+			"KumaCP *KumaCpVersion `json:\"kumaCp,omitempty\"`",
+		)),
+		Entry("slice of pointers", documentedField(
+			"Subscriptions created by a given zone.",
+			"Subscriptions []*KDSSubscription `json:\"subscriptions,omitempty\"`",
+		)),
+		Entry("map field", documentedField(
+			"Stat holds the per service stats.",
+			"Stat map[string]*KDSServiceStats `json:\"stat,omitempty\"`",
+		)),
+		Entry("embedded field", documentedField(
+			"Time is pinned to UTC so the bytes do not vary by host.",
+			"time.Time `json:\"-\"`",
+		)),
 	)
 
 	DescribeTable(
